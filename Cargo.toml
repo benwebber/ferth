@@ -1,6 +1,25 @@
 [package]
-name = "fe"
+name = "ferth"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "A safe, native-sized Forth. no_std compatible."
+readme = "README.md"
+homepage = "https://github.com/benwebber/ferth"
+repository = "https://github.com/benwebber/ferth"
+keywords = ["forth", "language"]
+categories = ["compilers", "no-std"]
+
+[features]
+std = []
+repl = ["std", "dep:rustyline"]
+
+[[bin]]
+name = "fe"
+required-features = ["repl"]
 
 [dependencies]
+rustyline = { version = "14", optional = true }
+
+[dev-dependencies]
+ferth = { path = ".", features = ["std"] }
