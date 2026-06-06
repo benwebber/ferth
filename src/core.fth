@@ -62,8 +62,8 @@
 : begin here ; immediate
 : until ['] (jmpz) , , ; immediate
 : again ['] (jmp) , , ; immediate
-: while ['] (jmpz) , here 0 , ; immediate
-: repeat ['] (jmp) , swap , here swap ! ; immediate
+: while ['] (jmpz) , here 0 , swap ; immediate
+: repeat ['] (jmp) , , here swap ! ; immediate
 
 : constant >r : r> postpone literal postpone ; ;
 : variable align here 0 , constant ;
