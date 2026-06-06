@@ -512,7 +512,7 @@ impl Vm {
                 let mut index = self.rpop(data)?;
                 let limit = self.rpop(data)?;
                 let start = self.rpop(data)?;
-                index += 1;
+                index = index.wrapping_add(1);
                 if index != limit {
                     self.rpush(data, start)?;
                     self.rpush(data, limit)?;
