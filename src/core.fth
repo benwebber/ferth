@@ -36,8 +36,6 @@
 : = xor 0= ;
 : <> = 0= ;
 : 0<> 0= invert ;
-: < - 0< ;
-: > swap < ;
 
 : +! dup >r @ + r> ! ;
 
@@ -72,16 +70,12 @@
 : 2dup over over ;
 : 2drop drop drop ;
 : 2swap rot >r rot r> ;
-\ TODO: 2r> and 2>r don't work.
-\ : 2>r ( x1 x2 -- ) ( R: -- x1 x2 )
-\   postpone swap postpone >r postpone >r
-\ ; immediate
-\ : 2r> ( -- x1 x2 ) ( R: x1 x2 -- )
-\   postpone swap postpone r> postpone r>
-\ ; immediate
-\ : 2over ( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )
-\   2>r 2dup 2r> 2swap
-\ ;
+
+\ Overflow-safe comparison operators.
+\ TODO: explain
+: <  ( n1 n2 -- flag ) 2dup xor 0< if      drop 0< else - 0< then ;
+: u< ( u1 u2 -- flag ) 2dup xor 0< if swap drop 0< else - 0< then ;
+: > swap < ;
 
 : ?dup ( x -- 0 | x x ) dup if dup then ;
 : abs dup 0< if negate then ;
