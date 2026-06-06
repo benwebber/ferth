@@ -131,9 +131,9 @@ ops! {
     /// Multiply the top two items on the data stack.
     ///
     /// ```text
-    /// * ( n1 n2 -- n3 )
+    /// * ( u1 u2 -- ud )
     /// ```
-    Mul = 0x12,
+    UmMul = 0x12,
 
     /// Copy the value at the top of the return stack to the data stack.
     ///
@@ -451,10 +451,14 @@ impl Vm {
                 let a = self.pop(data)?;
                 self.push(data, a.wrapping_add(b))?;
             }
-            Op::Mul => {
-                let b = self.pop(data)?;
-                let a = self.pop(data)?;
-                self.push(data, a.wrapping_mul(b))?;
+            Op::UmMul => {
+                let u1 = self.pop(data)? as u128;
+                let u2 = self.pop(data)? as u128;
+                let ud = u1 * u2;
+                let ud_lo = ud as usize;
+                let ud_hi = (ud >> (8 * Self::SIZE)) as usize;
+                self.push(data, ud_lo)?;
+                self.push(data, ud_hi)?;
             }
             Op::Nand => {
                 let b = self.pop(data)?;

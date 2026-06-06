@@ -26,13 +26,12 @@
 : xor over over and invert >r or r> and ;
 : negate invert 1 + ;
 
+: * ( n1 n2 -- n3 ) um* drop ;
+
 : 1+ 1 + ;
 : 1- -1 + ;
 \ : - invert 1+ + ;
-: /mod ( n1 n2 -- n3 n4 ) 0 swap um/mod ;
-: / /mod swap drop ;
-
-: depth (sp@) 1 cells / ;
+: 2* 2 * ;
 
 : = xor 0= ;
 : <> = 0= ;
@@ -89,7 +88,80 @@
 : min ( n1 n2 -- n3 ) 2dup < if drop else swap drop then ;
 : max ( n1 n2 -- n3 ) 2dup > if drop else swap drop then ;
 
+\ TODO: Compare bitwise alternative.
+: dnegate ( d1 -- d2 )
+                                      ( dlo dhi )
+  swap negate swap                    ( dlo' dhi )
+  \ If dlo' is 0, negating the double is the same as negating the high cell.
+  \ Otherwise invert the high cell.
+  over 0= if negate else invert then  ( dlo' dhi' )
+;
+: dabs ( d1 -- d2 ) dup 0< if dnegate then ;
+
 : s>d dup 0< if -1 else 0 then ;
+
+\ um/mod
+\   \_ sm/rem
+\        \_ fm/mod
+\        \_ / /mod */ */mod
+: sm/rem ( d1 n1 -- n2 n3 )
+  \ Save dividend sign (high cell).
+  over >r               ( dlo dhi ) ( R: dhi )
+  \ Save quotient sign (hi XOR n1 ).
+  2dup xor >r           ( dlo dhi n ) ( R: dhi q' )
+  \ Calculate magnitudes.
+  abs >r dabs r>        ( dlo_u dhi_u u )
+  um/mod                ( r_u q_u )
+  \ Apply quotient sign.
+  r> 0< if negate then  ( r_u q_n ) ( R: dhi )
+  swap                  ( q_n r_u )
+  \ Apply remainder sign.
+  r> 0< if negate then  ( q_n r_n ) ( R: )
+  swap                  ( r_n q_n )
+;
+
+: 2>r ( x1 x2 -- ) ( R: -- x1 x2 )
+  ['] swap , ['] >r , ['] >r ,
+; immediate
+: 2r> ( -- x1 x2 ) ( R: x1 x2 -- )
+  ['] r> , ['] r> , ['] swap ,
+; immediate
+: 2over ( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )
+  2>r 2dup 2r> 2swap
+;
+
+: fm/mod ( d1 n1 -- n2 n3 )
+  \ Save divisor.
+  dup >r              ( dlo dhi n ) ( R: n )
+  \ Save sign of quotient (hi XOR n).
+  over r@ xor >r      ( dlo dhi n ) ( R: dhi q' )
+  sm/rem              ( r_s q_s )
+  over 0<> r> 0< and if
+    \ Floor if signs differ and remainder is non-zero.
+    1- swap r> + swap ( r+n q-1 )
+  else
+    \ Discard divisor.
+    r> drop
+  then
+;
+
+: /mod ( n1 n2 -- n2 n3 ) >r s>d r> sm/rem ;
+: / /mod swap drop ;
+: mod /mod drop ;
+: m* ( n1 n2 -- d )
+  \ Save negative flag.
+  2dup xor 0< >r      ( R: flag )
+  \ Multiply absolute magnitudes.
+  abs swap abs        ( u2 u1 )
+  um*                 ( ud )
+  \ Adust sign.
+  r> if dnegate then
+;
+: */mod ( n1 n2 n3 -- n4 n5 ) >r m* r> sm/rem ;
+: */ ( n1 n2 n3 -- n4 ) */mod swap drop ;
+
+: 2/ dup 1 rshift swap 0 invert 1 rshift invert and or ;
+: depth (sp@) 1 cells / ;
 : 2@ dup cell+ @ swap @ ;
 : 2! swap over ! cell+ ! ;
 : 2@ dup cell+ @ swap @ ;

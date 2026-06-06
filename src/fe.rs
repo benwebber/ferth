@@ -210,7 +210,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"(loop)", Loop),
             (b"(nand)", Nand),
             (b"(s\")", Str),
-            (b"*", Mul),
+            (b"um*", UmMul),
             (b"+", Add),
             (b"0<", LtZ),
             (b"0=", EqZ),
@@ -284,11 +284,12 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let store = Xt(self.op_xt(Store));
         let to_r = Xt(self.op_xt(ToR));
         let r_from = Xt(self.op_xt(RFrom));
-        let mul = Xt(self.op_xt(Mul));
+        let ummul = Xt(self.op_xt(UmMul));
         let c_fetch = Xt(self.op_xt(CFetch));
         let c_store = Xt(self.op_xt(CStore));
         let swap = Xt(self.op_xt(Swap));
         let sp_fetch = Xt(self.op_xt(SpFetch));
+        let drop = Xt(self.op_xt(Drop));
         let bl = L(usize::from(BL));
 
         // : dup ( x -- x x ) (sp@) @ [-SIZE] + ;
@@ -304,7 +305,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         // : - ( n1 n2 -- n3 ) invert 1+ + ;
         compile!(minus, b"-", 0, DoCol, [invert, L(1), add, add]);
         // cells
-        compile!(cells, b"cells", 0, DoCol, [L(Vm::SIZE), mul]);
+        compile!(cells, b"cells", 0, DoCol, [L(Vm::SIZE), ummul, drop]);
         // : +! ( u addr -- ) dup >r @ + r> ! ;
         compile!(plus_store, b"+!", 0, DoCol, [dup, to_r, fetch, add, r_from, store]);
         // : allot ( n -- ) (here) +! ;
