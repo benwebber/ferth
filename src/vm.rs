@@ -215,13 +215,6 @@ ops! {
     /// ```
     Str = 0x1c,
 
-    /// Push the data field address of the current word.
-    ///
-    /// ```text
-    /// (dovar) ( -- a-addr )
-    /// ```
-    DoVar = 0x1d,
-
     /// Fundamental division operation.
     ///
     /// Divide the double `ud` by `u1`, pushing the quotion `u3` and the remainder `u2`.
@@ -576,9 +569,6 @@ impl Vm {
                 self.push(data, self.ip)?;
                 self.push(data, len)?;
                 self.ip += (len + Self::SIZE - 1) & !(Self::SIZE - 1);
-            }
-            Op::DoVar => {
-                self.push(data, self.w + Self::SIZE)?;
             }
             Op::LShift => {
                 let u = self.pop(data)?;

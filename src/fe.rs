@@ -209,7 +209,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let opcodes: &[(&[u8], Op)] = &[
             (b"!", Op::Store),
             (b"(docol)", Op::DoCol),
-            (b"(dovar)", Op::DoVar),
             (b"(exit)", Op::Exit),
             (b"(jmp)", Op::Jmp),
             (b"(jmpz)", Op::JmpZ),
@@ -360,17 +359,28 @@ impl<M: Mem, I: Io> Fe<M, I> {
         );
 
         // Finally, compile the compilation words.
+
         // : ] true state ! ;
         compile!(rbracket, b"]", 0, Op::DoCol, [L(usize::MAX), addr!(STATE), store]);
         // : [ false state ! ;
         compile!(lbracket, b"[", IMMEDIATE, Op::DoCol, [L(0), addr!(STATE), store]);
-        // : create ( "<spaces>name" -- ) bl parse (header) ' (dovar) @ , ;
+
+        // : (noop) ;
+        //
+        // Used with create to set up empty definitions for variables and does>.
+        compile!(b"(noop)", 0, Op::DoCol, []);
+        let noop_xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
+
+        // : create ( "<spaces>name" -- ) bl parse (header) ' (noop) >body , ;
+        //
+        // Point to the >body of noop.
         compile!(
             b"create",
             0,
             Op::DoCol,
-            [bl, parse, header, L(self.op_xt(Op::DoVar)), fetch, comma]
+            [bl, parse, header, L(noop_xt + Vm::SIZE), comma]
         );
+
         // (hidden-flag)
         compile!(hidden_flag, b"(hidden-flag)", 0, Op::DoCol, [L(HIDDEN.into())]);
         // (immediate-flag)
