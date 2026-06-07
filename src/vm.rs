@@ -14,6 +14,8 @@ macro_rules! ops {
         }
 
         impl Op {
+            pub const MAX: usize = u8::MAX as usize;
+
             fn from_usize(u: usize) -> Result<Self> {
                 match u {
                     $($val => Ok(Op::$name),)+
@@ -313,6 +315,7 @@ impl Vm {
     const DS_ADDR: usize = 0;
 
     pub fn new(ds_len: usize, rs_len: usize) -> Self {
+        assert!(Self::layout_ok(rs_len, rs_len), "stacks too small");
         Self {
             ip: 0,
             w: 0,
@@ -321,6 +324,10 @@ impl Vm {
             ds_len,
             rs_len,
         }
+    }
+
+    pub const fn layout_ok(ds_len: usize, rs_len: usize) -> bool {
+        (ds_len + rs_len + 1) * Self::SIZE > Op::MAX
     }
 
     /// Execute instructions until a stop condition.
@@ -603,14 +610,23 @@ impl Vm {
 
     /// Execute the code referenced by the W register.
     fn dispatch<M: Mem>(&mut self, data: &mut Data<M>) -> Result<Option<Stop>> {
-        let op = Op::from_usize(data.read_cell(self.w)?)?;
-        match op {
-            Op::Yield => {
-                let index = data.read_cell(self.w + Self::SIZE)?;
-                let token = YieldToken { ip: self.ip, index };
-                Ok(Some(Stop::Yield(token)))
+        let w = data.read_cell(self.w)?;
+        if w >= self.reserved() {
+            // W is an address. This is a create/does> word.
+            self.push(data, self.w + Self::SIZE)?;
+            self.rpush(data, self.ip)?;
+            self.ip = w;
+            Ok(None)
+        } else {
+            let op = Op::from_usize(w)?;
+            match op {
+                Op::Yield => {
+                    let index = data.read_cell(self.w + Self::SIZE)?;
+                    let token = YieldToken { ip: self.ip, index };
+                    Ok(Some(Stop::Yield(token)))
+                }
+                _ => self.execute(data, op),
             }
-            _ => self.execute(data, op),
         }
     }
 }

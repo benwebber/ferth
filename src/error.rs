@@ -37,6 +37,11 @@ pub enum Error {
     BuiltinTableFull,
     /// The line length (in bytes) exceeds the size of the terminal input buffer.
     LineTooLong,
+    /// The stacks are too small.
+    ///
+    /// The data space must start above the opcode range in order to distinguish between opcodes
+    /// and defined words.
+    StacksTooSmall,
 }
 
 impl core::fmt::Display for Error {
@@ -62,6 +67,7 @@ impl core::fmt::Display for Error {
             Self::InvalidBuiltin(idx) => write!(f, "invalid builtin: 0x{idx:02x}"),
             Self::BuiltinTableFull => write!(f, "builtin table full"),
             Self::LineTooLong => write!(f, "line too long"),
+            Self::StacksTooSmall => write!(f, "stacks too small"),
         }
     }
 }

@@ -90,8 +90,13 @@ pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
 
 impl<M: Mem, I: Io> Fe<M, I> {
     pub fn new(mem: M, io: I) -> Result<Self> {
+        let ds_len = 64;
+        let rs_len = 64;
+        if !Vm::layout_ok(ds_len, rs_len) {
+            return Err(Error::StacksTooSmall);
+        }
         let data = Data::new(mem);
-        let vm = Vm::new(64, 64);
+        let vm = Vm::new(ds_len, rs_len);
         let layout_base = vm.reserved();
         let mut fe = Self {
             vm,

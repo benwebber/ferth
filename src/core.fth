@@ -51,6 +51,7 @@
 : ['] ' postpone literal ; immediate
 : c,  here c! 1 allot ;
 : >body 1 cells + ;
+: does> r> (latest) @ ! ;
 : chars ( -- ) ;
 
 : exit ['] (exit) , ; immediate
