@@ -181,7 +181,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             };
         }
 
-        use Op::*;
         use Token::{Lit as L, Xt};
 
         // 1. Reserve cells for system variables.
@@ -203,37 +202,39 @@ impl<M: Mem, I: Io> Fe<M, I> {
         // The inner interpreter implements these words directly. They comprise the most
         // fundamental set of execution, stack, memory, and arithmetic operations.
         let opcodes: &[(&[u8], Op)] = &[
-            (b"!", Store),
-            (b"(do)", Do),
-            (b"(docol)", DoCol),
-            (b"(dovar)", DoVar),
-            (b"(exit)", Exit),
-            (b"(jmp)", Jmp),
-            (b"(jmpz)", JmpZ),
-            (b"(lit)", Lit),
-            (b"(loop)", Loop),
-            (b"(nand)", Nand),
-            (b"(s\")", Str),
-            (b"um*", UmMul),
-            (b"+", Add),
-            (b"0<", LtZ),
-            (b"0=", EqZ),
-            (b">r", ToR),
-            (b"@", Fetch),
-            (b"c!", CStore),
-            (b"c@", CFetch),
-            (b"(sp@)", SpFetch),
-            (b"drop", Drop),
-            (b"i", RFetch), // see r@
-            (b"r>", RFrom),
-            (b"swap", Swap),
-            (b"lshift", LShift),
-            (b"rshift", RShift),
-            (b"um/mod", UmDivMod),
-            // r@ cannot be a : definition because DoCol puts its return address on top of the
+            (b"!", Op::Store),
+            (b"(docol)", Op::DoCol),
+            (b"(dovar)", Op::DoVar),
+            (b"(exit)", Op::Exit),
+            (b"(jmp)", Op::Jmp),
+            (b"(jmpz)", Op::JmpZ),
+            (b"(lit)", Op::Lit),
+            (b"(nand)", Op::Nand),
+            (b"(do)", Op::Do),
+            (b"(+loop)", Op::PlusLoop),
+            (b"unloop", Op::Unloop),
+            (b"i", Op::I),
+            (b"j", Op::J),
+            (b"(s\")", Op::Str),
+            (b"um*", Op::UmMul),
+            (b"+", Op::Add),
+            (b"0<", Op::LtZ),
+            (b"0=", Op::EqZ),
+            (b">r", Op::ToR),
+            (b"@", Op::Fetch),
+            (b"c!", Op::CStore),
+            (b"c@", Op::CFetch),
+            (b"(sp@)", Op::SpFetch),
+            (b"drop", Op::Drop),
+            (b"r>", Op::RFrom),
+            (b"swap", Op::Swap),
+            (b"lshift", Op::LShift),
+            (b"rshift", Op::RShift),
+            (b"um/mod", Op::UmDivMod),
+            // r@ cannot be a : definition because Op::DoCol puts its return address on top of the
             // return stack before r@ executes. r@ returns that instead of whatever was previously
             // on the top of the return stack. The opcode executes directly.
-            (b"r@", RFetch),
+            (b"r@", Op::RFetch),
         ];
         for (name, op) in opcodes {
             let xt = self.compile(name, 0, *op, &[])?;
@@ -282,44 +283,44 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let header = Xt(header);
         let parse = Xt(parse);
 
-        let nand = Xt(self.op_xt(Nand));
-        let add = Xt(self.op_xt(Add));
-        let fetch = Xt(self.op_xt(Fetch));
-        let store = Xt(self.op_xt(Store));
-        let to_r = Xt(self.op_xt(ToR));
-        let r_from = Xt(self.op_xt(RFrom));
-        let ummul = Xt(self.op_xt(UmMul));
-        let c_fetch = Xt(self.op_xt(CFetch));
-        let c_store = Xt(self.op_xt(CStore));
-        let swap = Xt(self.op_xt(Swap));
-        let sp_fetch = Xt(self.op_xt(SpFetch));
-        let drop = Xt(self.op_xt(Drop));
+        let nand = Xt(self.op_xt(Op::Nand));
+        let add = Xt(self.op_xt(Op::Add));
+        let fetch = Xt(self.op_xt(Op::Fetch));
+        let store = Xt(self.op_xt(Op::Store));
+        let to_r = Xt(self.op_xt(Op::ToR));
+        let r_from = Xt(self.op_xt(Op::RFrom));
+        let ummul = Xt(self.op_xt(Op::UmMul));
+        let c_fetch = Xt(self.op_xt(Op::CFetch));
+        let c_store = Xt(self.op_xt(Op::CStore));
+        let swap = Xt(self.op_xt(Op::Swap));
+        let sp_fetch = Xt(self.op_xt(Op::SpFetch));
+        let drop = Xt(self.op_xt(Op::Drop));
         let bl = L(usize::from(BL));
 
         // : dup ( x -- x x ) (sp@) @ [-SIZE] + ;
         //
         // We have to use -SIZE because `-` is not available yet.
-        compile!(dup, b"dup", 0, DoCol, [sp_fetch, L(Vm::SIZE.wrapping_neg()), add, fetch]);
+        compile!(dup, b"dup", 0, Op::DoCol, [sp_fetch, L(Vm::SIZE.wrapping_neg()), add, fetch]);
         // : invert ( x1 -- x2 ) dup (nand) ;
-        compile!(invert, b"invert", 0, DoCol, [dup, nand]);
+        compile!(invert, b"invert", 0, Op::DoCol, [dup, nand]);
         // : or ( x1 x2 -- x3 ) invert swap invert (nand) ;
-        compile!(or, b"or", 0, DoCol, [invert, swap, invert, nand]);
+        compile!(or, b"or", 0, Op::DoCol, [invert, swap, invert, nand]);
         // : and ( x1 x2 -- x3 ) (nand) invert ;
-        compile!(and, b"and", 0, DoCol, [nand, invert]);
+        compile!(and, b"and", 0, Op::DoCol, [nand, invert]);
         // : - ( n1 n2 -- n3 ) invert 1+ + ;
-        compile!(minus, b"-", 0, DoCol, [invert, L(1), add, add]);
+        compile!(minus, b"-", 0, Op::DoCol, [invert, L(1), add, add]);
         // cells
-        compile!(cells, b"cells", 0, DoCol, [L(Vm::SIZE), ummul, drop]);
+        compile!(cells, b"cells", 0, Op::DoCol, [L(Vm::SIZE), ummul, drop]);
         // : +! ( u addr -- ) dup >r @ + r> ! ;
-        compile!(plus_store, b"+!", 0, DoCol, [dup, to_r, fetch, add, r_from, store]);
+        compile!(plus_store, b"+!", 0, Op::DoCol, [dup, to_r, fetch, add, r_from, store]);
         // : allot ( n -- ) (here) +! ;
-        compile!(allot, b"allot", 0, DoCol, [addr!(HERE), plus_store]);
+        compile!(allot, b"allot", 0, Op::DoCol, [addr!(HERE), plus_store]);
         // : aligned ( addr -- a-addr ) 1 cells 1- + 1 cells 1- invert and ;
         compile!(
             aligned,
             b"aligned",
             0,
-            DoCol,
+            Op::DoCol,
             [L(1), cells, L(-1isize as usize), add, add, L(1), cells, L(-1isize as usize), add, invert, and]
         );
         // : align ( -- ) here aligned here - allot ;
@@ -327,7 +328,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             align,
             b"align",
             0,
-            DoCol,
+            Op::DoCol,
             [addr!(HERE), fetch, aligned, addr!(HERE), fetch, minus, allot]
         );
         // : , ( x -- ) align here ! 1 cells allot ;
@@ -335,7 +336,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             comma,
             b",",
             0,
-            DoCol,
+            Op::DoCol,
             [align, addr!(HERE), fetch, store, L(1), cells, allot]
         );
         let Xt(comma_xt) = comma else { unreachable!() };
@@ -349,26 +350,26 @@ impl<M: Mem, I: Io> Fe<M, I> {
         compile!(
             b"literal",
             IMMEDIATE,
-            DoCol,
+            Op::DoCol,
             [L(self.op_xt(Op::Lit)), comma, comma]
         );
 
         // Finally, compile the compilation words.
         // : ] true state ! ;
-        compile!(rbracket, b"]", 0, DoCol, [L(usize::MAX), addr!(STATE), store]);
+        compile!(rbracket, b"]", 0, Op::DoCol, [L(usize::MAX), addr!(STATE), store]);
         // : [ false state ! ;
-        compile!(lbracket, b"[", IMMEDIATE, DoCol, [L(0), addr!(STATE), store]);
+        compile!(lbracket, b"[", IMMEDIATE, Op::DoCol, [L(0), addr!(STATE), store]);
         // : create ( "<spaces>name" -- ) bl parse (header) ' (dovar) @ , ;
         compile!(
             b"create",
             0,
-            DoCol,
-            [bl, parse, header, L(self.op_xt(DoVar)), fetch, comma]
+            Op::DoCol,
+            [bl, parse, header, L(self.op_xt(Op::DoVar)), fetch, comma]
         );
         // (hidden-flag)
-        compile!(hidden_flag, b"(hidden-flag)", 0, DoCol, [L(HIDDEN.into())]);
+        compile!(hidden_flag, b"(hidden-flag)", 0, Op::DoCol, [L(HIDDEN.into())]);
         // (immediate-flag)
-        compile!(b"(immediate-flag)", 0, DoCol, [L(IMMEDIATE.into())]);
+        compile!(b"(immediate-flag)", 0, Op::DoCol, [L(IMMEDIATE.into())]);
 
         // (flags-addr)
         //
@@ -377,7 +378,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             flags_addr,
             b"(flags-addr)",
             0,
-            DoCol,
+            Op::DoCol,
             [L((2 * Vm::SIZE).wrapping_neg()), add, L(1), add]
         );
 
@@ -393,11 +394,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
         compile!(
             b":",
             0,
-            DoCol,
+            Op::DoCol,
             [
                 bl, parse, header,
                 addr!(LATEST), fetch, flags_addr, dup, c_fetch, hidden_flag, or, swap, c_store,
-                L(self.op_xt(DoCol)), fetch, comma,
+                L(self.op_xt(Op::DoCol)), fetch, comma,
                 rbracket,
             ]
         );
@@ -412,9 +413,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
         compile!(
             b";",
             IMMEDIATE,
-            DoCol,
+            Op::DoCol,
             [
-                L(self.op_xt(Exit)), comma,
+                L(self.op_xt(Op::Exit)), comma,
                 addr!(LATEST), fetch, flags_addr, dup, c_fetch, hidden_flag, invert, and, swap, c_store,
                 lbracket,
             ]

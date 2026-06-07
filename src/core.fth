@@ -244,29 +244,32 @@
 \ LOOPS
 \ ==============================================================================
 
-variable (leave-chain)
+\ TODO: Document.
+variable (leave-list)
 
-: do
+: do ( n1 n2 -- ) ( R: -- loop-sys )
   ['] (do) ,
-  (leave-chain) @
-  0 (leave-chain) !
+  (leave-list) @
+  0 (leave-list) !
+  here
 ; immediate
 
-: leave
-  ['] r> , ['] drop ,
-  ['] r> , ['] drop ,
-  ['] r> , ['] drop ,
-  ['] (jmp) ,
-  (leave-chain) @ ,
-  here 1 cells -
-  (leave-chain) !
-; immediate
-
-: loop
-  ['] (loop) ,
-  (leave-chain) @ begin ?dup while
+: +loop
+  postpone (+loop)
+  ,
+  (leave-list) @ begin ?dup while
     dup @
     swap here swap !
   repeat
-  (leave-chain) !
+  (leave-list) !
+; immediate
+
+: loop 1 postpone literal postpone +loop ; immediate
+
+: leave
+  postpone unloop
+  postpone (jmp)
+  (leave-list) @ ,
+  here 1 cells -
+  (leave-list) !
 ; immediate

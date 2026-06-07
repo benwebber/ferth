@@ -171,19 +171,40 @@ ops! {
     /// ```
     Jmp = 0x17,
 
-    /// Save the current IP and loop state to the return stack.
+    /// Save the loop state to the return stack.
     ///
     /// ```text
-    /// (do) ( limit index -- ) ( R: -- ip limit index )
+    /// (do) ( limit index -- ) ( R: -- limit index' )
     /// ```
     Do = 0x19,
 
     /// Perform one iteration of a loop.
     ///
     /// ```text
-    /// (loop) ( -- ) ( start limit index -- start limit index' )
+    /// (+loop) ( step -- ) ( R: -- limit index' )
     /// ```
-    Loop = 0x1a,
+    PlusLoop = 0x30,
+
+    /// Reset the current loop state.
+    ///
+    /// ```text
+    /// (unloop) ( -- ) ( R: limit index' -- )
+    /// ```
+    Unloop = 0x31,
+
+    /// Push the current loop index to the data stack.
+    ///
+    /// ```text
+    /// i ( -- n )
+    /// ```
+    I = 0x32,
+
+    /// Push the outer loop index to the data stack.
+    ///
+    /// ```text
+    /// j ( -- n )
+    /// ```
+    J = 0x33,
 
     /// Push inline string address and length, skip over string data.
     ///
@@ -504,21 +525,43 @@ impl Vm {
             Op::Do => {
                 let index = self.pop(data)?;
                 let limit = self.pop(data)?;
-                self.rpush(data, self.ip)?;
                 self.rpush(data, limit)?;
-                self.rpush(data, index)?;
+                // index' = index - limit + isize::MIN
+                let fudged = index.wrapping_sub(limit).wrapping_add(isize::MIN as usize);
+                self.rpush(data, fudged)?;
             }
-            Op::Loop => {
-                let mut index = self.rpop(data)?;
-                let limit = self.rpop(data)?;
-                let start = self.rpop(data)?;
-                index = index.wrapping_add(1);
-                if index != limit {
-                    self.rpush(data, start)?;
-                    self.rpush(data, limit)?;
-                    self.rpush(data, index)?;
-                    self.ip = start;
+            Op::PlusLoop => {
+                let step = self.pop(data)? as isize;
+                let fudged = data.read_cell(self.rp - Self::SIZE)? as isize;
+                let (next, overflow) = fudged.overflowing_add(step);
+                if overflow {
+                    self.rpop(data)?;
+                    self.rpop(data)?;
+                    self.ip += Self::SIZE;
+                } else {
+                    data.write_cell(self.rp - Self::SIZE, next as usize)?;
+                    self.ip = data.read_cell(self.ip)?;
                 }
+            }
+            Op::I => {
+                let fudged = data.read_cell(self.rp - Self::SIZE)?;
+                let limit = data.read_cell(self.rp - 2 * Self::SIZE)?;
+                self.push(
+                    data,
+                    fudged.wrapping_sub(isize::MIN as usize).wrapping_add(limit),
+                )?;
+            }
+            Op::J => {
+                let fudged = data.read_cell(self.rp - 3 * Self::SIZE)?;
+                let limit = data.read_cell(self.rp - 4 * Self::SIZE)?;
+                self.push(
+                    data,
+                    fudged.wrapping_sub(isize::MIN as usize).wrapping_add(limit),
+                )?;
+            }
+            Op::Unloop => {
+                self.rpop(data)?;
+                self.rpop(data)?;
             }
             Op::Str => {
                 let len = data.read_cell(self.ip)?;
