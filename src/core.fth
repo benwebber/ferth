@@ -228,6 +228,42 @@
 
 : type ( c-addr u -- ) begin dup while over c@ emit swap 1+ swap 1- repeat 2drop ;
 
+\ Free-field number display
+\   https://forth-standard.org/standard/usage#subsubsection.3.2.1.3
+\   https://www.jimbrooks.org/programming/forth/forthPicturedNumericOutput.php
+variable hld
+: pad ( -- c-addr ) here 84 + ;
+: hold ( char -- )
+  hld @ 1-   ( char hld-1 )
+  dup hld !  ( char hld-1 )
+  c!         ( )
+;
+: (digit) ( n -- char ) dup 9 > if 55 + else 48 + then ; \ ( 55 = 'A' - 10, 48 = '0')
+: # ( ud1 -- ud2 )
+  ( lo hi )
+  0 base @      ( lo hi 0 base )
+  um/mod >r     ( lo r1 ) ( R: qhi )
+  base @        ( lo r1 base )
+  um/mod        ( r0 qlo )
+  swap          ( qlo r0 )
+  (digit) hold  ( qlo )
+  r>            ( qlo qhi ) ( R: )
+;
+: <# ( -- ) pad 64 + hld ! ;
+: #s ( ud1 -- ud2 )
+  begin
+    #           ( ud2 )
+    2dup or 0=  ( ud2 flag )
+  until
+;
+: #> ( xd -- c-addr u )
+  2drop      ( )
+  hld @      ( c-addr )
+  pad 64 +   ( c-addr bufend )
+  over -     ( c-addr u )
+;
+: sign ( n -- ) 0< if [char] - hold then ;
+
 : s"
   ['] (s") ,
   [char] " parse  ( src len )
