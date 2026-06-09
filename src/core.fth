@@ -383,3 +383,16 @@ variable (leave-list)
   \ Data stack starts at 0x00.
   0 do i cells @ . loop
 ;
+
+: quit
+  \ TODO: Set source-id, and set input device to user input.
+  (rp0) @ (rp!)
+  postpone [
+  begin
+    refill
+  while
+    (interpret)
+  repeat
+;
+
+: abort ( -- ) (sp0) @ (sp!) quit ;
