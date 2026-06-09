@@ -78,6 +78,7 @@
 : <  ( n1 n2 -- flag ) 2dup xor 0< if      drop 0< else - 0< then ;
 : u< ( u1 u2 -- flag ) 2dup xor 0< if swap drop 0< else - 0< then ;
 : > swap < ;
+: 0> 0 > ;
 
 : ?dup ( x -- 0 | x x ) dup if dup then ;
 : abs dup 0< if negate then ;
@@ -381,7 +382,7 @@ variable (leave-list)
   \ Print <depth>.
   [char] < emit dup 0 <# #s #> type [char] > emit space
   \ Data stack starts at 0x00.
-  0 do i cells @ . loop
+  0 ?do i cells @ . loop
 ;
 
 : quit
