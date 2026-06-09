@@ -375,3 +375,11 @@ variable (leave-list)
   loop              ( start ptr )
   swap -            ( n2 )
 ;
+
+: .s ( -- )
+  depth
+  \ Print <depth>.
+  [char] < emit dup 0 <# #s #> type [char] > emit space
+  \ Data stack starts at 0x00.
+  0 do i cells @ . loop
+;
