@@ -295,6 +295,11 @@ variable hld
   align
 ; immediate
 
+\ dot commands
+: u. ( u -- ) 0 <# #s #> type space ;
+: . ( n -- ) dup abs 0 <# #s rot sign #> type space ;
+: ." ( C: "ccc<quote>" -- ) ( -- ) postpone s" postpone type ; immediate
+
 : recurse (latest) @ , ; immediate
 
 : evaluate ( i*x c-addr u -- j*x )
