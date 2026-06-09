@@ -397,3 +397,9 @@ variable (leave-list)
 ;
 
 : abort ( -- ) (sp0) @ (sp!) quit ;
+
+: (abort") ( flag c-addr u -- )
+  rot if type abort else 2drop then
+;
+
+: abort" postpone s" postpone (abort") ; immediate
