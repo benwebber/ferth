@@ -162,17 +162,37 @@
 : 2! swap over ! cell+ ! ;
 : 2@ dup cell+ @ swap @ ;
 
+\ Copy u consecutive bytes from addr1 to addr2.
+\
+\ Works like memmove(3).
 : move ( addr1 addr2 u -- )
-  begin
-    dup       ( addr1 addr2 u u )
-  while       ( addr1 addr2 u )
-    >r        ( addr1 addr2 ) ( R: u )
-    over c@   ( addr1 addr2 char )
-    over c!   ( addr1 addr2 )
-    swap 1+   ( addr2 addr1' )
-    swap 1+   ( addr1+1 addr2+1 )
-    r> 1-     ( addr1+1 addr2+1 u-1 )
-  repeat
+  >r 2dup u< r> swap if
+    \ addr2 > addr1. Copy from top to bottom to avoid overwriting the source.
+    dup >r            ( addr1 addr2 u ) ( R: u )
+    + swap r@ + swap  ( addr1+u addr2+u ) ( R: u )
+    r>                ( addr1+u addr2+u u )
+    begin
+      dup             ( a1 a2 u u )
+    while
+      >r              ( a1 a2 ) ( R: u )
+      1- swap 1- swap ( a1-1 a2-1 )
+      over c@         ( a1-1 a2-1 char )
+      over c!         ( a1-1 a2-1 )
+      r> 1-           ( a1-1 a2-1 u-1 ) ( R: )
+    repeat
+  else
+    \ addr1 > addr2. Copy from bottom to top.
+    begin
+      dup       ( addr1 addr2 u u )
+    while       ( addr1 addr2 u )
+      >r        ( addr1 addr2 ) ( R: u )
+      over c@   ( addr1 addr2 char )
+      over c!   ( addr1 addr2 )
+      swap 1+   ( addr2 addr1+1 )
+      swap 1+   ( addr1+1 addr2+1 )
+      r> 1-     ( addr1+1 addr2+1 u-1 )
+    repeat
+  then
   ( addr1 addr2 0 )
   drop drop drop
 ;
