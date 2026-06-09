@@ -26,9 +26,12 @@ impl<M: Mem> Data<M> {
 
     /// Read a slice of bytes.
     pub fn read(&self, addr: usize, len: usize) -> Result<&[u8]> {
+        let end = addr
+            .checked_add(len)
+            .ok_or(Error::AddressOutOfRange(addr))?;
         self.mem
             .as_ref()
-            .get(addr..addr + len)
+            .get(addr..end)
             .ok_or(Error::AddressOutOfRange(addr))
     }
 
@@ -53,10 +56,13 @@ impl<M: Mem> Data<M> {
 
     /// Write a slice of bytes.
     pub fn write(&mut self, addr: usize, bytes: &[u8]) -> Result<()> {
+        let end = addr
+            .checked_add(bytes.len())
+            .ok_or(Error::AddressOutOfRange(addr))?;
         let dst = self
             .mem
             .as_mut()
-            .get_mut(addr..addr + bytes.len())
+            .get_mut(addr..end)
             .ok_or(Error::AddressOutOfRange(addr))?;
         dst.copy_from_slice(bytes);
         Ok(())
