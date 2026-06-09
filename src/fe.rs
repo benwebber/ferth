@@ -56,6 +56,10 @@ pub struct Layout {
     source_addr: usize,
     /// The current input buffer length (`(source-len)`).
     source_len: usize,
+    /// The initial data stack pointer (`(sp0)`).
+    sp0: usize,
+    /// The initial return stack pointer (`(rp0)`).
+    rp0: usize,
     /// The terminal input buffer.
     input: [u8; INPUT_BUFFER_SIZE],
 }
@@ -69,6 +73,8 @@ impl Layout {
     pub const TO_IN: usize = offset_of!(Self, to_in);
     pub const SOURCE_ADDR: usize = offset_of!(Self, source_addr);
     pub const SOURCE_LEN: usize = offset_of!(Self, source_len);
+    pub const SP0: usize = offset_of!(Self, sp0);
+    pub const RP0: usize = offset_of!(Self, rp0);
     pub const INPUT: usize = offset_of!(Self, input);
     pub const DATA: usize = size_of::<Self>();
 }
@@ -197,6 +203,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b">in", Layout::TO_IN, 0),
             (b"base", Layout::BASE, 10),
             (b"state", Layout::STATE, 0),
+            (b"(sp0)", Layout::SP0, Vm::DS_ADDR),
+            (b"(rp0)", Layout::RP0, self.vm.rs_addr() + Vm::SIZE),
         ];
         for (_, offset, value) in variables {
             self.data.write_cell(self.layout_base + offset, *value)?;
@@ -230,6 +238,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"c!", Op::CStore),
             (b"c@", Op::CFetch),
             (b"(sp@)", Op::SpFetch),
+            (b"(sp!)", Op::SpStore),
+            (b"(rp@)", Op::RpFetch),
+            (b"(rp!)", Op::RpStore),
             (b"drop", Op::Drop),
             (b"r>", Op::RFrom),
             (b"swap", Op::Swap),

@@ -251,6 +251,27 @@ ops! {
     /// (sp@) ( -- a-addr )
     /// ```
     SpFetch = 0x21,
+
+    /// Set the data stack pointer.
+    ///
+    /// ```text
+    /// (sp!) ( a-addr -- )
+    /// ```
+    SpStore = 0x23,
+
+    /// Push the return stack pointer to the data stack.
+    ///
+    /// ```text
+    /// (rp@) ( -- a-addr )
+    /// ```
+    RpFetch = 0x24,
+
+    /// Set the return stack pointer.
+    ///
+    /// ```text
+    /// (rp!) ( a-addr -- )
+    /// ```
+    RpStore = 0x25,
 }
 
 /// A token used to continue exection after yielding.
@@ -312,7 +333,7 @@ impl Vm {
     /// The size of a cell in bytes.
     pub const SIZE: usize = size_of::<usize>();
     /// The address of the bottom of the data stack.
-    const DS_ADDR: usize = 0;
+    pub const DS_ADDR: usize = 0;
 
     pub fn new(ds_len: usize, rs_len: usize) -> Self {
         assert!(Self::layout_ok(rs_len, rs_len), "stacks too small");
@@ -382,7 +403,7 @@ impl Vm {
     }
 
     /// Return the address of the bottom of the return stack.
-    fn rs_addr(&self) -> usize {
+    pub fn rs_addr(&self) -> usize {
         self.ds_len * Self::SIZE
     }
 
@@ -615,6 +636,23 @@ impl Vm {
             }
             Op::SpFetch => {
                 self.push(data, self.sp)?;
+            }
+            Op::SpStore => {
+                let addr = self.pop(data)?;
+                if addr > Self::DS_ADDR + self.ds_len * Self::SIZE {
+                    return Err(Error::AddressOutOfRange(addr));
+                }
+                self.sp = addr;
+            }
+            Op::RpFetch => {
+                self.push(data, self.rp)?;
+            }
+            Op::RpStore => {
+                let addr = self.pop(data)?;
+                if addr < self.rs_addr() || addr > self.rs_addr() + self.rs_len * Self::SIZE {
+                    return Err(Error::AddressOutOfRange(addr));
+                }
+                self.rp = addr;
             }
         }
         Ok(None)
