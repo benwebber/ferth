@@ -265,6 +265,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"postpone", Self::postpone, IMMEDIATE),
             (b"refill", Self::refill, 0),
             (b"(header)", Self::header, 0),
+            (b">number", Self::to_number, 0),
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
@@ -503,6 +504,33 @@ impl<M: Mem, I: Io> Fe<M, I> {
         self.data
             .write_cell(self.layout_addr(Layout::LATEST), cfa)?;
         self.data.write_cell(self.layout_addr(Layout::HERE), cfa)
+    }
+
+    /// Parse digits and add them to an accumulator.
+    ///
+    /// ```text
+    /// >number ( ud1 c-addr1 u1 -- ud2 c-addr2 u2 )
+    /// ```
+    #[allow(clippy::wrong_self_convention)]
+    fn to_number(&mut self) -> Result<()> {
+        let u: usize = self.pop()?.into();
+        let caddr: usize = self.pop()?.into();
+        let acc_hi = usize::from(self.pop()?) as u128;
+        let acc_lo = usize::from(self.pop()?) as u128;
+        let acc = (acc_hi << (8 * Vm::SIZE)) | acc_lo;
+        let bytes = self.data.read(caddr, u)?;
+        // TODO: Check base size.
+        let base = self.data.read_cell(self.layout_addr(Layout::BASE))? as u32;
+        let (acc, rest) = parser::to_number(acc, bytes, base);
+        let len = bytes.len() - rest.len();
+        let acc_lo = acc as usize;
+        let acc_hi = (acc >> (8 * Vm::SIZE)) as usize;
+        let caddr2 = caddr + len;
+        let u2 = rest.len();
+        self.push(Cell(acc_lo))?;
+        self.push(Cell(acc_hi))?;
+        self.push(Cell(caddr2))?;
+        self.push(Cell(u2))
     }
 
     fn write_header(&mut self, name: &[u8], flags: u8) -> Result<usize> {
