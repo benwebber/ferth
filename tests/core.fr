@@ -996,6 +996,7 @@ CREATE ABUF 50 CHARS ALLOT
 ;
 
 T{ ACCEPT-TEST -> }T
+HACK: accept reads this line from BufIo.
 
 \ ------------------------------------------------------------------------
 TESTING DICTIONARY SEARCH RULES

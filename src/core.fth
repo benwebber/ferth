@@ -363,3 +363,15 @@ variable (leave-list)
 ; immediate
 
 : fill ( c-addr u char -- ) rot rot 0 ?do 2dup c! char+ loop 2drop ;
+
+: accept ( c-addr +n1 -- +n2 )
+  over swap         ( start ptr )
+  0 ?do
+    key             ( start ptr c )
+    dup $0a = if    \ if c == '\n'
+      drop leave      ( start ptr )
+    then
+    over c! char+   ( start ptr+1 )
+  loop              ( start ptr )
+  swap -            ( n2 )
+;
