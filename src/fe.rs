@@ -215,6 +215,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"(lit)", Op::Lit),
             (b"(nand)", Op::Nand),
             (b"(do)", Op::Do),
+            (b"(?do)", Op::QDo),
             (b"(+loop)", Op::PlusLoop),
             (b"unloop", Op::Unloop),
             (b"i", Op::I),

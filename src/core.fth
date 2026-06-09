@@ -326,3 +326,15 @@ variable (leave-list)
   here 1 cells -
   (leave-list) !
 ; immediate
+
+: ?do ( n1|u1 n2|u2 -- ) ( R: -- loop-sys )
+  ['] (?do) ,
+  (leave-list) @
+  0 (leave-list) !
+  (leave-list) @ ,
+  here 1 cells -
+  (leave-list) !
+  here
+; immediate
+
+: fill ( c-addr u char -- ) rot rot 0 ?do 2dup c! char+ loop 2drop ;

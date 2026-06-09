@@ -180,6 +180,13 @@ ops! {
     /// ```
     Do = 0x19,
 
+    /// Branch if the top two stack items are equal, otherwise set up a loop state.
+    ///
+    /// ```text
+    /// (?do) ( limit index -- ) ( R: limit index' | )
+    /// ```
+    QDo = 0x22,
+
     /// Perform one iteration of a loop.
     ///
     /// ```text
@@ -562,6 +569,21 @@ impl Vm {
             Op::Unloop => {
                 self.rpop(data)?;
                 self.rpop(data)?;
+            }
+            Op::QDo => {
+                let index = self.pop(data)?;
+                let limit = self.pop(data)?;
+                if index == limit {
+                    // Jump.
+                    self.ip = data.read_cell(self.ip)?;
+                } else {
+                    // Step over target.
+                    self.ip += Self::SIZE;
+                    self.rpush(data, limit)?;
+                    // index' = index - limit + isize::MIN
+                    let fudged = index.wrapping_sub(limit).wrapping_add(isize::MIN as usize);
+                    self.rpush(data, fudged)?;
+                }
             }
             Op::Str => {
                 let len = data.read_cell(self.ip)?;
