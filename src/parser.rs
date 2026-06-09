@@ -31,12 +31,16 @@ pub fn parse_num(bytes: &[u8], base: u32) -> Option<usize> {
         return None;
     }
 
-    let s = core::str::from_utf8(rest).ok()?;
-    let n = isize::from_str_radix(s, base).ok()?;
+    let (acc, rest) = to_number(0, rest, base);
+
+    if !rest.is_empty() {
+        return None;
+    }
+
     if neg {
-        Some(n.wrapping_neg() as usize)
+        Some(acc.wrapping_neg() as usize)
     } else {
-        Some(n as usize)
+        Some(acc as usize)
     }
 }
 
