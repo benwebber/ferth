@@ -109,7 +109,8 @@ impl Io for StdIo {
 
     fn emit(&mut self, u: u8) -> Result<()> {
         use std::io::Write;
-        std::io::stdout().write_all(&[u]).map_err(|_| Error::Io)
+        std::io::stdout().write_all(&[u]).map_err(|_| Error::Io)?;
+        std::io::stdout().flush().map_err(|_| Error::Io)
     }
 
     fn read_line(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
