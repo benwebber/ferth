@@ -24,7 +24,6 @@ pub const BL: Cell = Cell(0x20);
 
 const CORE: &[u8] = include_bytes!("core.fth");
 const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
-const STRING: &[u8] = include_bytes!("string.fth");
 
 pub type Builtin<M, I> = fn(&mut Fe<M, I>) -> Result<()>;
 
@@ -476,7 +475,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         // 7. Bootstrap core wordlists.
         //
         // With the compiler words bootstrapped, we can bootstrap the rest of the system in Forth.
-        for src in &[CORE, CORE_EXT, STRING] {
+        for src in &[CORE, CORE_EXT] {
             for line in src.split(|&b| b == b'\n') {
                 if !line.is_empty() {
                     self.evaluate(line)?;
@@ -1499,5 +1498,56 @@ mod tests {
             .unwrap();
         fe.evaluate(b"test").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(3)); // 0+1+2, exits before adding 3
+    }
+
+    #[test]
+    fn test_environment() {
+        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+
+        let single = |fe: &mut TestFe, q: &[u8], expected: usize| {
+            fe.evaluate(q).unwrap();
+            assert_eq!(fe.pop().unwrap(), Cell(usize::MAX)); // true
+            assert_eq!(fe.pop().unwrap(), Cell(expected));
+        };
+        let double = |fe: &mut TestFe, q: &[u8], lo: usize, hi: usize| {
+            fe.evaluate(q).unwrap();
+            assert_eq!(fe.pop().unwrap(), Cell(usize::MAX)); // true
+            assert_eq!(fe.pop().unwrap(), Cell(hi));
+            assert_eq!(fe.pop().unwrap(), Cell(lo));
+        };
+
+        single(
+            &mut fe,
+            br#"s" /COUNTED-STRING" environment?"#,
+            u8::MAX as usize,
+        );
+        single(&mut fe, br#"s" /HOLD" environment?"#, 64);
+        single(&mut fe, br#"s" /PAD" environment?"#, 84);
+        single(
+            &mut fe,
+            br#"s" ADDRESS-UNIT-BITS" environment?"#,
+            size_of::<usize>(),
+        );
+        single(&mut fe, br#"s" FLOORED" environment?"#, 0);
+        single(&mut fe, br#"s" MAX-CHAR" environment?"#, u8::MAX as usize);
+        double(
+            &mut fe,
+            br#"s" MAX-D" environment?"#,
+            usize::MAX,
+            isize::MAX as usize,
+        );
+        single(&mut fe, br#"s" MAX-N" environment?"#, isize::MAX as usize);
+        single(&mut fe, br#"s" MAX-U" environment?"#, usize::MAX);
+        double(
+            &mut fe,
+            br#"s" MAX-UD" environment?"#,
+            usize::MAX,
+            usize::MAX,
+        );
+        single(&mut fe, br#"s" RETURN-STACK-CELLS" environment?"#, 64);
+        single(&mut fe, br#"s" STACK-CELLS" environment?"#, 64);
+
+        fe.evaluate(br#"s" UNKNOWN" environment?"#).unwrap();
+        assert_eq!(fe.pop().unwrap(), Cell(0)); // false
     }
 }

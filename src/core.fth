@@ -396,3 +396,47 @@ variable (leave-list)
 ;
 
 : abort" postpone s" postpone (abort") ; immediate
+
+: compare ( c-addr1 u1 c-addr2 u2 -- n )
+  \ Save the length comparision value.
+  rot                     ( addr1 addr2 len2 len1 )
+  2dup > if -1 else
+  2dup < if 1 else
+  0
+  then then >r            ( addr1 addr2 len2 len1 ) ( R: n )
+  \ Compare byte-by-byte until minimum length.
+  min                     ( addr1 addr2 min )
+  begin
+    dup                   ( addr1 addr2 min min )
+  while                   ( addr1 addr2 min )
+    >r                    ( addr1 addr2 ) ( R: n min )
+    over c@               ( addr1 addr2 c1 )
+    over c@               ( addr1 addr2 c1 c2 )
+    2dup <> if
+      < if -1 else 1 then ( addr1 addr2 n )
+      >r 2drop r>         ( n )
+      r> drop r> drop     ( n ) ( R: )
+      exit
+    then
+    2drop                 ( addr1 addr2 )
+    swap 1+ swap 1+       ( addr1' addr2' )
+    r> 1-                 ( addr1' addr2' min' ) ( R: n )
+  repeat
+  2drop drop r>           ( n ) ( R: )
+;
+
+: environment? ( c-addr u -- false | i*x true )
+  2dup s" /COUNTED-STRING"    compare 0= if 2drop (/counted-string)    true exit then
+  2dup s" /HOLD"              compare 0= if 2drop (/hold)              true exit then
+  2dup s" /PAD"               compare 0= if 2drop (/pad)               true exit then
+  2dup s" ADDRESS-UNIT-BITS"  compare 0= if 2drop (address-unit-bits)  true exit then
+  2dup s" FLOORED"            compare 0= if 2drop (floored)            true exit then
+  2dup s" MAX-CHAR"           compare 0= if 2drop (max-char)           true exit then
+  2dup s" MAX-D"              compare 0= if 2drop (max-d)              true exit then
+  2dup s" MAX-N"              compare 0= if 2drop (max-n)              true exit then
+  2dup s" MAX-U"              compare 0= if 2drop (max-u)              true exit then
+  2dup s" MAX-UD"             compare 0= if 2drop (max-ud)             true exit then
+  2dup s" RETURN-STACK-CELLS" compare 0= if 2drop (return-stack-cells) true exit then
+  2dup s" STACK-CELLS"        compare 0= if 2drop (stack-cells)        true exit then
+  2drop false
+;

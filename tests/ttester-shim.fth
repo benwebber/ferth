@@ -4,8 +4,6 @@
 \ This system does not support floating point yet. This file provides shims to
 \ load the file and skip those tests.
 
-: environment? 2drop 0 ;
-
 \ [IF]/[ELSE]/[THEN] reference implementations. Case-sensitive.
 \
 \   https://forth-standard.org/standard/tools/BracketELSE
@@ -28,6 +26,6 @@
      repeat 2drop                       ( level )
   refill 0= until                       ( level )
   drop
-; immediate 
+; immediate
 : [IF] ( flag -- ) 0= if postpone [ELSE] then ; immediate
 : [THEN] ( -- ) ; immediate
