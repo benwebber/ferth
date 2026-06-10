@@ -621,7 +621,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let len = u.min(255);
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
         if here + 1 + len > self.data.len() {
-            return Err(crate::VmError::AddressOutOfRange(here).into());
+            return Err(crate::vm::VmError::AddressOutOfRange(here).into());
         }
         // We need to read into a temporary buffer because `read` takes an immutable reference and
         // `write` takes a mutable one. `Data` could provide a `copy_within` method to avoid this.
@@ -976,7 +976,7 @@ mod tests {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
         fe.evaluate(b"variable foo").unwrap();
         fe.evaluate(b"42 foo !").unwrap();
-        assert_eq!(fe.pop(), Err(Error::Vm(crate::VmError::StackUnderflow)));
+        assert_eq!(fe.pop(), Err(Error::Vm(crate::vm::VmError::StackUnderflow)));
         fe.evaluate(b"foo @").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(42));
     }
@@ -1285,7 +1285,7 @@ mod tests {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
         fe.evaluate(b"1 2 3 2drop").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(1));
-        assert_eq!(fe.pop(), Err(Error::Vm(crate::VmError::StackUnderflow)));
+        assert_eq!(fe.pop(), Err(Error::Vm(crate::vm::VmError::StackUnderflow)));
     }
 
     #[test]
@@ -1303,7 +1303,7 @@ mod tests {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
         fe.evaluate(b"0 ?dup").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(0));
-        assert_eq!(fe.pop(), Err(Error::Vm(crate::VmError::StackUnderflow)));
+        assert_eq!(fe.pop(), Err(Error::Vm(crate::vm::VmError::StackUnderflow)));
         fe.evaluate(b"42 ?dup").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(42));
         assert_eq!(fe.pop().unwrap(), Cell(42));

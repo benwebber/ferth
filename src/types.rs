@@ -1,5 +1,5 @@
 //! Forth data types.
-use crate::{VmError, VmResult};
+use crate::vm::{VmError, VmResult};
 
 /// A value on the stack, and a word in memory (*x*).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]

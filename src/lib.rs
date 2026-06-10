@@ -27,5 +27,5 @@ mod parser;
 mod types;
 mod vm;
 
-pub use error::{Error, Result, VmError, VmResult};
+pub use error::{Error, Result};
 pub use fe::Fe;

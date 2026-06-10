@@ -1,6 +1,6 @@
 //! The system data space.
 use crate::types::AAddr;
-use crate::{VmError, VmResult};
+use crate::vm::{VmError, VmResult};
 
 pub trait Mem: AsRef<[u8]> + AsMut<[u8]> {}
 
