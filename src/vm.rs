@@ -2,7 +2,7 @@
 use core::mem::size_of;
 
 use crate::data::{Data, Mem};
-use crate::{Error, Result};
+use crate::{VmError, VmResult};
 
 macro_rules! ops {
     ($($(#[$attr:meta])* $name:ident = $val:literal),+ $(,)?) => {
@@ -16,10 +16,10 @@ macro_rules! ops {
         impl Op {
             pub const MAX: usize = u8::MAX as usize;
 
-            fn from_usize(u: usize) -> Result<Self> {
+            fn from_usize(u: usize) -> VmResult<Self> {
                 match u {
                     $($val => Ok(Op::$name),)+
-                    _ => Err(Error::InvalidOpCode(u as u8)),
+                    _ => Err(VmError::InvalidOpCode(u as u8)),
                 }
             }
         }
@@ -352,7 +352,7 @@ impl Vm {
     }
 
     /// Execute instructions until a stop condition.
-    pub fn run<M: Mem>(&mut self, data: &mut Data<M>) -> Result<Stop> {
+    pub fn run<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Stop> {
         loop {
             if self.ip == 0 {
                 // Sentinel address, always outside range of data space.
@@ -367,13 +367,13 @@ impl Vm {
     }
 
     /// Resume execution after yielding.
-    pub fn resume<M: Mem>(&mut self, data: &mut Data<M>, token: YieldToken) -> Result<Stop> {
+    pub fn resume<M: Mem>(&mut self, data: &mut Data<M>, token: YieldToken) -> VmResult<Stop> {
         self.ip = token.ip;
         self.run(data)
     }
 
     /// Execute the instruction at `addr`.
-    pub fn call<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> Result<Stop> {
+    pub fn call<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<Stop> {
         self.ip = 0;
         self.w = addr;
         match self.dispatch(data)? {
@@ -408,9 +408,9 @@ impl Vm {
     }
 
     /// Push a cell onto the data stack.
-    pub fn push<M: Mem>(&mut self, data: &mut Data<M>, x: usize) -> Result<()> {
+    pub fn push<M: Mem>(&mut self, data: &mut Data<M>, x: usize) -> VmResult<()> {
         if self.sp >= Self::DS_ADDR + self.ds_len * Self::SIZE {
-            return Err(Error::StackOverflow);
+            return Err(VmError::StackOverflow);
         }
         data.write_cell(self.sp, x)?;
         self.sp += Self::SIZE;
@@ -418,18 +418,18 @@ impl Vm {
     }
 
     /// Pop a cell from the data stack.
-    pub fn pop<M: Mem>(&mut self, data: &mut Data<M>) -> Result<usize> {
+    pub fn pop<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<usize> {
         if self.sp == Self::DS_ADDR {
-            return Err(Error::StackUnderflow);
+            return Err(VmError::StackUnderflow);
         }
         self.sp -= Self::SIZE;
         data.read_cell(self.sp)
     }
 
     /// Push a cell onto the return stack.
-    fn rpush<M: Mem>(&mut self, data: &mut Data<M>, x: usize) -> Result<()> {
+    fn rpush<M: Mem>(&mut self, data: &mut Data<M>, x: usize) -> VmResult<()> {
         if self.rp >= self.rs_addr() + self.rs_len * Self::SIZE {
-            return Err(Error::ReturnStackOverflow);
+            return Err(VmError::ReturnStackOverflow);
         }
         data.write_cell(self.rp, x)?;
         self.rp += Self::SIZE;
@@ -437,16 +437,16 @@ impl Vm {
     }
 
     /// Pop a cell from the return stack.
-    fn rpop<M: Mem>(&mut self, data: &mut Data<M>) -> Result<usize> {
+    fn rpop<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<usize> {
         if self.rp == self.rs_addr() {
-            return Err(Error::ReturnStackUnderflow);
+            return Err(VmError::ReturnStackUnderflow);
         }
         self.rp -= Self::SIZE;
         data.read_cell(self.rp)
     }
 
     /// Execute a single [`Op`] code.
-    fn execute<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> Result<Option<Stop>> {
+    fn execute<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
         match op {
             Op::Halt => {
                 return Ok(Some(Stop::Halt));
@@ -541,14 +541,14 @@ impl Vm {
             }
             Op::RFetch => {
                 if self.rp == self.rs_addr() {
-                    return Err(Error::StackUnderflow);
+                    return Err(VmError::ReturnStackUnderflow);
                 }
                 let x = data.read_cell(self.rp - Self::SIZE)?;
                 self.push(data, x)?;
             }
             Op::Yield => {
                 // Unreachable, but don't panic. `dispatch()` intercepts `Yield` first.
-                return Err(Error::InvalidOpCode(op as u8));
+                return Err(VmError::InvalidOpCode(op as u8));
             }
             Op::Do => {
                 let index = self.pop(data)?;
@@ -628,7 +628,7 @@ impl Vm {
                 let ud_hi = self.pop(data)? as u128;
                 let ud_lo = self.pop(data)? as u128;
                 if u1 == 0 {
-                    return Err(Error::DivisionByZero);
+                    return Err(VmError::DivisionByZero);
                 }
                 let ud = (ud_hi << (8 * Self::SIZE)) | ud_lo;
                 self.push(data, (ud % u1) as usize)?;
@@ -640,7 +640,7 @@ impl Vm {
             Op::SpStore => {
                 let addr = self.pop(data)?;
                 if addr > Self::DS_ADDR + self.ds_len * Self::SIZE {
-                    return Err(Error::AddressOutOfRange(addr));
+                    return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.sp = addr;
             }
@@ -650,7 +650,7 @@ impl Vm {
             Op::RpStore => {
                 let addr = self.pop(data)?;
                 if addr < self.rs_addr() || addr > self.rs_addr() + self.rs_len * Self::SIZE {
-                    return Err(Error::AddressOutOfRange(addr));
+                    return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.rp = addr;
             }
@@ -659,7 +659,7 @@ impl Vm {
     }
 
     /// Execute the code referenced by the W register.
-    fn dispatch<M: Mem>(&mut self, data: &mut Data<M>) -> Result<Option<Stop>> {
+    fn dispatch<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Option<Stop>> {
         let w = data.read_cell(self.w)?;
         if w >= self.reserved() {
             // W is an address. This is a create/does> word.

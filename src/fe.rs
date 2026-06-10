@@ -125,7 +125,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// ```
     pub fn push<T: Into<Cell>>(&mut self, x: T) -> Result<()> {
         let x: Cell = x.into();
-        self.vm.push(&mut self.data, x.into())
+        self.vm.push(&mut self.data, x.into())?;
+        Ok(())
     }
 
     /// Pop an item from the data stack.
@@ -134,7 +135,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// ( x --  )
     /// ```
     pub fn pop(&mut self) -> Result<Cell> {
-        self.vm.pop(&mut self.data).map(Cell)
+        Ok(self.vm.pop(&mut self.data).map(Cell)?)
     }
 
     /// Evaluate Forth code.
@@ -515,7 +516,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let cfa = self.write_header(&buf[..len], 0)?;
         self.data
             .write_cell(self.layout_addr(Layout::LATEST), cfa)?;
-        self.data.write_cell(self.layout_addr(Layout::HERE), cfa)
+        self.data.write_cell(self.layout_addr(Layout::HERE), cfa)?;
+        Ok(())
     }
 
     /// Parse digits and add them to an accumulator.
@@ -589,7 +591,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
         self.data.write_cell(here, val)?;
         self.data
-            .write_cell(self.layout_addr(Layout::HERE), here + Vm::SIZE)
+            .write_cell(self.layout_addr(Layout::HERE), here + Vm::SIZE)?;
+        Ok(())
     }
 
     /// ( "<spaces>" -- c-addr )
@@ -618,7 +621,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let len = u.min(255);
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
         if here + 1 + len > self.data.len() {
-            return Err(Error::AddressOutOfRange(here));
+            return Err(crate::VmError::AddressOutOfRange(here).into());
         }
         // We need to read into a temporary buffer because `read` takes an immutable reference and
         // `write` takes a mutable one. `Data` could provide a `copy_within` method to avoid this.
@@ -973,7 +976,7 @@ mod tests {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
         fe.evaluate(b"variable foo").unwrap();
         fe.evaluate(b"42 foo !").unwrap();
-        assert_eq!(fe.pop(), Err(Error::StackUnderflow));
+        assert_eq!(fe.pop(), Err(Error::Vm(crate::VmError::StackUnderflow)));
         fe.evaluate(b"foo @").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(42));
     }
@@ -1282,7 +1285,7 @@ mod tests {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
         fe.evaluate(b"1 2 3 2drop").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(1));
-        assert_eq!(fe.pop(), Err(Error::StackUnderflow));
+        assert_eq!(fe.pop(), Err(Error::Vm(crate::VmError::StackUnderflow)));
     }
 
     #[test]
@@ -1300,7 +1303,7 @@ mod tests {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
         fe.evaluate(b"0 ?dup").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(0));
-        assert_eq!(fe.pop(), Err(Error::StackUnderflow));
+        assert_eq!(fe.pop(), Err(Error::Vm(crate::VmError::StackUnderflow)));
         fe.evaluate(b"42 ?dup").unwrap();
         assert_eq!(fe.pop().unwrap(), Cell(42));
         assert_eq!(fe.pop().unwrap(), Cell(42));

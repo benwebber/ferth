@@ -1,6 +1,6 @@
 //! The system data space.
 use crate::types::AAddr;
-use crate::{Error, Result};
+use crate::{VmError, VmResult};
 
 pub trait Mem: AsRef<[u8]> + AsMut<[u8]> {}
 
@@ -25,18 +25,18 @@ impl<M: Mem> Data<M> {
     }
 
     /// Read a slice of bytes.
-    pub fn read(&self, addr: usize, len: usize) -> Result<&[u8]> {
+    pub fn read(&self, addr: usize, len: usize) -> VmResult<&[u8]> {
         let end = addr
             .checked_add(len)
-            .ok_or(Error::AddressOutOfRange(addr))?;
+            .ok_or(VmError::AddressOutOfRange(addr))?;
         self.mem
             .as_ref()
             .get(addr..end)
-            .ok_or(Error::AddressOutOfRange(addr))
+            .ok_or(VmError::AddressOutOfRange(addr))
     }
 
     /// Read a single cell.
-    pub fn read_cell(&self, addr: usize) -> Result<usize> {
+    pub fn read_cell(&self, addr: usize) -> VmResult<usize> {
         const SIZE: usize = size_of::<usize>();
         AAddr::try_from(addr)?;
         let bytes = self.read(addr, SIZE)?;
@@ -46,41 +46,41 @@ impl<M: Mem> Data<M> {
     }
 
     /// Read a single character (byte).
-    pub fn read_char(&self, addr: usize) -> Result<u8> {
+    pub fn read_char(&self, addr: usize) -> VmResult<u8> {
         self.mem
             .as_ref()
             .get(addr)
-            .ok_or(Error::AddressOutOfRange(addr))
+            .ok_or(VmError::AddressOutOfRange(addr))
             .copied()
     }
 
     /// Write a slice of bytes.
-    pub fn write(&mut self, addr: usize, bytes: &[u8]) -> Result<()> {
+    pub fn write(&mut self, addr: usize, bytes: &[u8]) -> VmResult<()> {
         let end = addr
             .checked_add(bytes.len())
-            .ok_or(Error::AddressOutOfRange(addr))?;
+            .ok_or(VmError::AddressOutOfRange(addr))?;
         let dst = self
             .mem
             .as_mut()
             .get_mut(addr..end)
-            .ok_or(Error::AddressOutOfRange(addr))?;
+            .ok_or(VmError::AddressOutOfRange(addr))?;
         dst.copy_from_slice(bytes);
         Ok(())
     }
 
     /// Write a single cell.
-    pub fn write_cell(&mut self, addr: usize, x: usize) -> Result<()> {
+    pub fn write_cell(&mut self, addr: usize, x: usize) -> VmResult<()> {
         AAddr::try_from(addr)?;
         self.write(addr, &x.to_le_bytes())
     }
 
     /// Write a single character (byte).
-    pub fn write_char(&mut self, addr: usize, c: u8) -> Result<()> {
+    pub fn write_char(&mut self, addr: usize, c: u8) -> VmResult<()> {
         *self
             .mem
             .as_mut()
             .get_mut(addr)
-            .ok_or(Error::AddressOutOfRange(addr))? = c;
+            .ok_or(VmError::AddressOutOfRange(addr))? = c;
         Ok(())
     }
 }

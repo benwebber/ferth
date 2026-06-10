@@ -1,5 +1,5 @@
 //! Forth data types.
-use crate::Error;
+use crate::{VmError, VmResult};
 
 /// A value on the stack, and a word in memory (*x*).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -39,23 +39,23 @@ impl From<Cell> for usize {
 pub struct AAddr(pub usize);
 
 impl TryFrom<usize> for AAddr {
-    type Error = Error;
+    type Error = VmError;
 
     #[inline]
-    fn try_from(u: usize) -> Result<Self, Self::Error> {
+    fn try_from(u: usize) -> VmResult<Self> {
         if u.is_multiple_of(Cell::SIZE) {
             Ok(Self(u))
         } else {
-            Err(Error::AddressMisaligned(u))
+            Err(VmError::AddressMisaligned(u))
         }
     }
 }
 
 impl TryFrom<Cell> for AAddr {
-    type Error = Error;
+    type Error = VmError;
 
     #[inline]
-    fn try_from(c: Cell) -> Result<Self, Self::Error> {
+    fn try_from(c: Cell) -> VmResult<Self> {
         Self::try_from(c.0)
     }
 }
@@ -86,12 +86,12 @@ mod tests {
     #[test]
     fn aaddr_misaligned() {
         let bad = Cell::SIZE + 1;
-        assert_eq!(AAddr::try_from(bad), Err(Error::AddressMisaligned(bad)));
+        assert_eq!(AAddr::try_from(bad), Err(VmError::AddressMisaligned(bad)));
     }
 
     #[test]
     fn aaddr_from_cell() {
         assert!(AAddr::try_from(Cell(Cell::SIZE)).is_ok());
-        assert_eq!(AAddr::try_from(Cell(1)), Err(Error::AddressMisaligned(1)));
+        assert_eq!(AAddr::try_from(Cell(1)), Err(VmError::AddressMisaligned(1)));
     }
 }
