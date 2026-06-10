@@ -45,6 +45,14 @@ impl<M: Mem> Data<M> {
         Ok(usize::from_le_bytes(buf))
     }
 
+    #[cfg(feature = "unsafe")]
+    pub unsafe fn read_cell_unchecked(&self, addr: usize) -> usize {
+        const SIZE: usize = size_of::<usize>();
+        unsafe {
+            usize::from_le_bytes(*(self.mem.as_ref().as_ptr().add(addr) as *const [u8; SIZE]))
+        }
+    }
+
     /// Read a single character (byte).
     pub fn read_char(&self, addr: usize) -> VmResult<u8> {
         self.mem
@@ -72,6 +80,12 @@ impl<M: Mem> Data<M> {
     pub fn write_cell(&mut self, addr: usize, x: usize) -> VmResult<()> {
         AAddr::try_from(addr)?;
         self.write(addr, &x.to_le_bytes())
+    }
+
+    #[cfg(feature = "unsafe")]
+    pub unsafe fn write_cell_unchecked(&mut self, addr: usize, x: usize) {
+        const SIZE: usize = size_of::<usize>();
+        unsafe { *(self.mem.as_mut().as_mut_ptr().add(addr) as *mut [u8; SIZE]) = x.to_le_bytes() };
     }
 
     /// Write a single character (byte).

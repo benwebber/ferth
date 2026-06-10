@@ -306,6 +306,9 @@ pub enum Stop {
 /// The inner interpreter does not own the system memory. It reserves a portion of memory at the
 /// bottom of the address space for its data stack and return stack. It maintains execution state
 /// with a set of internal registers, inaccessible to the host.
+///
+/// The `unsafe` crate feature enables unsafe stack access optimizations. They are safe in practice
+/// because the interpreter controls access to and validates the stack pointer addresses.
 pub struct Vm {
     /// The instruction pointer (IP).
     ///
@@ -412,6 +415,11 @@ impl Vm {
         if self.sp >= Self::DS_ADDR + self.ds_len * Self::SIZE {
             return Err(VmError::StackOverflow);
         }
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            data.write_cell_unchecked(self.sp, x)
+        };
+        #[cfg(not(feature = "unsafe"))]
         data.write_cell(self.sp, x)?;
         self.sp += Self::SIZE;
         Ok(())
@@ -423,7 +431,14 @@ impl Vm {
             return Err(VmError::StackUnderflow);
         }
         self.sp -= Self::SIZE;
-        data.read_cell(self.sp)
+        #[cfg(feature = "unsafe")]
+        {
+            Ok(unsafe { data.read_cell_unchecked(self.sp) })
+        }
+        #[cfg(not(feature = "unsafe"))]
+        {
+            data.read_cell(self.sp)
+        }
     }
 
     /// Push a cell onto the return stack.
@@ -431,6 +446,11 @@ impl Vm {
         if self.rp >= self.rs_addr() + self.rs_len * Self::SIZE {
             return Err(VmError::ReturnStackOverflow);
         }
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            data.write_cell_unchecked(self.rp, x)
+        };
+        #[cfg(not(feature = "unsafe"))]
         data.write_cell(self.rp, x)?;
         self.rp += Self::SIZE;
         Ok(())
@@ -442,7 +462,14 @@ impl Vm {
             return Err(VmError::ReturnStackUnderflow);
         }
         self.rp -= Self::SIZE;
-        data.read_cell(self.rp)
+        #[cfg(feature = "unsafe")]
+        {
+            Ok(unsafe { data.read_cell_unchecked(self.rp) })
+        }
+        #[cfg(not(feature = "unsafe"))]
+        {
+            data.read_cell(self.rp)
+        }
     }
 
     /// Execute a single [`Op`] code.

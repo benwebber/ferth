@@ -13,6 +13,7 @@ categories = ["compilers", "no-std"]
 [features]
 std = []
 repl = ["std", "dep:rustyline"]
+unsafe = []
 
 [[bin]]
 name = "fe"
