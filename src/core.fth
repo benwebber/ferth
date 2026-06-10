@@ -275,14 +275,18 @@ variable hld
 : sign ( n -- ) 0< if [char] - hold then ;
 
 : s"
-  ['] (s") ,
-  [char] " parse  ( src len )
-  dup ,           \ compile len
-  dup allot       \ reserve space for string bytes
-  here over -     ( src len string_start )
-  swap            ( src string_start len )
-  move
-  align
+  state @ if
+    ['] (s") ,
+    [char] " parse  ( src len )
+    dup ,           \ compile len
+    dup allot       \ reserve space for string bytes
+    here over -     ( src len string_start )
+    swap            ( src string_start len )
+    move
+    align
+  else
+    [char] " parse
+  then
 ; immediate
 
 \ dot commands
