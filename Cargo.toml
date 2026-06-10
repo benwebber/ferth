@@ -18,8 +18,13 @@ repl = ["std", "dep:rustyline"]
 name = "fe"
 required-features = ["repl"]
 
+[[bench]]
+name = "core"
+harness = false
+
 [dependencies]
 rustyline = { version = "14", optional = true }
 
 [dev-dependencies]
+criterion = "0.8.2"
 ferth = { path = ".", features = ["std"] }
