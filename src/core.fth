@@ -20,9 +20,6 @@
 : over >r dup r> swap ;
 : rot >r swap r> swap ;
 
-\ : invert dup (nand) ;
-\ : and (nand) invert ;
-\ : or invert swap invert (nand) ;
 : xor over over and invert >r or r> and ;
 : negate invert 1 + ;
 
@@ -30,7 +27,6 @@
 
 : 1+ 1 + ;
 : 1- -1 + ;
-\ : - invert 1+ + ;
 : 2* 2 * ;
 
 : = xor 0= ;
@@ -40,14 +36,7 @@
 : +! dup >r @ + r> ! ;
 
 : here (here) @ ;
-\ : allot (here) +! ;
 : cell+ 1 cells + ;
-\ : aligned 1 cells 1- + 1 cells 1- invert and ;
-\ : align here aligned here - allot ;
-\ : , align here ! 1 cells allot ;
-
-\ : [ false state ! ; immediate
-\ : ] true state ! ;
 : ['] ' postpone literal ; immediate
 : c,  here c! 1 allot ;
 : >body 1 cells + ;
