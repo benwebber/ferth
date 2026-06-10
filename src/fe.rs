@@ -36,6 +36,21 @@ enum Token {
     Xt(usize),
 }
 
+pub struct Environment {
+    pub counted_string: usize,
+    pub hold: usize,
+    pub pad: usize,
+    pub address_unit_bits: usize,
+    pub floored: bool,
+    pub max_char: usize,
+    pub max_d: i128,
+    pub max_n: isize,
+    pub max_u: usize,
+    pub max_ud: u128,
+    pub return_stack_cells: usize,
+    pub stack_cells: usize,
+}
+
 /// The layout of the data space.
 ///
 /// Represents the first region of memory after the VM's internal regions, containing system
@@ -114,7 +129,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             comma_xt: 0,
             layout_base,
         };
-        fe.bootstrap()?;
+        fe.bootstrap(ds_len, rs_len)?;
         Ok(fe)
     }
 
@@ -171,7 +186,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// This function hand compiles a minimal set of primitive Forth words used to bootstrap a
     /// working Forth system. Notably, it even bootstraps the compiler words like `:` and `;`.
     #[rustfmt::skip]
-    fn bootstrap(&mut self) -> Result<()> {
+    fn bootstrap(&mut self, ds_len: usize, rs_len: usize) -> Result<()> {
         macro_rules! compile {
             ($s:expr, $flags:expr, $code:expr) => {
                 self.compile($s, $flags, $code, &[])?;
@@ -455,7 +470,10 @@ impl<M: Mem, I: Io> Fe<M, I> {
             self.compile(name, 0, Op::DoCol, &[Token::Lit(self.layout_base + offset)])?;
         }
 
-        // 6. Bootstrap core wordlists.
+        // 6. Initialize environment constants.
+        self.compile_environment(ds_len, rs_len)?;
+
+        // 7. Bootstrap core wordlists.
         //
         // With the compiler words bootstrapped, we can bootstrap the rest of the system in Forth.
         for src in &[CORE, CORE_EXT, STRING] {
@@ -466,6 +484,70 @@ impl<M: Mem, I: Io> Fe<M, I> {
             }
         }
 
+        Ok(())
+    }
+
+    fn compile_environment(&mut self, ds_len: usize, rs_len: usize) -> Result<()> {
+        let env = Environment {
+            counted_string: 255,
+            hold: 64,
+            pad: 84,
+            address_unit_bits: 8,
+            floored: false,
+            max_char: 255,
+            max_d: i128::MAX,
+            max_n: isize::MAX,
+            max_u: usize::MAX,
+            max_ud: u128::MAX,
+            return_stack_cells: rs_len,
+            stack_cells: ds_len,
+        };
+        let flag = |b: bool| -> usize { if b { usize::MAX } else { 0 } };
+        let lo = |d: u128| d as usize;
+        let hi = |d: u128| (d >> usize::BITS) as usize;
+        self.compile(
+            b"(/counted-string)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(env.counted_string)],
+        )?;
+        self.compile(b"(/hold)", 0, Op::DoCol, &[Token::Lit(env.hold)])?;
+        self.compile(b"(/pad)", 0, Op::DoCol, &[Token::Lit(env.pad)])?;
+        self.compile(
+            b"(address-unit-bits)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(env.address_unit_bits)],
+        )?;
+        self.compile(b"(floored)", 0, Op::DoCol, &[Token::Lit(flag(env.floored))])?;
+        self.compile(b"(max-char)", 0, Op::DoCol, &[Token::Lit(env.max_char)])?;
+        let d = env.max_d as u128;
+        self.compile(
+            b"(max-d)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(lo(d)), Token::Lit(hi(d))],
+        )?;
+        self.compile(b"(max-n)", 0, Op::DoCol, &[Token::Lit(env.max_n as usize)])?;
+        self.compile(b"(max-u)", 0, Op::DoCol, &[Token::Lit(env.max_u)])?;
+        self.compile(
+            b"(max-ud)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(lo(env.max_ud)), Token::Lit(hi(env.max_ud))],
+        )?;
+        self.compile(
+            b"(return-stack-cells)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(env.return_stack_cells)],
+        )?;
+        self.compile(
+            b"(stack-cells)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(env.stack_cells)],
+        )?;
         Ok(())
     }
 
