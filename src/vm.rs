@@ -430,7 +430,7 @@ impl Vm {
             self.ip = w;
             Ok(None)
         } else {
-            let op = Op::from_usize(w)?;
+            let op = w.try_into()?;
             match op {
                 Op::Yield => {
                     let index = data.read_cell(self.w + Self::SIZE)?;
