@@ -2,6 +2,7 @@
 use core::mem::size_of;
 
 use crate::data::{Data, Mem};
+use crate::types::Double;
 
 mod error;
 mod op;
@@ -263,11 +264,11 @@ impl Vm {
                 self.push(data, a.wrapping_add(b))?;
             }
             Op::UmMul => {
-                let u1 = self.pop(data)? as u128;
-                let u2 = self.pop(data)? as u128;
+                let u1 = self.pop(data)? as Double;
+                let u2 = self.pop(data)? as Double;
                 let ud = u1 * u2;
                 let ud_lo = ud as usize;
-                let ud_hi = (ud >> (8 * Self::SIZE)) as usize;
+                let ud_hi = (ud >> usize::BITS) as usize;
                 self.push(data, ud_lo)?;
                 self.push(data, ud_hi)?;
             }
@@ -386,13 +387,13 @@ impl Vm {
                 self.push(data, x >> u)?;
             }
             Op::UmDivMod => {
-                let u1 = self.pop(data)? as u128;
-                let ud_hi = self.pop(data)? as u128;
-                let ud_lo = self.pop(data)? as u128;
+                let u1 = self.pop(data)? as Double;
+                let ud_hi = self.pop(data)? as Double;
+                let ud_lo = self.pop(data)? as Double;
                 if u1 == 0 {
                     return Err(VmError::DivisionByZero);
                 }
-                let ud = (ud_hi << (8 * Self::SIZE)) | ud_lo;
+                let ud = (ud_hi << usize::BITS) | ud_lo;
                 self.push(data, (ud % u1) as usize)?;
                 self.push(data, (ud / u1) as usize)?;
             }

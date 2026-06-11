@@ -1,3 +1,5 @@
+use crate::types::Double;
+
 pub fn parse_num(bytes: &[u8], base: u32) -> Option<usize> {
     if bytes.is_empty() {
         return None;
@@ -44,7 +46,7 @@ pub fn parse_num(bytes: &[u8], base: u32) -> Option<usize> {
     }
 }
 
-pub fn to_number(mut acc: u128, bytes: &[u8], base: u32) -> (u128, &[u8]) {
+pub fn to_number(mut acc: Double, bytes: &[u8], base: u32) -> (Double, &[u8]) {
     let digit = |c: u8| -> Option<u32> {
         let d = match c {
             b'0'..=b'9' => u32::from(c - b'0'),
@@ -57,7 +59,7 @@ pub fn to_number(mut acc: u128, bytes: &[u8], base: u32) -> (u128, &[u8]) {
     let mut rest = bytes;
     while let Some((&c, tail)) = rest.split_first() {
         let Some(d) = digit(c) else { break };
-        acc = acc * u128::from(base) + u128::from(d);
+        acc = acc * Double::from(base) + Double::from(d);
         rest = tail;
     }
     (acc, rest)

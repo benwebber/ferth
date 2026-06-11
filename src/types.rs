@@ -30,6 +30,15 @@ impl From<Cell> for usize {
     }
 }
 
+#[cfg(target_pointer_width = "64")]
+pub type Double = u128;
+
+#[cfg(target_pointer_width = "32")]
+pub type Double = u64;
+
+#[cfg(target_pointer_width = "16")]
+pub type Double = u32;
+
 /// A cell-aligned address (*a-addr*).
 ///
 /// `AAddr` does not implement `From<usize>`. A misaligned value cannot become an `AAddr`. Use
