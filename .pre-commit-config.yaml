@@ -15,3 +15,10 @@ repos:
         types: [rust]
         pass_filenames: false
         entry: cargo clippy --all-targets --all-features -- -D warnings
+
+      - id: pinact
+        name: pinact
+        language: system
+        files: \.github/
+        pass_filenames: false
+        entry: pinact run
