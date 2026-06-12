@@ -264,13 +264,12 @@ impl Vm {
                 self.push(data, a.wrapping_add(b))?;
             }
             Op::UmMul => {
-                let u1 = self.pop(data)? as Double;
-                let u2 = self.pop(data)? as Double;
-                let ud = u1 * u2;
-                let ud_lo = ud as usize;
-                let ud_hi = (ud >> usize::BITS) as usize;
-                self.push(data, ud_lo)?;
-                self.push(data, ud_hi)?;
+                let u1 = Double::from(self.pop(data)?);
+                let u2 = Double::from(self.pop(data)?);
+                let ud = Double(u1.0 * u2.0);
+                let (lo, hi): (usize, usize) = ud.into();
+                self.push(data, lo)?;
+                self.push(data, hi)?;
             }
             Op::Nand => {
                 let b = self.pop(data)?;
@@ -387,15 +386,16 @@ impl Vm {
                 self.push(data, x >> u)?;
             }
             Op::UmDivMod => {
-                let u1 = self.pop(data)? as Double;
-                let ud_hi = self.pop(data)? as Double;
-                let ud_lo = self.pop(data)? as Double;
+                let u1 = self.pop(data)?;
+                let ud_hi = self.pop(data)?;
+                let ud_lo = self.pop(data)?;
                 if u1 == 0 {
                     return Err(VmError::DivisionByZero);
                 }
-                let ud = (ud_hi << usize::BITS) | ud_lo;
-                self.push(data, (ud % u1) as usize)?;
-                self.push(data, (ud / u1) as usize)?;
+                let ud = Double::from((ud_lo, ud_hi));
+                let u1 = Double::from(u1);
+                self.push(data, (ud.0 % u1.0) as usize)?;
+                self.push(data, (ud.0 / u1.0) as usize)?;
             }
             Op::SpFetch => {
                 self.push(data, self.sp)?;

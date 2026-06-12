@@ -33,16 +33,16 @@ pub fn parse_num(bytes: &[u8], base: u32) -> Option<usize> {
         return None;
     }
 
-    let (acc, rest) = to_number(0, rest, base);
+    let (acc, rest) = to_number(Double(0), rest, base);
 
     if !rest.is_empty() {
         return None;
     }
 
     if neg {
-        Some(acc.wrapping_neg() as usize)
+        Some(acc.0.wrapping_neg() as usize)
     } else {
-        Some(acc as usize)
+        Some(acc.0 as usize)
     }
 }
 
@@ -59,7 +59,7 @@ pub fn to_number(mut acc: Double, bytes: &[u8], base: u32) -> (Double, &[u8]) {
     let mut rest = bytes;
     while let Some((&c, tail)) = rest.split_first() {
         let Some(d) = digit(c) else { break };
-        acc = acc * Double::from(base) + Double::from(d);
+        acc = Double(acc.0 * Double::from(base).0 + Double::from(d).0);
         rest = tail;
     }
     (acc, rest)
@@ -102,27 +102,30 @@ mod tests {
 
     #[test]
     fn to_number_decimal() {
-        assert_eq!(to_number(0, b"123", 10), (123, &b""[..]));
+        assert_eq!(to_number(Double(0), b"123", 10), (Double(123), &b""[..]));
     }
 
     #[test]
     fn to_number_empty() {
-        assert_eq!(to_number(42, b"", 10), (42, &b""[..]));
+        assert_eq!(to_number(Double(42), b"", 10), (Double(42), &b""[..]));
     }
 
     #[test]
     fn to_number_partial() {
-        assert_eq!(to_number(0, b"10z", 10), (10, &b"z"[..]));
+        assert_eq!(to_number(Double(0), b"10z", 10), (Double(10), &b"z"[..]));
     }
 
     #[test]
     fn to_number_continues() {
-        assert_eq!(to_number(0xff, b"ff", 16), (0xffff, &b""[..]));
+        assert_eq!(
+            to_number(Double(0xff), b"ff", 16),
+            (Double(0xffff), &b""[..])
+        );
     }
 
     #[test]
     fn to_number_case_folding() {
-        assert_eq!(to_number(0, b"abc", 16), (0xabc, &b""[..]));
-        assert_eq!(to_number(0, b"ABC", 16), (0xabc, &b""[..]));
+        assert_eq!(to_number(Double(0), b"abc", 16), (Double(0xabc), &b""[..]));
+        assert_eq!(to_number(Double(0), b"ABC", 16), (Double(0xabc), &b""[..]));
     }
 }

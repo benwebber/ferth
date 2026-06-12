@@ -503,8 +503,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             stack_cells: ds_len,
         };
         let flag = |b: bool| -> usize { if b { usize::MAX } else { 0 } };
-        let lo = |d: Double| d as usize;
-        let hi = |d: Double| (d >> usize::BITS) as usize;
         self.compile(
             b"(/counted-string)",
             0,
@@ -521,21 +519,12 @@ impl<M: Mem, I: Io> Fe<M, I> {
         )?;
         self.compile(b"(floored)", 0, Op::DoCol, &[Token::Lit(flag(env.floored))])?;
         self.compile(b"(max-char)", 0, Op::DoCol, &[Token::Lit(env.max_char)])?;
-        let d = env.max_d as Double;
-        self.compile(
-            b"(max-d)",
-            0,
-            Op::DoCol,
-            &[Token::Lit(lo(d)), Token::Lit(hi(d))],
-        )?;
+        let (lo, hi): (usize, usize) = Double(env.max_d as _).into();
+        self.compile(b"(max-d)", 0, Op::DoCol, &[Token::Lit(lo), Token::Lit(hi)])?;
         self.compile(b"(max-n)", 0, Op::DoCol, &[Token::Lit(env.max_n as usize)])?;
         self.compile(b"(max-u)", 0, Op::DoCol, &[Token::Lit(env.max_u)])?;
-        self.compile(
-            b"(max-ud)",
-            0,
-            Op::DoCol,
-            &[Token::Lit(lo(env.max_ud)), Token::Lit(hi(env.max_ud))],
-        )?;
+        let (lo, hi): (usize, usize) = env.max_ud.into();
+        self.compile(b"(max-ud)", 0, Op::DoCol, &[Token::Lit(lo), Token::Lit(hi)])?;
         self.compile(
             b"(return-stack-cells)",
             0,
@@ -611,20 +600,19 @@ impl<M: Mem, I: Io> Fe<M, I> {
     fn to_number(&mut self) -> Result<()> {
         let u: usize = self.pop()?.into();
         let caddr: usize = self.pop()?.into();
-        let acc_hi = usize::from(self.pop()?) as Double;
-        let acc_lo = usize::from(self.pop()?) as Double;
-        let acc = (acc_hi << usize::BITS) | acc_lo;
+        let hi = self.pop()?;
+        let lo = self.pop()?;
+        let acc = Double::from((lo, hi));
         let bytes = self.data.read(caddr, u)?;
         // TODO: Check base size.
         let base = self.data.read_cell(self.layout_addr(Layout::BASE))? as u32;
         let (acc, rest) = parser::to_number(acc, bytes, base);
         let len = bytes.len() - rest.len();
-        let acc_lo = acc as usize;
-        let acc_hi = (acc >> usize::BITS) as usize;
+        let (lo, hi): (Cell, Cell) = acc.into();
         let caddr2 = caddr + len;
         let u2 = rest.len();
-        self.push(Cell(acc_lo))?;
-        self.push(Cell(acc_hi))?;
+        self.push(lo)?;
+        self.push(hi)?;
         self.push(Cell(caddr2))?;
         self.push(Cell(u2))
     }
