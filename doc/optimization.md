@@ -170,3 +170,16 @@ They showed an improvement of around 35%.
 
 Most stack and arithmetic operations would benefit if the inner interpreter stored the value at the top of the data stack in a register.
 For example, `+` would only need to read the second value from memory, and it would store the result to the register directly, saving two memory accesses.
+
+---
+
+See [e37128d](https://github.com/benwebber/ferth/commit/e37128d55c3d5de17d03ff38ef04780ae876f125).
+
+This change had mixed results.
+
+* `countdown` and `deepchain` showed no change.
+* `crc32` and `fib` regressed by about 2%.
+* `rangesum` and `sieve` improved by about 2%.
+
+This change benefits words that perform a lot of binary stack arithmetic, where the next word can read directly from the register.
+Words that perform a lot of stack operations without binary arithmetic see a regression.
