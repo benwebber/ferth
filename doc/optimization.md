@@ -156,9 +156,15 @@ This could improve cache locality.
 
 ## Cache stack limits as struct fields
 
+See [a0a2351](https://github.com/benwebber/ferth/commit/a0a23517f75baa2515906d343b794dfc140d45e6).
+
 The inner interpreter needs to check if addresses fall within or without the stack ranges often.
 This requires basic arithmetic on the stack sizes.
 Caching these bounds as fields would simplify the checks.
+
+This removed arithmetic from every stack mutation, so all benchmarks showed a modest improvement in wall clock time of about 5%.
+`countdown` and `deepchain` exercise the return stack more extensively.
+They showed an improvement of around 35%.
 
 ## Store top of data stack in register
 
