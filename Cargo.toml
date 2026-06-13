@@ -20,7 +20,11 @@ name = "fe"
 required-features = ["repl"]
 
 [[bench]]
-name = "core"
+name = "forth"
+harness = false
+
+[[bench]]
+name = "lua"
 harness = false
 
 [dependencies]
@@ -29,3 +33,4 @@ rustyline = { version = "14", optional = true }
 [dev-dependencies]
 criterion = "0.8.2"
 ferth = { path = ".", features = ["std"] }
+mlua = { version = "0.10", features = ["lua54", "vendored"] }
