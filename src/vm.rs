@@ -39,6 +39,28 @@ macro_rules! maybe_write_cell_unchecked {
     }};
 }
 
+macro_rules! unary {
+    ($self:expr, |$x:ident| $body:expr) => {{
+        if $self.sp == Self::DS_ADDR {
+            return Err(VmError::StackUnderflow);
+        }
+        let $x = $self.tos;
+        $self.tos = $body;
+    }};
+}
+
+macro_rules! binary {
+    ($self:expr, $data:expr, |$a:ident, $b:ident| $body:expr) => {{
+        if $self.sp < 2 * Self::SIZE {
+            return Err(VmError::StackUnderflow);
+        }
+        let $b = $self.tos;
+        let $a = maybe_read_cell_unchecked!($data, $self.sp - 2 * Self::SIZE)?;
+        $self.tos = $body;
+        $self.sp -= Self::SIZE;
+    }};
+}
+
 /// A token used to continue exection after yielding.
 ///
 /// The outer interpreter must return this to the `Vm` in [`Vm::resume`].  This type intentionally
@@ -291,9 +313,7 @@ impl Vm {
                 data.write_char(addr, c)?;
             }
             Op::Add => {
-                let b = self.pop(data)?;
-                let a = self.pop(data)?;
-                self.push(data, a.wrapping_add(b))?;
+                binary!(self, data, |a, b| a.wrapping_add(b));
             }
             Op::UmMul => {
                 let u1 = Double::from(self.pop(data)?);
@@ -304,17 +324,13 @@ impl Vm {
                 self.push(data, hi)?;
             }
             Op::Nand => {
-                let b = self.pop(data)?;
-                let a = self.pop(data)?;
-                self.push(data, !(a & b))?;
+                binary!(self, data, |a, b| !(a & b));
             }
             Op::LtZ => {
-                let a = self.pop(data)?;
-                self.push(data, if (a as isize) < 0 { usize::MAX } else { 0 })?;
+                unary!(self, |n| if (n as isize) < 0 { usize::MAX } else { 0 });
             }
             Op::EqZ => {
-                let n = self.pop(data)? as isize;
-                self.push(data, if n == 0 { usize::MAX } else { 0 })?;
+                unary!(self, |n| if n == 0 { usize::MAX } else { 0 });
             }
             Op::Drop => {
                 self.pop(data)?;
@@ -416,14 +432,10 @@ impl Vm {
                 self.ip += (len + Self::SIZE - 1) & !(Self::SIZE - 1);
             }
             Op::LShift => {
-                let u = self.pop(data)?;
-                let x = self.pop(data)?;
-                self.push(data, x << u)?;
+                binary!(self, data, |x, u| x << u);
             }
             Op::RShift => {
-                let u = self.pop(data)?;
-                let x = self.pop(data)?;
-                self.push(data, x >> u)?;
+                binary!(self, data, |x, u| x >> u);
             }
             Op::UmDivMod => {
                 let u1 = self.pop(data)?;
