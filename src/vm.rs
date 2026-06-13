@@ -96,6 +96,14 @@ pub struct Vm {
     ds_len: usize,
     /// The length of the return stack.
     rs_len: usize,
+    /// The maximum value of the stack pointer.
+    ///
+    /// Cached for performance.
+    sp_max: usize,
+    /// The maximum value of the return stack pointer.
+    ///
+    /// Cached for performance.
+    rp_max: usize,
 }
 
 impl Vm {
@@ -105,7 +113,9 @@ impl Vm {
     pub const DS_ADDR: usize = 0;
 
     pub fn new(ds_len: usize, rs_len: usize) -> Self {
-        assert!(Self::layout_ok(rs_len, rs_len), "stacks too small");
+        assert!(Self::layout_ok(ds_len, rs_len), "stacks too small");
+        let sp_max = Self::DS_ADDR + ds_len * Self::SIZE;
+        let rp_max = sp_max + rs_len * Self::SIZE;
         Self {
             ip: 0,
             w: 0,
@@ -113,6 +123,8 @@ impl Vm {
             rp: ds_len * Self::SIZE,
             ds_len,
             rs_len,
+            sp_max,
+            rp_max,
         }
     }
 
@@ -172,13 +184,14 @@ impl Vm {
     }
 
     /// Return the address of the bottom of the return stack.
+    #[inline]
     pub fn rs_addr(&self) -> usize {
-        self.ds_len * Self::SIZE
+        self.sp_max
     }
 
     /// Push a cell onto the data stack.
     pub fn push<M: Mem>(&mut self, data: &mut Data<M>, x: usize) -> VmResult<()> {
-        if self.sp >= Self::DS_ADDR + self.ds_len * Self::SIZE {
+        if self.sp >= self.sp_max {
             return Err(VmError::StackOverflow);
         }
         maybe_write_cell_unchecked!(data, self.sp, x)?;
@@ -197,7 +210,7 @@ impl Vm {
 
     /// Push a cell onto the return stack.
     fn rpush<M: Mem>(&mut self, data: &mut Data<M>, x: usize) -> VmResult<()> {
-        if self.rp >= self.rs_addr() + self.rs_len * Self::SIZE {
+        if self.rp >= self.rp_max {
             return Err(VmError::ReturnStackOverflow);
         }
         maybe_write_cell_unchecked!(data, self.rp, x)?;
@@ -416,7 +429,7 @@ impl Vm {
             }
             Op::SpStore => {
                 let addr = self.pop(data)?;
-                if addr > Self::DS_ADDR + self.ds_len * Self::SIZE {
+                if addr > self.sp_max {
                     return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.sp = addr;
@@ -426,7 +439,7 @@ impl Vm {
             }
             Op::RpStore => {
                 let addr = self.pop(data)?;
-                if addr < self.rs_addr() || addr > self.rs_addr() + self.rs_len * Self::SIZE {
+                if addr < self.rs_addr() || addr > self.rp_max {
                     return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.rp = addr;
