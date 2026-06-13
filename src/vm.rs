@@ -336,10 +336,12 @@ impl Vm {
                 self.pop(data)?;
             }
             Op::Swap => {
-                let b = self.pop(data)?;
-                let a = self.pop(data)?;
-                self.push(data, b)?;
-                self.push(data, a)?;
+                if self.sp < 2 * Self::SIZE {
+                    return Err(VmError::StackUnderflow);
+                }
+                let tos = self.tos;
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - 2 * Self::SIZE)?;
+                maybe_write_cell_unchecked!(data, self.sp - 2 * Self::SIZE, tos)?;
             }
             Op::RFrom => {
                 let x = self.rpop(data)?;
