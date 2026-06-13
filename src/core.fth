@@ -147,7 +147,7 @@
 : */ ( n1 n2 n3 -- n4 ) */mod swap drop ;
 
 : 2/ dup 1 rshift swap 0 invert 1 rshift invert and or ;
-: depth (sp@) 1 cells / ;
+: depth (sp@) (sp0) @ - 1 cells / ;
 : 2@ dup cell+ @ swap @ ;
 : 2! swap over ! cell+ ! ;
 : 2@ dup cell+ @ swap @ ;

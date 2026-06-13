@@ -51,7 +51,7 @@ macro_rules! unary {
 
 macro_rules! binary {
     ($self:expr, $data:expr, |$a:ident, $b:ident| $body:expr) => {{
-        if $self.sp < 2 * Self::SIZE {
+        if $self.sp < (Self::DS_ADDR + 2 * Self::SIZE) {
             return Err(VmError::StackUnderflow);
         }
         let $b = $self.tos;
@@ -134,7 +134,11 @@ impl Vm {
     /// The size of a cell in bytes.
     pub const SIZE: usize = size_of::<usize>();
     /// The address of the bottom of the data stack.
-    pub const DS_ADDR: usize = 0;
+    ///
+    /// Address 0x00 is a scratch cell. [`Vm::push`] spills the value in TOS to memory. [`Vm::pop`]
+    /// reloads TOS from the same address. The scratch cell absorbs both operations, eliminating a
+    /// bounds check in two hot paths.
+    pub const DS_ADDR: usize = Self::SIZE;
 
     pub fn new(ds_len: usize, rs_len: usize) -> Self {
         assert!(Self::layout_ok(ds_len, rs_len), "stacks too small");
@@ -143,9 +147,9 @@ impl Vm {
         Self {
             ip: 0,
             w: 0,
-            sp: 0,
+            sp: Self::DS_ADDR,
             tos: 0,
-            rp: ds_len * Self::SIZE,
+            rp: sp_max,
             ds_len,
             rs_len,
             sp_max,
@@ -220,11 +224,7 @@ impl Vm {
         if self.sp >= self.sp_max {
             return Err(VmError::StackOverflow);
         }
-        if self.sp != Self::DS_ADDR {
-            // Prevent underflow when stack is empty on unsafe path.
-            // TODO: Profile moving this check into unsafe block.
-            maybe_write_cell_unchecked!(data, self.sp - Self::SIZE, self.tos)?;
-        }
+        maybe_write_cell_unchecked!(data, self.sp - Self::SIZE, self.tos)?;
         self.tos = x;
         self.sp += Self::SIZE;
         Ok(())
@@ -237,9 +237,7 @@ impl Vm {
         }
         let x = self.tos;
         self.sp -= Self::SIZE;
-        if self.sp != Self::DS_ADDR {
-            self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
-        }
+        self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
         Ok(x)
     }
 
@@ -336,7 +334,7 @@ impl Vm {
                 self.pop(data)?;
             }
             Op::Swap => {
-                if self.sp < 2 * Self::SIZE {
+                if self.sp < (Self::DS_ADDR + 2 * Self::SIZE) {
                     return Err(VmError::StackUnderflow);
                 }
                 let tos = self.tos;
@@ -456,14 +454,11 @@ impl Vm {
             }
             Op::SpStore => {
                 let addr = self.pop(data)?;
-                if addr > self.sp_max {
+                if addr < Self::DS_ADDR || addr > self.sp_max {
                     return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.sp = addr;
-                if self.sp != Self::DS_ADDR {
-                    // The new TOS was next on stack before popping addr above.
-                    self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
-                }
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
             }
             Op::RpFetch => {
                 self.push(data, self.rp)?;
