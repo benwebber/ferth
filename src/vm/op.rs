@@ -282,4 +282,12 @@ ops! {
     /// 0= ( x -- flag )
     /// ```
     EqZ = 0x22,
+
+    // TODO: Renumber.
+    /// Execute a create/does> definition.
+    ///
+    /// ```text
+    /// (docreate) ( -- a-addr )
+    /// ```
+    DoCreate = 0x23,
 }

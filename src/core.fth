@@ -39,8 +39,8 @@
 : cell+ 1 cells + ;
 : ['] ' postpone literal ; immediate
 : c,  here c! 1 allot ;
-: >body 1 cells + ;
-: does> r> (latest) @ ! ;
+: >body 2 cells + ;
+: does> r> (latest) @ cell+ ! ;
 : chars ( -- ) ;
 
 : exit ['] (exit) , ; immediate

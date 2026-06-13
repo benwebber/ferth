@@ -394,20 +394,12 @@ impl<M: Mem, I: Io> Fe<M, I> {
         // : [ false state ! ;
         compile!(lbracket, b"[", IMMEDIATE, Op::DoCol, [L(0), addr!(STATE), store]);
 
-        // : (noop) ;
-        //
-        // Used with create to set up empty definitions for variables and does>.
-        compile!(b"(noop)", 0, Op::DoCol, []);
-        let noop_xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
-
-        // : create ( "<spaces>name" -- ) bl parse (header) ' (noop) >body , ;
-        //
-        // Point to the >body of noop.
+        // : create ( "<spaces>name" -- ) bl parse (header) (docreate) , 0 , ;
         compile!(
             b"create",
             0,
             Op::DoCol,
-            [bl, parse, header, L(noop_xt + Vm::SIZE), comma]
+            [bl, parse, header, L(Op::DoCreate as usize), comma, L(0), comma]
         );
 
         // (hidden-flag)

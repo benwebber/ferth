@@ -312,6 +312,14 @@ impl Vm {
                 // Unreachable, but don't panic. `dispatch()` intercepts `Yield` first.
                 return Err(VmError::InvalidOpCode(op as u8));
             }
+            Op::DoCreate => {
+                let does_addr = data.read_cell(self.w + Self::SIZE)?;
+                self.push(data, self.w + 2 * Self::SIZE)?;
+                if does_addr != 0 {
+                    self.rpush(data, self.ip)?;
+                    self.ip = does_addr;
+                }
+            }
             Op::Do => {
                 let index = self.pop(data)?;
                 let limit = self.pop(data)?;
@@ -423,23 +431,14 @@ impl Vm {
 
     /// Execute the code referenced by the W register.
     fn dispatch<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Option<Stop>> {
-        let w = data.read_cell(self.w)?;
-        if w >= self.reserved() {
-            // W is an address. This is a create/does> word.
-            self.push(data, self.w + Self::SIZE)?;
-            self.rpush(data, self.ip)?;
-            self.ip = w;
-            Ok(None)
-        } else {
-            let op = w.try_into()?;
-            match op {
-                Op::Yield => {
-                    let index = data.read_cell(self.w + Self::SIZE)?;
-                    let token = YieldToken { ip: self.ip, index };
-                    Ok(Some(Stop::Yield(token)))
-                }
-                _ => self.execute(data, op),
+        let op = data.read_cell(self.w)?.try_into()?;
+        match op {
+            Op::Yield => {
+                let index = data.read_cell(self.w + Self::SIZE)?;
+                let token = YieldToken { ip: self.ip, index };
+                Ok(Some(Stop::Yield(token)))
             }
+            _ => self.execute(data, op),
         }
     }
 }
