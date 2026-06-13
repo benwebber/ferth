@@ -37,25 +37,29 @@ I use [cargo-show-asm](https://github.com/pacak/cargo-show-asm) to review the ge
 
 ## Unchecked stack access
 
-See [6582330](https://github.com/benwebber/ferth/commit/658233063d96e1f94c0f59a5672a07e6f223c9cf).
-
 The inner interpreter stores the stacks in main memory and stores pointers to the tops of the stacks in struct fields.
 Reading stack values safely requires validating the address and copying the word bytes from memory to a temporary buffer.
 
 The outer interpreter&mdash;and therefore program code&mdash;cannot directly manipulate these registers except through prescribed methods and opcodes.
 Therefore we can trust that the stack pointers always point to valid stack cells.
 
+---
+
+See [6582330](https://github.com/benwebber/ferth/commit/658233063d96e1f94c0f59a5672a07e6f223c9cf).
+
 I introduced an `unsafe` feature flag to cast stack cell ranges directly to and from `usize` values.
 This improves all stack operations and yielded a 5 to 10% improvement on all benchmarks.
 
 ## Dense opcode values
 
-See [3992865](https://github.com/benwebber/ferth/commit/3992865aa6eed56691436d8c2f895460291b108c).
-
 For byte code dispatch like this, LLVM will compile dispatch to a single jump table if the range of discriminant values is dense.
 During development, I added and removed opcodes, and never renumbered them sequentially, leaving lots of gaps.
 The maximum opcode value was `0x33` (51) even though there were only 34 instructions.
 I was curious if renumbering them sequentially would generate a more efficient table.
+
+---
+
+See [3992865](https://github.com/benwebber/ferth/commit/3992865aa6eed56691436d8c2f895460291b108c).
 
 Renumbering them sequentially had no impact on execution.
 LLVM already generated a jump table for dispatch.
@@ -64,25 +68,29 @@ Previously, each gap in the range fell through to the invalid opcode branch.
 
 ## Unchecked IP access
 
-See [6a2fc4f](https://github.com/benwebber/ferth/commit/6a2fc4f5a7d7e88e460c70675fa90b50351a73f7).
-
 Similar to stack access, only the inner interpreter has access to the IP register.
 It is safe to cast this value directly to a `usize`.
 
 In contrast, the outer interpreter *can* manipulate the W register through `Vm::call`, so an unsafe read would be truly unsafe.
+
+---
+
+See [6a2fc4f](https://github.com/benwebber/ferth/commit/6a2fc4f5a7d7e88e460c70675fa90b50351a73f7).
 
 Similar to the unchecked stack access optimization, this yielded an improvement of 5 to 15% across all benchmarks except `countdown`.
 The `deepchain` benchmark showed an improvement of 35%.
 
 ## Introduce primitive for `create`&hellip;`does>` words
 
-See [5d31e99](https://github.com/benwebber/ferth/commit/5d31e995e870799a50a882fe6d6799b741e5a7f9).
-
 Previously, `create` compiled an execution token directly to the code field that `does>` would later replace.
 
 In this system, XTs are cell addresses.
 This incurred an extra branch in the hot inner loop (`Vm::dispatch`) to check that the value fell outside the range of the inner interpreter stacks.
 This also indirectly checked that the value *was* an address and not an opcode, because the opcode values all fall within the stack address range.
+
+---
+
+See [5d31e99](https://github.com/benwebber/ferth/commit/5d31e995e870799a50a882fe6d6799b741e5a7f9).
 
 I implemented a dedicated `DoCreate` opcode to remove this branch.
 Although no benchmark exercises `create`&hellip;`does>` words directly, this change modestly improved all `Vm::dispatch` calls.
@@ -156,11 +164,13 @@ This could improve cache locality.
 
 ## Cache stack limits as struct fields
 
-See [a0a2351](https://github.com/benwebber/ferth/commit/a0a23517f75baa2515906d343b794dfc140d45e6).
-
 The inner interpreter needs to check if addresses fall within or without the stack ranges often.
 This requires basic arithmetic on the stack sizes.
 Caching these bounds as fields would simplify the checks.
+
+---
+
+See [a0a2351](https://github.com/benwebber/ferth/commit/a0a23517f75baa2515906d343b794dfc140d45e6).
 
 This removed arithmetic from every stack mutation, so all benchmarks showed a modest improvement in wall clock time of about 5%.
 `countdown` and `deepchain` exercise the return stack more extensively.
