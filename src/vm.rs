@@ -92,6 +92,8 @@ pub struct Vm {
     sp: usize,
     /// The return stack pointer.
     rp: usize,
+    /// The value on the top of the data stack.
+    tos: usize,
     /// The length of the data stack.
     ds_len: usize,
     /// The length of the return stack.
@@ -120,6 +122,7 @@ impl Vm {
             ip: 0,
             w: 0,
             sp: 0,
+            tos: 0,
             rp: ds_len * Self::SIZE,
             ds_len,
             rs_len,
@@ -165,7 +168,7 @@ impl Vm {
 
     /// Reset stacks.
     pub fn reset(&mut self) {
-        self.sp = 0;
+        self.sp = Self::DS_ADDR;
         self.rp = self.rs_addr();
     }
 
@@ -175,12 +178,13 @@ impl Vm {
     }
 
     pub fn stack<'a, M: Mem>(&self, data: &'a Data<M>) -> impl Iterator<Item = usize> + 'a {
-        (Self::DS_ADDR..self.sp)
+        let bottom = (Self::DS_ADDR..self.sp.saturating_sub(Self::SIZE))
             .step_by(Self::SIZE)
             .map(move |addr| {
                 data.read_cell(addr)
                     .expect("unreachable: stack cell within validated range")
-            })
+            });
+        bottom.chain((self.sp != Self::DS_ADDR).then_some(self.tos))
     }
 
     /// Return the address of the bottom of the return stack.
@@ -194,7 +198,12 @@ impl Vm {
         if self.sp >= self.sp_max {
             return Err(VmError::StackOverflow);
         }
-        maybe_write_cell_unchecked!(data, self.sp, x)?;
+        if self.sp != Self::DS_ADDR {
+            // Prevent underflow when stack is empty on unsafe path.
+            // TODO: Profile moving this check into unsafe block.
+            maybe_write_cell_unchecked!(data, self.sp - Self::SIZE, self.tos)?;
+        }
+        self.tos = x;
         self.sp += Self::SIZE;
         Ok(())
     }
@@ -204,8 +213,12 @@ impl Vm {
         if self.sp == Self::DS_ADDR {
             return Err(VmError::StackUnderflow);
         }
+        let x = self.tos;
         self.sp -= Self::SIZE;
-        maybe_read_cell_unchecked!(data, self.sp)
+        if self.sp != Self::DS_ADDR {
+            self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
+        }
+        Ok(x)
     }
 
     /// Push a cell onto the return stack.
@@ -433,6 +446,10 @@ impl Vm {
                     return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.sp = addr;
+                if self.sp != Self::DS_ADDR {
+                    // The new TOS was next on stack before popping addr above.
+                    self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
+                }
             }
             Op::RpFetch => {
                 self.push(data, self.rp)?;
