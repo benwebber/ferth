@@ -72,8 +72,9 @@ pub enum Stop {
 /// bottom of the address space for its data stack and return stack. It maintains execution state
 /// with a set of internal registers, inaccessible to the host.
 ///
-/// The `unsafe` crate feature enables unsafe stack access optimizations. They are safe in practice
-/// because the interpreter controls access to and validates the stack pointer addresses.
+/// The `unsafe` crate feature enables pointer access IP and stack pointer optimizations. They are
+/// safe in practice because the interpreter controls access to and validates the pointer
+/// addresses.
 pub struct Vm {
     /// The instruction pointer (IP).
     ///

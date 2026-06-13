@@ -64,10 +64,15 @@ Previously, each gap in the range fell through to the invalid opcode branch.
 
 ## Unchecked IP access
 
+See [6a2fc4f](https://github.com/benwebber/ferth/commit/6a2fc4f5a7d7e88e460c70675fa90b50351a73f7).
+
 Similar to stack access, only the inner interpreter has access to the IP register.
 It is safe to cast this value directly to a `usize`.
 
 In contrast, the outer interpreter *can* manipulate the W register through `Vm::call`, so an unsafe read would be truly unsafe.
+
+Similar to the unchecked stack access optimization, this yielded an improvement of 5 to 15% across all benchmarks except `countdown`.
+The `deepchain` benchmark showed an improvement of 35%.
 
 ## Introduce primitive for `create`&hellip;`does>` words
 
