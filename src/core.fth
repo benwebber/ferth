@@ -131,7 +131,7 @@
   then
 ;
 
-: /mod ( n1 n2 -- n2 n3 ) >r s>d r> sm/rem ;
+: /mod ( n1 n2 -- n3 n4 ) >r s>d r> sm/rem ;
 : / /mod swap drop ;
 : mod /mod drop ;
 : m* ( n1 n2 -- d )
