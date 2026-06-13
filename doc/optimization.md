@@ -183,13 +183,16 @@ For example, `+` would only need to read the second value from memory, and it wo
 
 ---
 
-See [e37128d](https://github.com/benwebber/ferth/commit/e37128d55c3d5de17d03ff38ef04780ae876f125).
-
-This change had mixed results.
+This change (up to [9886cb1](https://github.com/benwebber/ferth/commit/9886cb1ea50e14fcabfef654514b07ff4d6ce3d6)) initially had mixed results.
 
 * `countdown` and `deepchain` showed no change.
 * `crc32` and `fib` regressed by about 2%.
 * `rangesum` and `sieve` improved by about 2%.
 
-This change benefits words that perform a lot of binary stack arithmetic, where the next word can read directly from the register.
-Words that perform a lot of stack operations without binary arithmetic see a regression.
+Words that perform a lot of binary stack arithmetic, where the next word can read directly from the register, saw an improvement.
+Words that perform a lot of stack operations without binary arithmetic saw a regression.
+This was primarily because `Vm::push` and `Vm::pop` now required bounds checks to spill and reload the TOS register, respectively.
+
+Next I reserved a scratch cell below the data stack to absorb writes, eliminating the bounds checks ([132e3b8](https://github.com/benwebber/ferth/commit/132e3b84e4deabcc5def45816bd18b4b844e8365)).
+This improved wall clock time by 3 to 15% on all benchmarks except `deepchain`.
+This makes sense because `deepchain` exercises the return stack and call path more than the data stack.
