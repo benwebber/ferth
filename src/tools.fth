@@ -114,12 +114,19 @@ variable (dump-end)
       dup cell+ dup rot (body-len) 1 cells - + swap ( body' body )
       do
         i @                               ( xt )
-        dup (has-inline-cells?) if
-          \ This word has a body parameter.
-          drop i cell+ @ .
-          2 cells
+        dup ['] (s") = if
+          \ Skip variable length string.
+          drop
+          s" (s" type [char] " emit [char] ) emit space \ (s")
+          i cell+ @ aligned 2 cells +
         else
-          (>name) type space 1 cells
+          dup (has-inline-cells?) if
+            \ This word has a body parameter.
+            drop i cell+ @ .
+            2 cells
+          else
+            (>name) type space 1 cells
+          then
         then
       +loop
       cr
