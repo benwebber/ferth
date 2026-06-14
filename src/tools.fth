@@ -80,9 +80,10 @@ variable (dump-end)
 ;
 
 : (dump-header) ( xt -- )
-  dup (>name) drop 1-   ( xt nfa )
-  swap 1 cells +        ( nfa body-start )
-  over -                ( nfa header-size )
+  dup (>name) drop 1-         ( xt nfa )
+  1 cells 1- invert and       ( xt nfa' )
+  swap 1 cells +              ( nfa' body-start )
+  over -                      ( nfa' header-size )
   dump
 ;
 
@@ -93,11 +94,12 @@ variable (dump-end)
 ;
 
 : (dump-word) ( xt -- )
-  dup (>name) drop 1-   ( xt nfa )
-  swap                  ( nfa xt )
-  dup 1 cells +         ( nfa xt body-start )
-  swap (body-len) +     ( nfa body-end )
-  over -                ( nfa size )
+  dup (>name) drop 1-         ( xt nfa )
+  1 cells 1- invert and       ( xt nfa' )
+  swap                        ( nfa' xt )
+  dup 1 cells +               ( nfa' xt body-start )
+  swap (body-len) +           ( nfa' body-end )
+  over -                      ( nfa' size )
   dump
 ;
 
