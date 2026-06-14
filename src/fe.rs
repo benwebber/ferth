@@ -10,9 +10,6 @@ use super::io::{Io, NoIo};
 use super::parser;
 use super::vm::{Op, Stop, Vm};
 
-pub const IMMEDIATE: u8 = 0b01;
-pub const HIDDEN: u8 = 0b10;
-
 /// The maximum word length in bytes.
 const MAX_WORD_LEN: usize = 31;
 /// The maximum number of builtins in the builtins table.
@@ -20,7 +17,14 @@ const MAX_BUILTINS: usize = 256;
 /// The size of the terminal input buffer.
 const INPUT_BUFFER_SIZE: usize = 256;
 
-pub const BL: usize = 0x20;
+/// The offset of the `info` field from the `code` field.
+const INFO_FROM_CFA: usize = 2 * SIZE;
+/// The immediate bitflag.
+const IMMEDIATE: u8 = 0b01;
+/// The hidden bitflag.
+const HIDDEN: u8 = 0b10;
+
+const BL: usize = 0x20;
 
 const CORE: &[u8] = include_bytes!("core.fth");
 const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
@@ -28,27 +32,60 @@ const TOOLS: &[u8] = include_bytes!("tools.fth");
 
 pub type Builtin<M, I> = fn(&mut Fe<M, I>) -> Result<()>;
 
-const INFO_FROM_CFA: usize = 2 * SIZE;
-
 #[derive(Clone, Copy)]
 enum Token {
     Lit(usize),
     Xt(usize),
 }
 
+/// System environment configuration.
+// TODO: Split this into system invariants (type sizes) and user configuration (buffer sizes and
+// stack lengths).
+#[derive(Debug, Clone, Copy)]
 pub struct Environment {
+    /// The maximum length of a counted string (bytes).
     pub counted_string: usize,
+    /// The size of the pictured numeric output buffer (bytes).
     pub hold: usize,
+    /// The size of the `pad` scratch area (bytes).
     pub pad: usize,
+    /// The size of one address unit (bits).
     pub address_unit_bits: usize,
+    /// Whether floored division is the default.
     pub floored: bool,
+    /// The maximum value of a character (*char*).
     pub max_char: usize,
+    /// The maximum value of a signed double.
     pub max_d: SignedDouble,
+    /// The maximum value of a signed integer.
     pub max_n: isize,
+    /// The maximum value of an unsigned integer.
     pub max_u: usize,
+    /// The maximum value of an unsigned double.
     pub max_ud: Double,
+    /// The number of cells in the return stack.
     pub return_stack_cells: usize,
+    /// The number of cells in the data stack.
     pub stack_cells: usize,
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self {
+            counted_string: u8::MAX as usize,
+            hold: 64,
+            pad: 84,
+            address_unit_bits: u8::BITS as usize,
+            floored: false,
+            max_char: u8::MAX as usize,
+            max_d: SignedDouble::MAX,
+            max_n: isize::MAX,
+            max_u: usize::MAX,
+            max_ud: Double::MAX,
+            return_stack_cells: 64,
+            stack_cells: 64,
+        }
+    }
 }
 
 /// The layout of the data space.
@@ -107,17 +144,20 @@ pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
     builtins: [Option<Builtin<M, I>>; MAX_BUILTINS],
     builtins_len: usize,
     layout_base: usize,
+    env: Environment,
 }
 
 impl<M: Mem, I: Io> Fe<M, I> {
     pub fn new(mem: M, io: I) -> Result<Self> {
-        let ds_len = 64;
-        let rs_len = 64;
-        if !Vm::layout_ok(ds_len, rs_len) {
+        Self::with_env(mem, io, Environment::default())
+    }
+
+    pub fn with_env(mem: M, io: I, env: Environment) -> Result<Self> {
+        if !Vm::layout_ok(env.stack_cells, env.return_stack_cells) {
             return Err(Error::StacksTooSmall);
         }
         let data = Data::new(mem);
-        let vm = Vm::new(ds_len, rs_len);
+        let vm = Vm::new(env.stack_cells, env.return_stack_cells);
         let layout_base = vm.reserved();
         let mut fe = Self {
             vm,
@@ -128,8 +168,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
             op_xts: [0; 256],
             comma_xt: 0,
             layout_base,
+            env,
         };
-        fe.bootstrap(ds_len, rs_len)?;
+        fe.bootstrap()?;
         Ok(fe)
     }
 
@@ -186,7 +227,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// This function hand compiles a minimal set of primitive Forth words used to bootstrap a
     /// working Forth system. Notably, it even bootstraps the compiler words like `:` and `;`.
     #[rustfmt::skip]
-    fn bootstrap(&mut self, ds_len: usize, rs_len: usize) -> Result<()> {
+    fn bootstrap(&mut self) -> Result<()> {
         macro_rules! compile {
             ($s:expr, $flags:expr, $code:expr) => {
                 self.compile($s, $flags, $code, &[])?;
@@ -477,7 +518,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         }
 
         // 6. Initialize environment constants.
-        self.compile_environment(ds_len, rs_len)?;
+        self.compile_environment()?;
 
         // 7. Bootstrap core wordlists.
         //
@@ -493,55 +534,56 @@ impl<M: Mem, I: Io> Fe<M, I> {
         Ok(())
     }
 
-    fn compile_environment(&mut self, ds_len: usize, rs_len: usize) -> Result<()> {
-        let env = Environment {
-            counted_string: 255,
-            hold: 64,
-            pad: 84,
-            address_unit_bits: 8,
-            floored: false,
-            max_char: 255,
-            max_d: SignedDouble::MAX,
-            max_n: isize::MAX,
-            max_u: usize::MAX,
-            max_ud: Double::MAX,
-            return_stack_cells: rs_len,
-            stack_cells: ds_len,
-        };
+    fn compile_environment(&mut self) -> Result<()> {
         let flag = |b: bool| -> usize { if b { TRUE } else { FALSE } };
         self.compile(
             b"(/counted-string)",
             0,
             Op::DoCol,
-            &[Token::Lit(env.counted_string)],
+            &[Token::Lit(self.env.counted_string)],
         )?;
-        self.compile(b"(/hold)", 0, Op::DoCol, &[Token::Lit(env.hold)])?;
-        self.compile(b"(/pad)", 0, Op::DoCol, &[Token::Lit(env.pad)])?;
+        self.compile(b"(/hold)", 0, Op::DoCol, &[Token::Lit(self.env.hold)])?;
+        self.compile(b"(/pad)", 0, Op::DoCol, &[Token::Lit(self.env.pad)])?;
         self.compile(
             b"(address-unit-bits)",
             0,
             Op::DoCol,
-            &[Token::Lit(env.address_unit_bits)],
+            &[Token::Lit(self.env.address_unit_bits)],
         )?;
-        self.compile(b"(floored)", 0, Op::DoCol, &[Token::Lit(flag(env.floored))])?;
-        self.compile(b"(max-char)", 0, Op::DoCol, &[Token::Lit(env.max_char)])?;
-        let (lo, hi): (usize, usize) = Double(env.max_d.0 as _).into();
+        self.compile(
+            b"(floored)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(flag(self.env.floored))],
+        )?;
+        self.compile(
+            b"(max-char)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(self.env.max_char)],
+        )?;
+        let (lo, hi): (usize, usize) = Double(self.env.max_d.0 as _).into();
         self.compile(b"(max-d)", 0, Op::DoCol, &[Token::Lit(lo), Token::Lit(hi)])?;
-        self.compile(b"(max-n)", 0, Op::DoCol, &[Token::Lit(env.max_n as usize)])?;
-        self.compile(b"(max-u)", 0, Op::DoCol, &[Token::Lit(env.max_u)])?;
-        let (lo, hi): (usize, usize) = env.max_ud.into();
+        self.compile(
+            b"(max-n)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(self.env.max_n as usize)],
+        )?;
+        self.compile(b"(max-u)", 0, Op::DoCol, &[Token::Lit(self.env.max_u)])?;
+        let (lo, hi): (usize, usize) = self.env.max_ud.into();
         self.compile(b"(max-ud)", 0, Op::DoCol, &[Token::Lit(lo), Token::Lit(hi)])?;
         self.compile(
             b"(return-stack-cells)",
             0,
             Op::DoCol,
-            &[Token::Lit(env.return_stack_cells)],
+            &[Token::Lit(self.env.return_stack_cells)],
         )?;
         self.compile(
             b"(stack-cells)",
             0,
             Op::DoCol,
-            &[Token::Lit(env.stack_cells)],
+            &[Token::Lit(self.env.stack_cells)],
         )?;
         Ok(())
     }
@@ -1064,7 +1106,7 @@ mod tests {
         single(
             &mut fe,
             br#"s" ADDRESS-UNIT-BITS" environment?"#,
-            size_of::<usize>(),
+            u8::BITS as usize,
         );
         single(&mut fe, br#"s" FLOORED" environment?"#, FALSE);
         single(&mut fe, br#"s" MAX-CHAR" environment?"#, u8::MAX as usize);
