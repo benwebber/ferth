@@ -3,10 +3,10 @@ variable (dump-width)
 variable (dump-end)
 8 constant (dump-group)
 
-: (green) 27 emit ." [32m" ;
-: (blue) 27 emit ." [36m" ;
-: (dim) 27 emit ." [2m" ;
-: (sgr0) 27 emit ." [0m" ;
+: (green) $1b emit ." [32m" ;
+: (blue) $1b emit ." [36m" ;
+: (dim) $1b emit ." [2m" ;
+: (sgr0) $1b emit ." [0m" ;
 
 \ Helpers to write ANSI escape codes directly into a buffer.
 : (buf-sgr0!)  ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 0 over c! 1+ [char] m over c! 1+ ;
