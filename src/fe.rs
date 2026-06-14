@@ -25,6 +25,7 @@ pub const BL: Cell = Cell(0x20);
 
 const CORE: &[u8] = include_bytes!("core.fth");
 const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
+const TOOLS: &[u8] = include_bytes!("tools.fth");
 
 pub type Builtin<M, I> = fn(&mut Fe<M, I>) -> Result<()>;
 
@@ -475,7 +476,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         // 7. Bootstrap core wordlists.
         //
         // With the compiler words bootstrapped, we can bootstrap the rest of the system in Forth.
-        for src in &[CORE, CORE_EXT] {
+        for src in &[CORE, CORE_EXT, TOOLS] {
             for line in src.split(|&b| b == b'\n') {
                 if !line.is_empty() {
                     self.evaluate(line)?;
