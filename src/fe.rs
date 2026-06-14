@@ -260,6 +260,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"(rp@)", Op::RpFetch),
             (b"(rp!)", Op::RpStore),
             (b"drop", Op::Drop),
+            (b"dup", Op::Dup),
             (b"r>", Op::RFrom),
             (b"swap", Op::Swap),
             (b"lshift", Op::LShift),
@@ -324,15 +325,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let c_fetch = Xt(self.op_xt(Op::CFetch));
         let c_store = Xt(self.op_xt(Op::CStore));
         let swap = Xt(self.op_xt(Op::Swap));
-        let sp_fetch = Xt(self.op_xt(Op::SpFetch));
         let rp_fetch = Xt(self.op_xt(Op::RpFetch));
         let drop = Xt(self.op_xt(Op::Drop));
+        let dup = Xt(self.op_xt(Op::Dup));
         let bl = L(usize::from(BL));
 
-        // : dup ( x -- x x ) (sp@) @ [-SIZE] + ;
-        //
-        // We have to use -SIZE because `-` is not available yet.
-        compile!(dup, b"dup", 0, Op::DoCol, [sp_fetch, L(Vm::SIZE.wrapping_neg()), add, fetch]);
         // : invert ( x1 -- x2 ) dup (nand) ;
         compile!(invert, b"invert", 0, Op::DoCol, [dup, nand]);
         // : or ( x1 x2 -- x3 ) invert swap invert (nand) ;

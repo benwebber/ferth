@@ -132,6 +132,13 @@ ops! {
     /// ```
     Swap = 0x0F,
 
+    /// Duplicate the value at the top of the data stack.
+    ///
+    /// ```text
+    /// dup ( x -- x x )
+    /// ```
+    Dup = 0x14,
+
     /// Push the address of the top of the data stack before `SpFetch` executes.
     ///
     /// ```text

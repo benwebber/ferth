@@ -355,6 +355,12 @@ impl Vm {
                 self.tos = maybe_read_cell_unchecked!(data, self.sp - 2 * Self::SIZE)?;
                 maybe_write_cell_unchecked!(data, self.sp - 2 * Self::SIZE, tos)?;
             }
+            Op::Dup => {
+                if self.sp == Self::DS_ADDR {
+                    return Err(VmError::StackUnderflow);
+                }
+                self.push(data, self.tos)?;
+            }
             Op::RFrom => {
                 let x = self.rpop(data)?;
                 self.push(data, x)?;
@@ -1159,6 +1165,32 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
         assert_eq!(v.execute(&mut d, Op::Swap), Err(VmError::StackUnderflow));
+    }
+
+    // Dup
+
+    #[test]
+    fn op_dup_ok() {
+        let (mut v, mut d) = vm();
+        v.push(&mut d, 1).unwrap();
+        v.push(&mut d, 2).unwrap();
+        v.execute(&mut d, Op::Dup).unwrap();
+        assert_eq!(ds(&v, &d), vec![1, 2, 2]);
+    }
+
+    #[test]
+    fn op_dup_underflow() {
+        let (mut v, mut d) = vm();
+        assert_eq!(v.execute(&mut d, Op::Dup), Err(VmError::StackUnderflow));
+    }
+
+    #[test]
+    fn op_dup_overflow() {
+        let (mut v, mut d) = vm();
+        for i in 0..DS_LEN {
+            v.push(&mut d, i).unwrap();
+        }
+        assert_eq!(v.execute(&mut d, Op::Dup), Err(VmError::StackOverflow));
     }
 
     // SpFetch
