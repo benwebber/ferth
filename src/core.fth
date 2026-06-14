@@ -374,8 +374,7 @@ variable (leave-list)
   depth
   \ Print <depth>.
   [char] < emit dup 0 <# #s #> type [char] > emit space
-  \ Data stack starts at 0x00.
-  0 ?do i cells @ . loop
+  0 ?do i cells (sp0) @ + @ . loop
 ;
 
 : quit
