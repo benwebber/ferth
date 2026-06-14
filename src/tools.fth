@@ -79,6 +79,28 @@ variable (dump-end)
   swap                  ( name-addr len )
 ;
 
+: (dump-header) ( xt -- )
+  dup (>name) drop 1-   ( xt nfa )
+  swap 1 cells +        ( nfa body-start )
+  over -                ( nfa header-size )
+  dump
+;
+
+: (dump-body) ( xt -- )
+  dup 1 cells +         ( xt body-start )
+  swap (body-len)       ( body-start body-len )
+  dump
+;
+
+: (dump-word) ( xt -- )
+  dup (>name) drop 1-   ( xt nfa )
+  swap                  ( nfa xt )
+  dup 1 cells +         ( nfa xt body-start )
+  swap (body-len) +     ( nfa body-end )
+  over -                ( nfa size )
+  dump
+;
+
 : words
   cr
   (latest) @
