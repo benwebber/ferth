@@ -8,29 +8,6 @@ variable (dump-end)
 : (dim) $1b emit ." [2m" ;
 : (sgr0) $1b emit ." [0m" ;
 
-\ Helpers to write ANSI escape codes directly into a buffer.
-: (buf-sgr0!)  ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 0 over c! 1+ [char] m over c! 1+ ;
-: (buf-dim!)   ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 2 over c! 1+ [char] m over c! 1+ ;
-: (buf-green!) ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 3 over c! 1+ [char] 2 over c! 1+ [char] m over c! 1+ ;
-: (buf-blue!)  ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 3 over c! 1+ [char] 6 over c! 1+ [char] m over c! 1+ ;
-
-\ Colourize a byte in the ASCII column.
-: (dump-ascii!) ( buf char -- buf' )
-  dup 0= if
-    \ 0x00: dim
-    drop (buf-dim!) [char] . over c! 1+ (buf-sgr0!) exit
-  then
-  dup $20 $7f within if
-    \ printable: green
-    swap (buf-green!) swap over c! 1+ (buf-sgr0!) exit
-  then
-  dup $ff = if
-    \ 0xff: blue
-    drop (buf-blue!) [char] . over c! 1+ (buf-sgr0!) exit
-  then
-  \ other: default
-  drop [char] . over c! 1+ ;
-
 : (dump-nibble) ( n -- char ) $f and dup 9 > if 87 + else 48 + then emit ;
 : (dump-byte) ( n -- ) dup 4 rshift (dump-nibble) (dump-nibble) ;
 
@@ -54,25 +31,32 @@ variable (dump-end)
 
 : (dump?) ( addr -- addr flag ) dup (dump-end) @ u< ;
 
+: (emit-ascii) ( char -- )
+  dup 0= if drop (dim) [char] . emit (sgr0) exit then
+  dup $20 $7f within if (green) emit (sgr0) exit then
+  dup $ff = if drop (blue) [char] . emit (sgr0) exit then
+  drop [char] . emit ;
+
 : (dump-row) ( addr -- )
   cr
-  dup (dump-addr) 2 spaces  ( addr )
-  pad (/hold) + swap                      ( ascii addr )
-  dup 16 + swap                           ( ascii addr' addr )
+  dup (dump-addr) 2 spaces
+  dup >r
+  dup 16 + swap
   ?do
-    i (dump-start) @ -                    ( ascii pos )
+    i (dump-start) @ -
     dup (dump-group) mod 0= swap 16 mod 0<> and if space then
     i (dump-end) @ u< if
-      i c@                                ( ascii char )
-      dup (emit-byte) space               ( ascii char )
-      (dump-ascii!)                       ( ascii' )
+      i c@ (emit-byte) space
     else
       3 spaces
-      bl over c! 1+                       ( ascii' )
     then
   loop
   space
-  pad (/hold) + swap over - type
+  r>
+  dup 16 + swap
+  ?do
+    i (dump-end) @ u< if i c@ (emit-ascii) else space then
+  loop
 ;
 
 \ Count digits used to represent number in the current base.
