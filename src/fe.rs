@@ -668,6 +668,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
         }
         if code == Op::DoCol {
             self.comma(self.op_xts[Op::Exit as usize])?;
+            let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
+            self.data
+                .write_cell(xt - 3 * Vm::SIZE, here - (xt + Vm::SIZE))?;
         }
         Ok(xt)
     }
