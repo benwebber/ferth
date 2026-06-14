@@ -70,3 +70,18 @@ variable (dump-end)
   r> base !
   cr
 ;
+
+: (>name) ( xt -- c-addr u )
+  2 cells - dup c@  ( info-addr len )
+  swap over -       ( len name-addr )
+  swap              ( name-addr len )
+;
+
+: words
+  cr
+  (latest) @
+  begin dup 0<> while
+    dup (>name) type space
+    1 cells - @
+  repeat
+;
