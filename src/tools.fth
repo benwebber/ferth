@@ -3,9 +3,29 @@ variable (dump-width)
 variable (dump-end)
 8 constant (dump-group)
 
-8 (dump-width) !
+: (green) 27 emit ." [32m" ;
+: (blue) 27 emit ." [36m" ;
+: (dim) 27 emit ." [2m" ;
+: (sgr0) 27 emit ." [0m" ;
 
 : (dump-byte) 0 <# # # #> type ;
+
+: (emit-byte)
+  dup 0= if
+    (dim) (dump-byte) (sgr0)
+  else
+    dup $20 $7f within if
+      (green) (dump-byte) (sgr0)
+    else
+      dup $ff = if
+        (blue) (dump-byte) (sgr0)
+      else
+        (dump-byte)
+      then
+    then
+  then
+;
+
 : (dump-printable) ( char -- char' ) dup $20 $7f within 0= if drop [char] . then ;
 : (dump-addr) ( addr -- ) 0 <# (dump-width) @ 0 ?do # loop #> type ;
 
@@ -21,7 +41,7 @@ variable (dump-end)
     dup (dump-group) mod 0= swap 16 mod 0<> and if space then
     i (dump-end) @ u< if
       i c@                                ( ascii char )
-      dup (dump-byte) space               ( ascii char )
+      dup (emit-byte) space               ( ascii char )
       (dump-printable) over c!            ( ascii )
     else
       3 spaces
