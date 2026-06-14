@@ -447,6 +447,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
 
         // : ;
         //   ['] (exit) ,
+        //   \ Store bodylen.
+        //   (latest) @ 3 cells - swap 1 cells add here swap - swap !
+        //   \ Unset hidden flag.
         //   (latest) @ (flags-addr) dup c@ (hidden-flag) invert and swap c!
         //   [
         // ; immediate
@@ -458,6 +461,13 @@ impl<M: Mem, I: Io> Fe<M, I> {
             Op::DoCol,
             [
                 L(self.op_xt(Op::Exit)), comma,
+                // Store bodylen.
+                addr!(LATEST), fetch,
+                dup, L((3 * Vm::SIZE).wrapping_neg()), add,
+                swap, L(Vm::SIZE), add,
+                addr!(HERE), fetch, swap, minus,
+                swap, store,
+                // Unset hidden flag.
                 addr!(LATEST), fetch, flags_addr, dup, c_fetch, hidden_flag, invert, and, swap, c_store,
                 lbracket,
             ]
@@ -549,12 +559,14 @@ impl<M: Mem, I: Io> Fe<M, I> {
     ///
     /// The length of the name follows as a single byte, then the bytes of the name.
     ///
+    /// The `bodylen` field encodes the length of the body in cells.
+    ///
     /// The `info` field packs the flags into the least significant byte and the length into the
     /// next byte. It currently reserves two additional bytes of space.
     ///
     /// The `link` field links to the `code` field of the next word in the dictionary.
     ///
-    /// The `code` field contains an [`Op`] code. The compiled `data `of the word, if it exists,
+    /// The `code` field contains an [`Op`] code. The compiled `body` of the word, if it exists,
     /// follows the `code` field.
     ///
     /// Assuming a 32-bit cell size, the header looks like this in memory:
@@ -565,6 +577,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// |      pad...   |      len      |             name...           |
     /// +---------------+---------------+-------------------------------+
     /// |                              name...                          |
+    /// +---------------------------------------------------------------+
+    /// |                            bodylen                            |
     /// +-------------------------------+---------------+---------------+
     /// |            info (reserved)    |   info (len)  | info (flags)  |
     /// +-------------------------------+---------------+---------------+
@@ -572,7 +586,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// +---------------------------------------------------------------+
     /// |                              code                             |
     /// +---------------------------------------------------------------+
-    /// |                              data...                          |
+    /// |                              body...                          |
     /// +---------------------------------------------------------------+
     /// ```
     ///
@@ -628,8 +642,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let nfa = here + pad;
         self.data.write_char(nfa, len)?;
         self.data.write(nfa + 1, name)?;
+        // bodylen (0 until ;)
+        let body_len = nfa + 1 + len as usize;
+        self.data.write_cell(body_len, 0)?;
         // info
-        let info = nfa + 1 + len as usize;
+        let info = body_len + Vm::SIZE;
         self.data.write_cell(info, pack_info(flags, len))?;
         self.data.write_cell(info + Vm::SIZE, latest)?;
         // code
@@ -724,7 +741,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             let flags = (info >> 8) as u8;
             let wlen = info & 0xFF;
             if flags & HIDDEN == 0 && wlen == len {
-                let name_at = xt - INFO_FROM_CFA - wlen;
+                let name_at = xt - INFO_FROM_CFA - Vm::SIZE - wlen;
                 let a = self.data.read(addr, len)?;
                 let b = self.data.read(name_at, wlen)?;
                 if a.eq_ignore_ascii_case(b) {

@@ -71,6 +71,8 @@ variable (dump-end)
   cr
 ;
 
+: (body-len) ( xt -- u ) 3 cells - @ ;
+
 : (>name) ( xt -- c-addr u )
   2 cells - dup c@  ( info-addr len )
   swap over -       ( len name-addr )
