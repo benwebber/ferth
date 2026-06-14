@@ -8,6 +8,7 @@ variable (dump-end)
 : (dim) $1b emit ." [2m" ;
 : (sgr0) $1b emit ." [0m" ;
 
+: (is-ascii-graphic?) $20 $7f within ;
 : (dump-nibble) ( n -- char ) $f and dup 9 > if 87 + else 48 + then emit ;
 : (dump-byte) ( n -- ) dup 4 rshift (dump-nibble) (dump-nibble) ;
 
@@ -15,7 +16,7 @@ variable (dump-end)
   dup 0= if
     (dim) (dump-byte) (sgr0)
   else
-    dup $20 $7f within if
+    dup (is-ascii-graphic?) if
       (green) (dump-byte) (sgr0)
     else
       dup $ff = if
@@ -33,7 +34,7 @@ variable (dump-end)
 
 : (emit-ascii) ( char -- )
   dup 0= if drop (dim) [char] . emit (sgr0) exit then
-  dup $20 $7f within if (green) emit (sgr0) exit then
+  dup (is-ascii-graphic?) if (green) emit (sgr0) exit then
   dup $ff = if drop (blue) [char] . emit (sgr0) exit then
   drop [char] . emit ;
 
