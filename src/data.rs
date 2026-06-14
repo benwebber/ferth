@@ -1,5 +1,4 @@
 //! The system data space.
-use crate::types::AAddr;
 use crate::vm::{VmError, VmResult};
 
 pub trait Mem: AsRef<[u8]> + AsMut<[u8]> {}
@@ -38,7 +37,9 @@ impl<M: Mem> Data<M> {
     /// Read a single cell.
     pub fn read_cell(&self, addr: usize) -> VmResult<usize> {
         const SIZE: usize = size_of::<usize>();
-        AAddr::try_from(addr)?;
+        if !addr.is_multiple_of(SIZE) {
+            return Err(VmError::AddressMisaligned(addr));
+        }
         let bytes = self.read(addr, SIZE)?;
         let mut buf = [0u8; SIZE];
         buf.copy_from_slice(bytes);
@@ -78,7 +79,9 @@ impl<M: Mem> Data<M> {
 
     /// Write a single cell.
     pub fn write_cell(&mut self, addr: usize, x: usize) -> VmResult<()> {
-        AAddr::try_from(addr)?;
+        if !addr.is_multiple_of(size_of::<usize>()) {
+            return Err(VmError::AddressMisaligned(addr));
+        }
         self.write(addr, &x.to_le_bytes())
     }
 
