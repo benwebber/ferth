@@ -196,3 +196,9 @@ This was primarily because `Vm::push` and `Vm::pop` now required bounds checks t
 Next I reserved a scratch cell below the data stack to absorb writes, eliminating the bounds checks ([132e3b8](https://github.com/benwebber/ferth/commit/132e3b84e4deabcc5def45816bd18b4b844e8365)).
 This improved wall clock time by 3 to 15% on all benchmarks except `deepchain`.
 This makes sense because `deepchain` exercises the return stack and call path more than the data stack.
+
+## Implement more primitives in Rust
+
+During development, I strived to minimize the number of opcodes I implemented.
+This includes some words as fundamental as `dup`, which I originally defined using the stack pointer words.
+I did this partially to internalize the Forth execution model, but also because I wanted to see the effect of optimizing these common words in native code.
