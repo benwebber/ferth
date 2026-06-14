@@ -1,12 +1,5 @@
 : (dump-byte) 0 <# # # #> type ;
-: (dump-printable) ( x -- )
-  dup $20 $7f within if
-    emit
-  else
-    drop
-    [char] . emit
-  then
-;
+: (dump-printable) ( char -- char' ) dup $20 $7f within 0= if drop [char] . then ;
 : (dump-addr) ( addr -- )
   (address-unit-bits) cells
   dup 64 = if drop 0 <# # # # # # # # # # # # # # # # # #> type exit then
@@ -20,14 +13,23 @@ variable (dump-end)
 
 : (dump-row) ( addr -- )
   cr
-  dup (dump-addr) [char] : emit space
-  dup 16 over + swap ?do
-    i (dump?) if c@ (dump-byte) space else 3 spaces then
+  dup (dump-addr) [char] : emit space   ( addr )
+  pad (/hold) + swap                    ( ascii addr )
+  dup 16 + swap                         ( ascii addr' addr )
+  ?do
+    i (dump-end) @ u< if
+      i c@                              ( ascii char )
+      dup (dump-byte) space             ( ascii char )
+      (dump-printable) over c!          ( ascii )
+    else
+      3 spaces
+      bl over c!                        ( ascii )
+    then
+    1+
   loop
+  drop
   [char] | emit
-  16 over + swap ?do
-    i (dump?) if c@ (dump-printable) else drop space then
-  loop
+  pad (/hold) + 16 type
   [char] | emit
 ;
 
