@@ -74,9 +74,9 @@ variable (dump-end)
 : (body-len) ( xt -- u ) 3 cells - @ ;
 
 : (>name) ( xt -- c-addr u )
-  2 cells - dup c@  ( info-addr len )
-  swap over -       ( len name-addr )
-  swap              ( name-addr len )
+  2 cells - dup c@      ( info-addr len )
+  swap 1 cells - over - ( len name-addr )
+  swap                  ( name-addr len )
 ;
 
 : words
@@ -92,16 +92,36 @@ variable (dump-end)
 
 : ? ( a-addr -- ) @ 0 <# #s #> type ;
 
+: (has-inline-cells?) ( xt -- n )
+  dup ['] (lit)   = if drop 1 exit then
+  dup ['] (jmp)   = if drop 1 exit then
+  dup ['] (jmpz)  = if drop 1 exit then
+  dup ['] (+loop) = if drop 1 exit then
+  dup ['] (?do)   = if drop 1 exit then
+  drop 0
+;
+
 : see ( "<spaces>name" )
-  bl parse (find)                   ( c-addr u -- 0 | xt -1 | xt 1 )
-  0<> if                            ( xt )
+  bl parse (find)                         ( c-addr u -- 0 | xt -1 | xt 1 )
+  0<> if                                  ( xt )
     cr
-    dup @ ['] (docol) @ = if        ( xt )
+    dup @ ['] (docol) @ = if              ( xt )
       \ This is a colon definition.
-      dup (>name)                   ( xt name-addr len )
-      [char] : emit space type cr   ( xt )
-      \ TODO: Iterate over data.
-      s" colon " type (>name) type  ( )
+      dup (>name)                         ( xt name-addr len )
+      [char] : emit space type cr         ( xt )
+      2 spaces
+      \ Iterate from the start of the body to the cell before the last (exit).
+      dup cell+ dup rot (body-len) 1 cells - + swap ( body' body )
+      do
+        i @                               ( xt )
+        dup (has-inline-cells?) if
+          \ This word has a body parameter.
+          drop i cell+ @ .
+          2 cells
+        else
+          (>name) type space 1 cells
+        then
+      +loop
       cr
       [char] ; emit
     else
