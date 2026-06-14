@@ -291,23 +291,37 @@ impl Vm {
                 }
             }
             Op::Fetch => {
-                let addr = self.pop(data)?;
-                let val = data.read_cell(addr)?;
-                self.push(data, val)?;
+                if self.sp == Self::DS_ADDR {
+                    return Err(VmError::StackUnderflow);
+                }
+                let addr = self.tos;
+                self.tos = data.read_cell(addr)?;
             }
             Op::Store => {
-                let addr = self.pop(data)?;
-                let val = self.pop(data)?;
+                if self.sp < Self::DS_ADDR + 2 * Self::SIZE {
+                    return Err(VmError::StackUnderflow);
+                }
+                let addr = self.tos;
+                let val = maybe_read_cell_unchecked!(data, self.sp - 2 * Self::SIZE)?;
+                self.sp -= 2 * Self::SIZE;
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
                 data.write_cell(addr, val)?;
             }
             Op::CFetch => {
-                let addr = self.pop(data)?;
-                let u = data.read_char(addr)?;
-                self.push(data, u as usize)?;
+                if self.sp == Self::DS_ADDR {
+                    return Err(VmError::StackUnderflow);
+                }
+                let addr = self.tos;
+                self.tos = data.read_char(addr)? as usize;
             }
             Op::CStore => {
-                let addr = self.pop(data)?;
-                let c = self.pop(data)? as u8;
+                if self.sp < Self::DS_ADDR + 2 * Self::SIZE {
+                    return Err(VmError::StackUnderflow);
+                }
+                let addr = self.tos;
+                let c = maybe_read_cell_unchecked!(data, self.sp - 2 * Self::SIZE)? as u8;
+                self.sp -= 2 * Self::SIZE;
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
                 data.write_char(addr, c)?;
             }
             Op::Add => {
