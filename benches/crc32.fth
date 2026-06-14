@@ -1,6 +1,3 @@
-: nip swap drop ;
-: erase 0 fill ;
-
 hex
 : crc-bit ( crc -- crc )
     dup 1 and

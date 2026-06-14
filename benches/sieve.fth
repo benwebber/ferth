@@ -1,7 +1,3 @@
-: nip swap drop ;
-: erase 0 fill ;
-: pick cells (sp@) swap - 2 cells - @ ;
-
 variable sieve-end
 
 : sieve ( limit -- n )
