@@ -269,7 +269,7 @@ variable hld
 : #> ( xd -- c-addr u )
   2drop      ( )
   hld @      ( c-addr )
-  pad 64 +   ( c-addr bufend )
+  pad (/hold) +   ( c-addr bufend )
   over -     ( c-addr u )
 ;
 : sign ( n -- ) 0< if [char] - hold then ;
