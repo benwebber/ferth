@@ -31,7 +31,8 @@ variable (dump-end)
   \ other: default
   drop [char] . over c! 1+ ;
 
-: (dump-byte) 0 <# # # #> type ;
+: (dump-nibble) ( n -- char ) $f and dup 9 > if 87 + else 48 + then emit ;
+: (dump-byte) ( n -- ) dup 4 rshift (dump-nibble) (dump-nibble) ;
 
 : (emit-byte)
   dup 0= if
