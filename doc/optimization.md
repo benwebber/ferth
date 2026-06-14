@@ -202,3 +202,8 @@ This makes sense because `deepchain` exercises the return stack and call path mo
 During development, I strived to minimize the number of opcodes I implemented.
 This includes some words as fundamental as `dup`, which I originally defined using the stack pointer words.
 I did this partially to internalize the Forth execution model, but also because I wanted to see the effect of optimizing these common words in native code.
+
+---
+
+Implementing `dup` alone in [394a6df](https://github.com/benwebber/ferth/commit/394a6df79ef1f8fdc937a98d28a21a93e31340bd) improved every benchmark far more than any of the previous optimizations. The `crc32`, `fib`, and `sieve` benchmarks all saw a 50% decrease in wall clock tim
+The others between 3 and 33%.
