@@ -81,7 +81,9 @@ variable (dump-end)
   cr
   (latest) @
   begin dup 0<> while
-    dup (>name) type space
+    dup (flags-addr) c@ (hidden-flag) and 0= if
+      dup (>name) type space
+    then
     1 cells - @
   repeat
 ;
