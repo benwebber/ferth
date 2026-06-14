@@ -169,6 +169,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let result = self.interpret();
         if result.is_err() {
             let _ = self.data.write_cell(self.layout_addr(Layout::STATE), 0);
+            self.vm.reset();
         }
         result
     }
