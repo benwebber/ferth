@@ -263,10 +263,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"lshift", Op::LShift),
             (b"rshift", Op::RShift),
             (b"um/mod", Op::UmDivMod),
-            // r@ cannot be a : definition because Op::DoCol puts its return address on top of the
-            // return stack before r@ executes. r@ returns that instead of whatever was previously
-            // on the top of the return stack. The opcode executes directly.
-            (b"r@", Op::RFetch),
         ];
         for (name, op) in opcodes {
             let xt = self.compile(name, 0, *op, &[])?;
@@ -327,6 +323,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let c_store = Xt(self.op_xt(Op::CStore));
         let swap = Xt(self.op_xt(Op::Swap));
         let sp_fetch = Xt(self.op_xt(Op::SpFetch));
+        let rp_fetch = Xt(self.op_xt(Op::RpFetch));
         let drop = Xt(self.op_xt(Op::Drop));
         let bl = L(usize::from(BL));
 
@@ -344,6 +341,16 @@ impl<M: Mem, I: Io> Fe<M, I> {
         compile!(minus, b"-", 0, Op::DoCol, [invert, L(1), add, add]);
         // cells
         compile!(cells, b"cells", 0, Op::DoCol, [L(Vm::SIZE), ummul, drop]);
+        // : r@ ( -- x ) ( R: x -- x ) (rp@) 2 cells - @ ;
+        //
+        // RP points to the next cell, and DoCol pushes a call frame onto the stack. Thus we need
+        // to subtract 2 cells from RP.
+        compile!(
+            b"r@",
+            0,
+            Op::DoCol,
+            [rp_fetch, L(-2isize as usize), cells, add, fetch]
+        );
         // : +! ( u addr -- ) dup >r @ + r> ! ;
         compile!(plus_store, b"+!", 0, Op::DoCol, [dup, to_r, fetch, add, r_from, store]);
         // : allot ( n -- ) (here) +! ;

@@ -161,13 +161,6 @@ ops! {
     /// ```
     RFrom = 0x13,
 
-    /// Copy the value at the top of the return stack to the data stack.
-    ///
-    /// ```text
-    /// r@ ( -- x ) ( R: x -- x )
-    /// ```
-    RFetch = 0x14,
-
     /// Push the return stack pointer to the data stack.
     ///
     /// ```text

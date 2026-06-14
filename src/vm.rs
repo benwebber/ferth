@@ -363,13 +363,6 @@ impl Vm {
                 let x = self.pop(data)?;
                 self.rpush(data, x)?;
             }
-            Op::RFetch => {
-                if self.rp == self.rs_addr() {
-                    return Err(VmError::ReturnStackUnderflow);
-                }
-                let x = maybe_read_cell_unchecked!(data, self.rp - Self::SIZE)?;
-                self.push(data, x)?;
-            }
             Op::Yield => {
                 // Unreachable, but don't panic. `dispatch()` intercepts `Yield` first.
                 return Err(VmError::InvalidOpCode(op as u8));
