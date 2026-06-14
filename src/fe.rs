@@ -8,7 +8,6 @@ use crate::{Error, Result};
 use super::data::{Data, Mem};
 use super::io::{Io, NoIo};
 use super::parser;
-use super::types::Cell;
 use super::vm::{Op, Stop, Vm};
 
 pub const IMMEDIATE: u8 = 0b01;
@@ -21,7 +20,7 @@ const MAX_BUILTINS: usize = 256;
 /// The size of the terminal input buffer.
 const INPUT_BUFFER_SIZE: usize = 256;
 
-pub const BL: Cell = Cell(0x20);
+pub const BL: usize = 0x20;
 
 const CORE: &[u8] = include_bytes!("core.fth");
 const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
@@ -139,9 +138,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// ```text
     /// ( -- x )
     /// ```
-    pub fn push<T: Into<Cell>>(&mut self, x: T) -> Result<()> {
-        let x: Cell = x.into();
-        self.vm.push(&mut self.data, x.into())?;
+    pub fn push(&mut self, x: usize) -> Result<()> {
+        self.vm.push(&mut self.data, x)?;
         Ok(())
     }
 
@@ -150,8 +148,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// ```text
     /// ( x --  )
     /// ```
-    pub fn pop(&mut self) -> Result<Cell> {
-        Ok(self.vm.pop(&mut self.data).map(Cell)?)
+    pub fn pop(&mut self) -> Result<usize> {
+        Ok(self.vm.pop(&mut self.data)?)
     }
 
     /// Evaluate Forth code.
@@ -328,7 +326,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let rp_fetch = Xt(self.op_xt(Op::RpFetch));
         let drop = Xt(self.op_xt(Op::Drop));
         let dup = Xt(self.op_xt(Op::Dup));
-        let bl = L(usize::from(BL));
+        let bl = L(BL);
 
         // : invert ( x1 -- x2 ) dup (nand) ;
         compile!(invert, b"invert", 0, Op::DoCol, [dup, nand]);
@@ -592,8 +590,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
     ///
     /// After `(header)` executes, `here` points to the `code` field address.
     fn header(&mut self) -> Result<()> {
-        let len = usize::from(self.pop()?);
-        let addr = usize::from(self.pop()?);
+        let len = self.pop()?;
+        let addr = self.pop()?;
         let mut buf = [0u8; MAX_WORD_LEN];
         buf[..len].copy_from_slice(self.data.read(addr, len)?);
         let cfa = self.write_header(&buf[..len], 0)?;
@@ -610,8 +608,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// ```
     #[allow(clippy::wrong_self_convention)]
     fn to_number(&mut self) -> Result<()> {
-        let u: usize = self.pop()?.into();
-        let caddr: usize = self.pop()?.into();
+        let u = self.pop()?;
+        let caddr = self.pop()?;
         let hi = self.pop()?;
         let lo = self.pop()?;
         let acc = Double::from((lo, hi));
@@ -620,13 +618,13 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let base = self.data.read_cell(self.layout_addr(Layout::BASE))? as u32;
         let (acc, rest) = parser::to_number(acc, bytes, base);
         let len = bytes.len() - rest.len();
-        let (lo, hi): (Cell, Cell) = acc.into();
+        let (lo, hi): (usize, usize) = acc.into();
         let caddr2 = caddr + len;
         let u2 = rest.len();
         self.push(lo)?;
         self.push(hi)?;
-        self.push(Cell(caddr2))?;
-        self.push(Cell(u2))
+        self.push(caddr2)?;
+        self.push(u2)
     }
 
     fn write_header(&mut self, name: &[u8], flags: u8) -> Result<usize> {
@@ -701,10 +699,10 @@ impl<M: Mem, I: Io> Fe<M, I> {
         }
         self.data
             .write_cell(self.layout_addr(Layout::TO_IN), to_in)?;
-        self.push(Cell(delim as usize))?;
+        self.push(delim as usize)?;
         self.parse()?;
-        let u = usize::from(self.pop()?);
-        let caddr = usize::from(self.pop()?);
+        let u = self.pop()?;
+        let caddr = self.pop()?;
         // TODO: return error instead of truncating
         let len = u.min(255);
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
@@ -731,10 +729,10 @@ impl<M: Mem, I: Io> Fe<M, I> {
     ///
     /// [`search-wordlist`]: https://forth-standard.org/standard/search/SEARCH-WORDLIST
     fn find(&mut self) -> Result<()> {
-        let len = usize::from(self.pop()?);
-        let addr = usize::from(self.pop()?);
+        let len = self.pop()?;
+        let addr = self.pop()?;
         if len > MAX_WORD_LEN {
-            return self.push(Cell::ZERO);
+            return self.push(0);
         }
 
         let mut xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
@@ -758,22 +756,22 @@ impl<M: Mem, I: Io> Fe<M, I> {
 
         match found {
             Some((xt, flag)) => {
-                self.push(Cell(xt))?;
-                self.push(Cell(flag as usize))
+                self.push(xt)?;
+                self.push(flag as usize)
             }
-            None => self.push(Cell::ZERO),
+            None => self.push(0),
         }
     }
 
     /// ( "<spaces>name" -- xt )
     // TODO: after implementing errors, move this to Forth
     fn tick(&mut self) -> Result<()> {
-        let caddr = self.parse_word(BL.0 as u8)?;
+        let caddr = self.parse_word(BL as u8)?;
         let len = self.data.read_char(caddr)? as usize;
-        self.push(Cell(caddr + 1))?;
-        self.push(Cell(len))?;
+        self.push(caddr + 1)?;
+        self.push(len)?;
         self.find()?;
-        let flag = self.pop()?.to_isize();
+        let flag = self.pop()? as isize;
         if flag == 0 {
             return Err(self.undefined(caddr));
         }
@@ -787,31 +785,31 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// ```
     // TODO: Reimplement and expose this as `>number`.
     fn number(&mut self) -> Result<()> {
-        let caddr = usize::from(self.pop()?);
+        let caddr = self.pop()?;
         let len = self.data.read_char(caddr)? as usize;
         let base = self.data.read_cell(self.layout_addr(Layout::BASE))?;
 
         if let Some(n) = parser::parse_num(self.data.read(caddr + 1, len)?, base as u32) {
-            self.push(Cell(n))?;
-            self.push(Cell(1))
+            self.push(n)?;
+            self.push(1)
         } else {
-            self.push(Cell(caddr))?;
-            self.push(Cell::ZERO)
+            self.push(caddr)?;
+            self.push(0)
         }
     }
 
     // TODO: Move this to Forth.
     fn postpone(&mut self) -> Result<()> {
-        let caddr = self.parse_word(BL.0 as u8)?;
+        let caddr = self.parse_word(BL as u8)?;
         let len = self.data.read_char(caddr)? as usize;
-        self.push(Cell(caddr + 1))?;
-        self.push(Cell(len))?;
+        self.push(caddr + 1)?;
+        self.push(len)?;
         self.find()?;
-        let flag = self.pop()?.to_isize();
+        let flag = self.pop()? as isize;
         if flag == 0 {
             return Err(self.undefined(caddr));
         }
-        let xt = usize::from(self.pop()?);
+        let xt = self.pop()?;
         let is_immediate = flag == 1;
         if is_immediate {
             // Compile the XT directly so that the current word *executes* the target when it runs.
@@ -855,34 +853,34 @@ impl<M: Mem, I: Io> Fe<M, I> {
     // TODO: Move this to Forth.
     fn interpret(&mut self) -> Result<()> {
         loop {
-            let c_addr = self.parse_word(BL.0 as u8)?;
+            let c_addr = self.parse_word(BL as u8)?;
             if self.data.read_char(c_addr)? == 0 {
                 return Ok(());
             }
             let len = self.data.read_char(c_addr)? as usize;
-            self.push(Cell(c_addr + 1))?;
-            self.push(Cell(len))?;
+            self.push(c_addr + 1)?;
+            self.push(len)?;
             self.find()?;
-            let flag = self.pop()?.to_isize();
+            let flag = self.pop()? as isize;
             let state = self.data.read_cell(self.layout_addr(Layout::STATE))?;
             if flag != 0 {
                 if state == 0 || flag == 1 {
                     self.execute()?;
                 } else {
-                    let x = usize::from(self.pop()?);
+                    let x = self.pop()?;
                     self.comma(x)?;
                 }
             } else {
-                self.push(Cell(c_addr))?;
+                self.push(c_addr)?;
                 self.number()?;
-                let ok = self.pop()?.to_isize();
-                let v = usize::from(self.pop()?);
+                let ok = self.pop()? as isize;
+                let v = self.pop()?;
                 if ok == 1 {
                     if state != 0 {
                         self.comma(self.op_xts[Op::Lit as usize])?;
                         self.comma(v)?;
                     } else {
-                        self.push(Cell(v))?;
+                        self.push(v)?;
                     }
                 } else {
                     return Err(self.undefined(v));
@@ -899,7 +897,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     ///
     /// See [`PARSE`](https://forth-standard.org/standard/core/PARSE).
     fn parse(&mut self) -> Result<()> {
-        let delim = usize::from(self.pop()?) as u8;
+        let delim = self.pop()? as u8;
         let src = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
         let src_len = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
         let mut to_in = self.data.read_cell(self.layout_addr(Layout::TO_IN))?;
@@ -920,8 +918,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
         }
         self.data
             .write_cell(self.layout_addr(Layout::TO_IN), to_in)?;
-        self.push(Cell(src + start))?;
-        self.push(Cell(len))
+        self.push(src + start)?;
+        self.push(len)
     }
 
     /// Receive a single character from the input device.
@@ -933,7 +931,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// See [`KEY`](https://forth-standard.org/standard/core/KEY).
     fn key(&mut self) -> Result<()> {
         match self.io.key()? {
-            Some(c) => self.push(Cell(c as usize)),
+            Some(c) => self.push(c as usize),
             None => Err(Error::Io),
         }
     }
@@ -947,7 +945,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// See [`EMIT`](https://forth-standard.org/standard/core/EMIT).
     fn emit(&mut self) -> Result<()> {
         // TODO: What if the TOS is not a char?
-        let c = usize::from(self.pop()?) as u8;
+        let c = self.pop()? as u8;
         self.io.emit(c)
     }
 
@@ -969,11 +967,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
                 self.data
                     .write_cell(self.layout_addr(Layout::SOURCE_LEN), len)?;
                 self.data.write_cell(self.layout_addr(Layout::TO_IN), 0)?;
-                self.push(Cell(!0))?; // true
+                self.push(!0)?; // true
                 Ok(())
             }
             Ok(None) => {
-                self.push(Cell::ZERO)?; // false
+                self.push(0)?; // false
                 Ok(())
             }
             Err(e) => Err(e),
@@ -1047,14 +1045,14 @@ mod tests {
 
         let single = |fe: &mut TestFe, q: &[u8], expected: usize| {
             fe.evaluate(q).unwrap();
-            assert_eq!(fe.pop().unwrap(), Cell(usize::MAX)); // true
-            assert_eq!(fe.pop().unwrap(), Cell(expected));
+            assert_eq!(fe.pop().unwrap(), usize::MAX); // true
+            assert_eq!(fe.pop().unwrap(), expected);
         };
         let double = |fe: &mut TestFe, q: &[u8], lo: usize, hi: usize| {
             fe.evaluate(q).unwrap();
-            assert_eq!(fe.pop().unwrap(), Cell(usize::MAX)); // true
-            assert_eq!(fe.pop().unwrap(), Cell(hi));
-            assert_eq!(fe.pop().unwrap(), Cell(lo));
+            assert_eq!(fe.pop().unwrap(), usize::MAX); // true
+            assert_eq!(fe.pop().unwrap(), hi);
+            assert_eq!(fe.pop().unwrap(), lo);
         };
 
         single(
@@ -1089,6 +1087,6 @@ mod tests {
         single(&mut fe, br#"s" STACK-CELLS" environment?"#, 64);
 
         fe.evaluate(br#"s" UNKNOWN" environment?"#).unwrap();
-        assert_eq!(fe.pop().unwrap(), Cell(0)); // false
+        assert_eq!(fe.pop().unwrap(), 0usize); // false
     }
 }
