@@ -633,6 +633,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// After `(header)` executes, `here` points to the `code` field address.
     fn header(&mut self) -> Result<()> {
         let len = self.pop()?;
+        if len > MAX_WORD_LEN {
+            return Err(Error::CountedStrTooLong(len));
+        }
         let addr = self.pop()?;
         let mut buf = [0u8; MAX_WORD_LEN];
         buf[..len].copy_from_slice(self.data.read(addr, len)?);
@@ -1078,6 +1081,17 @@ mod tests {
     fn test_undefined_word() {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
         assert!(matches!(fe.evaluate(b"nope"), Err(Error::UndefinedWord(_))));
+    }
+
+    #[test]
+    fn test_long_word_name_errors() {
+        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+        // A name at the limit (30 bytes) is accepted.
+        let ok = [b": ".as_slice(), &[b'a'; 30], b" 1 ;"].concat();
+        assert!(fe.evaluate(&ok).is_ok());
+        // A name that is too long returns an error instead of panicking.
+        let long = [b": ".as_slice(), &[b'a'; 40], b" 1 ;"].concat();
+        assert_eq!(fe.evaluate(&long), Err(Error::CountedStrTooLong(40)));
     }
 
     #[test]
