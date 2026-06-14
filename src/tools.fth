@@ -89,3 +89,24 @@ variable (dump-end)
 ;
 
 : ? ( a-addr -- ) @ 0 <# #s #> type ;
+
+: see ( "<spaces>name" )
+  bl parse (find)                   ( c-addr u -- 0 | xt -1 | xt 1 )
+  0<> if                            ( xt )
+    cr
+    dup @ ['] (docol) @ = if        ( xt )
+      \ This is a colon definition.
+      dup (>name)                   ( xt name-addr len )
+      [char] : emit space type cr   ( xt )
+      \ TODO: Iterate over data.
+      s" colon " type (>name) type  ( )
+      cr
+      [char] ; emit
+    else
+      s" builtin " type (>name) type cr
+    then
+  else                              ( )
+    s" undefined word" type cr
+    abort
+  then
+;
