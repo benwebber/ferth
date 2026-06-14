@@ -43,3 +43,69 @@ impl core::fmt::Display for VmError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn width() -> usize {
+        core::mem::size_of::<usize>() * 2
+    }
+
+    #[test]
+    fn display_stack_overflow() {
+        assert_eq!(VmError::StackOverflow.to_string(), "stack overflow");
+    }
+
+    #[test]
+    fn display_stack_underflow() {
+        assert_eq!(VmError::StackUnderflow.to_string(), "stack underflow");
+    }
+
+    #[test]
+    fn display_return_stack_overflow() {
+        assert_eq!(
+            VmError::ReturnStackOverflow.to_string(),
+            "return stack overflow"
+        );
+    }
+
+    #[test]
+    fn display_return_stack_underflow() {
+        assert_eq!(
+            VmError::ReturnStackUnderflow.to_string(),
+            "return stack underflow"
+        );
+    }
+
+    #[test]
+    fn display_address_out_of_range() {
+        let addr = 0xcafe;
+        assert_eq!(
+            VmError::AddressOutOfRange(addr).to_string(),
+            format!("address out of range: 0x{:0width$x}", addr, width = width())
+        );
+    }
+
+    #[test]
+    fn display_address_misaligned() {
+        let addr = 0x0003;
+        assert_eq!(
+            VmError::AddressMisaligned(addr).to_string(),
+            format!("address misaligned: 0x{:0width$x}", addr, width = width())
+        );
+    }
+
+    #[test]
+    fn display_invalid_opcode() {
+        assert_eq!(
+            VmError::InvalidOpCode(0xab).to_string(),
+            "invalid opcode: 0xab"
+        );
+    }
+
+    #[test]
+    fn display_division_by_zero() {
+        assert_eq!(VmError::DivisionByZero.to_string(), "division by zero");
+    }
+}

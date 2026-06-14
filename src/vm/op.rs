@@ -284,3 +284,25 @@ ops! {
     /// ```
     DoCreate = 0x23,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn max_is_u8_max() {
+        assert_eq!(Op::MAX, u8::MAX as usize);
+    }
+
+    #[test]
+    fn try_from_valid() {
+        assert_eq!(Op::try_from(0x00).unwrap(), Op::Halt);
+        assert_eq!(Op::try_from(0x01).unwrap(), Op::Yield);
+        assert_eq!(Op::try_from(0x23).unwrap(), Op::DoCreate);
+    }
+
+    #[test]
+    fn try_from_invalid() {
+        assert_eq!(Op::try_from(0xfe), Err(VmError::InvalidOpCode(0xfe)));
+    }
+}
