@@ -85,3 +85,5 @@ variable (dump-end)
     1 cells - @
   repeat
 ;
+
+: ? ( a-addr -- ) @ 0 <# #s #> type ;
