@@ -29,3 +29,7 @@ mod vm;
 
 pub use error::{Error, Result};
 pub use fe::Fe;
+
+pub const SIZE: usize = size_of::<usize>();
+pub const TRUE: usize = usize::MAX;
+pub const FALSE: usize = 0;

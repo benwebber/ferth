@@ -1,4 +1,5 @@
 //! The system data space.
+use crate::SIZE;
 use crate::vm::{VmError, VmResult};
 
 pub trait Mem: AsRef<[u8]> + AsMut<[u8]> {}
@@ -36,7 +37,6 @@ impl<M: Mem> Data<M> {
 
     /// Read a single cell.
     pub fn read_cell(&self, addr: usize) -> VmResult<usize> {
-        const SIZE: usize = size_of::<usize>();
         if !addr.is_multiple_of(SIZE) {
             return Err(VmError::AddressMisaligned(addr));
         }
@@ -48,7 +48,6 @@ impl<M: Mem> Data<M> {
 
     #[cfg(feature = "unsafe")]
     pub unsafe fn read_cell_unchecked(&self, addr: usize) -> usize {
-        const SIZE: usize = size_of::<usize>();
         unsafe {
             usize::from_le_bytes(*(self.mem.as_ref().as_ptr().add(addr) as *const [u8; SIZE]))
         }

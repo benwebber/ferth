@@ -3,7 +3,7 @@ use core::mem::offset_of;
 
 use crate::counted::CountedStr31;
 use crate::types::{Double, SignedDouble};
-use crate::{Error, Result};
+use crate::{Error, FALSE, Result, SIZE, TRUE};
 
 use super::data::{Data, Mem};
 use super::io::{Io, NoIo};
@@ -28,7 +28,7 @@ const TOOLS: &[u8] = include_bytes!("tools.fth");
 
 pub type Builtin<M, I> = fn(&mut Fe<M, I>) -> Result<()>;
 
-const INFO_FROM_CFA: usize = 2 * Vm::SIZE;
+const INFO_FROM_CFA: usize = 2 * SIZE;
 
 #[derive(Clone, Copy)]
 enum Token {
@@ -220,7 +220,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"base", Layout::BASE, 10),
             (b"state", Layout::STATE, 0),
             (b"(sp0)", Layout::SP0, Vm::DS_ADDR),
-            (b"(rp0)", Layout::RP0, self.vm.rs_addr() + Vm::SIZE),
+            (b"(rp0)", Layout::RP0, self.vm.rs_addr() + SIZE),
         ];
         for (_, offset, value) in variables {
             self.data.write_cell(self.layout_base + offset, *value)?;
@@ -337,7 +337,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         // : - ( n1 n2 -- n3 ) invert 1+ + ;
         compile!(minus, b"-", 0, Op::DoCol, [invert, L(1), add, add]);
         // cells
-        compile!(cells, b"cells", 0, Op::DoCol, [L(Vm::SIZE), ummul, drop]);
+        compile!(cells, b"cells", 0, Op::DoCol, [L(SIZE), ummul, drop]);
         // : r@ ( -- x ) ( R: x -- x ) (rp@) 2 cells - @ ;
         //
         // RP points to the next cell, and DoCol pushes a call frame onto the stack. Thus we need
@@ -394,9 +394,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
         // Finally, compile the compilation words.
 
         // : ] true state ! ;
-        compile!(rbracket, b"]", 0, Op::DoCol, [L(usize::MAX), addr!(STATE), store]);
+        compile!(rbracket, b"]", 0, Op::DoCol, [L(TRUE), addr!(STATE), store]);
         // : [ false state ! ;
-        compile!(lbracket, b"[", IMMEDIATE, Op::DoCol, [L(0), addr!(STATE), store]);
+        compile!(lbracket, b"[", IMMEDIATE, Op::DoCol, [L(FALSE), addr!(STATE), store]);
 
         // : create ( "<spaces>name" -- ) bl parse (header) (docreate) , 0 , ;
         compile!(
@@ -419,7 +419,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             b"(flags-addr)",
             0,
             Op::DoCol,
-            [L((2 * Vm::SIZE).wrapping_neg()), add, L(1), add]
+            [L((2 * SIZE).wrapping_neg()), add, L(1), add]
         );
 
         // : :
@@ -461,8 +461,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
                 L(self.op_xt(Op::Exit)), comma,
                 // Store bodylen.
                 addr!(LATEST), fetch,
-                dup, L((3 * Vm::SIZE).wrapping_neg()), add,
-                swap, L(Vm::SIZE), add,
+                dup, L((3 * SIZE).wrapping_neg()), add,
+                swap, L(SIZE), add,
                 addr!(HERE), fetch, swap, minus,
                 swap, store,
                 // Unset hidden flag.
@@ -508,7 +508,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             return_stack_cells: rs_len,
             stack_cells: ds_len,
         };
-        let flag = |b: bool| -> usize { if b { usize::MAX } else { 0 } };
+        let flag = |b: bool| -> usize { if b { TRUE } else { FALSE } };
         self.compile(
             b"(/counted-string)",
             0,
@@ -635,7 +635,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let latest = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
         // pad the name so as to always align info
-        let pad = (Vm::SIZE - ((here + 1 + len as usize) % Vm::SIZE)) % Vm::SIZE;
+        let pad = (SIZE - ((here + 1 + len as usize) % SIZE)) % SIZE;
         // name
         let nfa = here + pad;
         self.data.write_char(nfa, len)?;
@@ -644,11 +644,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let body_len = nfa + 1 + len as usize;
         self.data.write_cell(body_len, 0)?;
         // info
-        let info = body_len + Vm::SIZE;
+        let info = body_len + SIZE;
         self.data.write_cell(info, pack_info(flags, len))?;
-        self.data.write_cell(info + Vm::SIZE, latest)?;
+        self.data.write_cell(info + SIZE, latest)?;
         // code
-        let cfa = info + 2 * Vm::SIZE;
+        let cfa = info + 2 * SIZE;
         Ok(cfa)
     }
 
@@ -667,8 +667,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         if code == Op::DoCol {
             self.comma(self.op_xts[Op::Exit as usize])?;
             let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
-            self.data
-                .write_cell(xt - 3 * Vm::SIZE, here - (xt + Vm::SIZE))?;
+            self.data.write_cell(xt - 3 * SIZE, here - (xt + SIZE))?;
         }
         Ok(xt)
     }
@@ -677,7 +676,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
         self.data.write_cell(here, val)?;
         self.data
-            .write_cell(self.layout_addr(Layout::HERE), here + Vm::SIZE)?;
+            .write_cell(self.layout_addr(Layout::HERE), here + SIZE)?;
         Ok(())
     }
 
@@ -742,7 +741,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             let flags = (info >> 8) as u8;
             let wlen = info & 0xFF;
             if flags & HIDDEN == 0 && wlen == len {
-                let name_at = xt - INFO_FROM_CFA - Vm::SIZE - wlen;
+                let name_at = xt - INFO_FROM_CFA - SIZE - wlen;
                 let a = self.data.read(addr, len)?;
                 let b = self.data.read(name_at, wlen)?;
                 if a.eq_ignore_ascii_case(b) {
@@ -751,7 +750,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
                     break;
                 }
             }
-            xt = self.data.read_cell(xt - Vm::SIZE)?;
+            xt = self.data.read_cell(xt - SIZE)?;
         }
 
         match found {
@@ -967,11 +966,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
                 self.data
                     .write_cell(self.layout_addr(Layout::SOURCE_LEN), len)?;
                 self.data.write_cell(self.layout_addr(Layout::TO_IN), 0)?;
-                self.push(!0)?; // true
+                self.push(TRUE)?;
                 Ok(())
             }
             Ok(None) => {
-                self.push(0)?; // false
+                self.push(FALSE)?;
                 Ok(())
             }
             Err(e) => Err(e),
@@ -1001,7 +1000,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let cfa = self.write_header(name, flags)?;
         self.data.write_cell(cfa, code as usize)?;
         self.data
-            .write_cell(self.layout_addr(Layout::HERE), cfa + Vm::SIZE)?;
+            .write_cell(self.layout_addr(Layout::HERE), cfa + SIZE)?;
         self.data
             .write_cell(self.layout_addr(Layout::LATEST), cfa)?;
         Ok(cfa)
@@ -1045,12 +1044,12 @@ mod tests {
 
         let single = |fe: &mut TestFe, q: &[u8], expected: usize| {
             fe.evaluate(q).unwrap();
-            assert_eq!(fe.pop().unwrap(), usize::MAX); // true
+            assert_eq!(fe.pop().unwrap(), TRUE);
             assert_eq!(fe.pop().unwrap(), expected);
         };
         let double = |fe: &mut TestFe, q: &[u8], lo: usize, hi: usize| {
             fe.evaluate(q).unwrap();
-            assert_eq!(fe.pop().unwrap(), usize::MAX); // true
+            assert_eq!(fe.pop().unwrap(), TRUE);
             assert_eq!(fe.pop().unwrap(), hi);
             assert_eq!(fe.pop().unwrap(), lo);
         };
@@ -1067,7 +1066,7 @@ mod tests {
             br#"s" ADDRESS-UNIT-BITS" environment?"#,
             size_of::<usize>(),
         );
-        single(&mut fe, br#"s" FLOORED" environment?"#, 0);
+        single(&mut fe, br#"s" FLOORED" environment?"#, FALSE);
         single(&mut fe, br#"s" MAX-CHAR" environment?"#, u8::MAX as usize);
         double(
             &mut fe,
@@ -1087,6 +1086,6 @@ mod tests {
         single(&mut fe, br#"s" STACK-CELLS" environment?"#, 64);
 
         fe.evaluate(br#"s" UNKNOWN" environment?"#).unwrap();
-        assert_eq!(fe.pop().unwrap(), 0usize); // false
+        assert_eq!(fe.pop().unwrap(), FALSE);
     }
 }

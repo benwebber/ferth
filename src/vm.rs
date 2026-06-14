@@ -1,8 +1,7 @@
 //! The inner interpreter.
-use core::mem::size_of;
-
 use crate::data::{Data, Mem};
 use crate::types::Double;
+use crate::{FALSE, SIZE, TRUE};
 
 mod error;
 mod op;
@@ -51,13 +50,13 @@ macro_rules! unary {
 
 macro_rules! binary {
     ($self:expr, $data:expr, |$a:ident, $b:ident| $body:expr) => {{
-        if $self.sp < (Self::DS_ADDR + 2 * Self::SIZE) {
+        if $self.sp < (Self::DS_ADDR + 2 * SIZE) {
             return Err(VmError::StackUnderflow);
         }
         let $b = $self.tos;
-        let $a = maybe_read_cell_unchecked!($data, $self.sp - 2 * Self::SIZE)?;
+        let $a = maybe_read_cell_unchecked!($data, $self.sp - 2 * SIZE)?;
         $self.tos = $body;
-        $self.sp -= Self::SIZE;
+        $self.sp -= SIZE;
     }};
 }
 
@@ -131,19 +130,17 @@ pub struct Vm {
 }
 
 impl Vm {
-    /// The size of a cell in bytes.
-    pub const SIZE: usize = size_of::<usize>();
     /// The address of the bottom of the data stack.
     ///
     /// Address 0x00 is a scratch cell. [`Vm::push`] spills the value in TOS to memory. [`Vm::pop`]
     /// reloads TOS from the same address. The scratch cell absorbs both operations, eliminating a
     /// bounds check in two hot paths.
-    pub const DS_ADDR: usize = Self::SIZE;
+    pub const DS_ADDR: usize = SIZE;
 
     pub fn new(ds_len: usize, rs_len: usize) -> Self {
         assert!(Self::layout_ok(ds_len, rs_len), "stacks too small");
-        let sp_max = Self::DS_ADDR + ds_len * Self::SIZE;
-        let rp_max = sp_max + rs_len * Self::SIZE;
+        let sp_max = Self::DS_ADDR + ds_len * SIZE;
+        let rp_max = sp_max + rs_len * SIZE;
         Self {
             ip: 0,
             w: 0,
@@ -158,7 +155,7 @@ impl Vm {
     }
 
     pub const fn layout_ok(ds_len: usize, rs_len: usize) -> bool {
-        (ds_len + rs_len + 1) * Self::SIZE > Op::MAX
+        (ds_len + rs_len + 1) * SIZE > Op::MAX
     }
 
     /// Execute instructions until a stop condition.
@@ -169,7 +166,7 @@ impl Vm {
                 return Ok(Stop::Halt);
             }
             self.w = maybe_read_cell_unchecked!(data, self.ip)?;
-            self.ip += Self::SIZE;
+            self.ip += SIZE;
             if let Some(stop) = self.dispatch(data)? {
                 return Ok(stop);
             };
@@ -200,12 +197,12 @@ impl Vm {
 
     /// Return the number of bytes reserved in memory by the VM's internal state (e.g. stacks).
     pub fn reserved(&self) -> usize {
-        (self.ds_len + self.rs_len + 1) * Self::SIZE
+        (self.ds_len + self.rs_len + 1) * SIZE
     }
 
     pub fn stack<'a, M: Mem>(&self, data: &'a Data<M>) -> impl Iterator<Item = usize> + 'a {
-        let bottom = (Self::DS_ADDR..self.sp.saturating_sub(Self::SIZE))
-            .step_by(Self::SIZE)
+        let bottom = (Self::DS_ADDR..self.sp.saturating_sub(SIZE))
+            .step_by(SIZE)
             .map(move |addr| {
                 data.read_cell(addr)
                     .expect("unreachable: stack cell within validated range")
@@ -224,9 +221,9 @@ impl Vm {
         if self.sp >= self.sp_max {
             return Err(VmError::StackOverflow);
         }
-        maybe_write_cell_unchecked!(data, self.sp - Self::SIZE, self.tos)?;
+        maybe_write_cell_unchecked!(data, self.sp - SIZE, self.tos)?;
         self.tos = x;
-        self.sp += Self::SIZE;
+        self.sp += SIZE;
         Ok(())
     }
 
@@ -236,8 +233,8 @@ impl Vm {
             return Err(VmError::StackUnderflow);
         }
         let x = self.tos;
-        self.sp -= Self::SIZE;
-        self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
+        self.sp -= SIZE;
+        self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
         Ok(x)
     }
 
@@ -247,7 +244,7 @@ impl Vm {
             return Err(VmError::ReturnStackOverflow);
         }
         maybe_write_cell_unchecked!(data, self.rp, x)?;
-        self.rp += Self::SIZE;
+        self.rp += SIZE;
         Ok(())
     }
 
@@ -256,7 +253,7 @@ impl Vm {
         if self.rp == self.rs_addr() {
             return Err(VmError::ReturnStackUnderflow);
         }
-        self.rp -= Self::SIZE;
+        self.rp -= SIZE;
         maybe_read_cell_unchecked!(data, self.rp)
     }
 
@@ -271,12 +268,12 @@ impl Vm {
             }
             Op::DoCol => {
                 self.rpush(data, self.ip)?;
-                self.ip = self.w + Self::SIZE;
+                self.ip = self.w + SIZE;
             }
             Op::Lit => {
                 let val = maybe_read_cell_unchecked!(data, self.ip)?;
                 self.push(data, val)?;
-                self.ip += Self::SIZE;
+                self.ip += SIZE;
             }
             Op::Jmp => {
                 let target = maybe_read_cell_unchecked!(data, self.ip)?;
@@ -287,7 +284,7 @@ impl Vm {
                 if self.pop(data)? == 0 {
                     self.ip = target; // TODO: validate target
                 } else {
-                    self.ip += Self::SIZE;
+                    self.ip += SIZE;
                 }
             }
             Op::Fetch => {
@@ -298,13 +295,13 @@ impl Vm {
                 self.tos = data.read_cell(addr)?;
             }
             Op::Store => {
-                if self.sp < Self::DS_ADDR + 2 * Self::SIZE {
+                if self.sp < Self::DS_ADDR + 2 * SIZE {
                     return Err(VmError::StackUnderflow);
                 }
                 let addr = self.tos;
-                let val = maybe_read_cell_unchecked!(data, self.sp - 2 * Self::SIZE)?;
-                self.sp -= 2 * Self::SIZE;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
+                let val = maybe_read_cell_unchecked!(data, self.sp - 2 * SIZE)?;
+                self.sp -= 2 * SIZE;
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
                 data.write_cell(addr, val)?;
             }
             Op::CFetch => {
@@ -315,13 +312,13 @@ impl Vm {
                 self.tos = data.read_char(addr)? as usize;
             }
             Op::CStore => {
-                if self.sp < Self::DS_ADDR + 2 * Self::SIZE {
+                if self.sp < Self::DS_ADDR + 2 * SIZE {
                     return Err(VmError::StackUnderflow);
                 }
                 let addr = self.tos;
-                let c = maybe_read_cell_unchecked!(data, self.sp - 2 * Self::SIZE)? as u8;
-                self.sp -= 2 * Self::SIZE;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
+                let c = maybe_read_cell_unchecked!(data, self.sp - 2 * SIZE)? as u8;
+                self.sp -= 2 * SIZE;
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
                 data.write_char(addr, c)?;
             }
             Op::Add => {
@@ -339,21 +336,21 @@ impl Vm {
                 binary!(self, data, |a, b| !(a & b));
             }
             Op::LtZ => {
-                unary!(self, |n| if (n as isize) < 0 { usize::MAX } else { 0 });
+                unary!(self, |n| if (n as isize) < 0 { TRUE } else { FALSE });
             }
             Op::EqZ => {
-                unary!(self, |n| if n == 0 { usize::MAX } else { 0 });
+                unary!(self, |n| if n == 0 { TRUE } else { FALSE });
             }
             Op::Drop => {
                 self.pop(data)?;
             }
             Op::Swap => {
-                if self.sp < (Self::DS_ADDR + 2 * Self::SIZE) {
+                if self.sp < (Self::DS_ADDR + 2 * SIZE) {
                     return Err(VmError::StackUnderflow);
                 }
                 let tos = self.tos;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - 2 * Self::SIZE)?;
-                maybe_write_cell_unchecked!(data, self.sp - 2 * Self::SIZE, tos)?;
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - 2 * SIZE)?;
+                maybe_write_cell_unchecked!(data, self.sp - 2 * SIZE, tos)?;
             }
             Op::Dup => {
                 if self.sp == Self::DS_ADDR {
@@ -374,8 +371,8 @@ impl Vm {
                 return Err(VmError::InvalidOpCode(op as u8));
             }
             Op::DoCreate => {
-                let does_addr = data.read_cell(self.w + Self::SIZE)?;
-                self.push(data, self.w + 2 * Self::SIZE)?;
+                let does_addr = data.read_cell(self.w + SIZE)?;
+                self.push(data, self.w + 2 * SIZE)?;
                 if does_addr != 0 {
                     self.rpush(data, self.ip)?;
                     self.ip = does_addr;
@@ -391,28 +388,28 @@ impl Vm {
             }
             Op::PlusLoop => {
                 let step = self.pop(data)? as isize;
-                let fudged = maybe_read_cell_unchecked!(data, self.rp - Self::SIZE)? as isize;
+                let fudged = maybe_read_cell_unchecked!(data, self.rp - SIZE)? as isize;
                 let (next, overflow) = fudged.overflowing_add(step);
                 if overflow {
                     self.rpop(data)?;
                     self.rpop(data)?;
-                    self.ip += Self::SIZE;
+                    self.ip += SIZE;
                 } else {
-                    maybe_write_cell_unchecked!(data, self.rp - Self::SIZE, next as usize)?;
+                    maybe_write_cell_unchecked!(data, self.rp - SIZE, next as usize)?;
                     self.ip = maybe_read_cell_unchecked!(data, self.ip)?;
                 }
             }
             Op::I => {
-                let fudged = maybe_read_cell_unchecked!(data, self.rp - Self::SIZE)?;
-                let limit = maybe_read_cell_unchecked!(data, self.rp - 2 * Self::SIZE)?;
+                let fudged = maybe_read_cell_unchecked!(data, self.rp - SIZE)?;
+                let limit = maybe_read_cell_unchecked!(data, self.rp - 2 * SIZE)?;
                 self.push(
                     data,
                     fudged.wrapping_sub(isize::MIN as usize).wrapping_add(limit),
                 )?;
             }
             Op::J => {
-                let fudged = maybe_read_cell_unchecked!(data, self.rp - 3 * Self::SIZE)?;
-                let limit = maybe_read_cell_unchecked!(data, self.rp - 4 * Self::SIZE)?;
+                let fudged = maybe_read_cell_unchecked!(data, self.rp - 3 * SIZE)?;
+                let limit = maybe_read_cell_unchecked!(data, self.rp - 4 * SIZE)?;
                 self.push(
                     data,
                     fudged.wrapping_sub(isize::MIN as usize).wrapping_add(limit),
@@ -430,7 +427,7 @@ impl Vm {
                     self.ip = maybe_read_cell_unchecked!(data, self.ip)?;
                 } else {
                     // Step over target.
-                    self.ip += Self::SIZE;
+                    self.ip += SIZE;
                     self.rpush(data, limit)?;
                     // index' = index - limit + isize::MIN
                     let fudged = index.wrapping_sub(limit).wrapping_add(isize::MIN as usize);
@@ -439,10 +436,10 @@ impl Vm {
             }
             Op::Str => {
                 let len = maybe_read_cell_unchecked!(data, self.ip)?;
-                self.ip += Self::SIZE;
+                self.ip += SIZE;
                 self.push(data, self.ip)?;
                 self.push(data, len)?;
-                self.ip += (len + Self::SIZE - 1) & !(Self::SIZE - 1);
+                self.ip += (len + SIZE - 1) & !(SIZE - 1);
             }
             Op::LShift => {
                 binary!(self, data, |x, u| x << u);
@@ -471,7 +468,7 @@ impl Vm {
                     return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.sp = addr;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - Self::SIZE)?;
+                self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
             }
             Op::RpFetch => {
                 self.push(data, self.rp)?;
@@ -492,7 +489,7 @@ impl Vm {
         let op = data.read_cell(self.w)?.try_into()?;
         match op {
             Op::Yield => {
-                let index = data.read_cell(self.w + Self::SIZE)?;
+                let index = data.read_cell(self.w + SIZE)?;
                 let token = YieldToken { ip: self.ip, index };
                 Ok(Some(Stop::Yield(token)))
             }
@@ -520,7 +517,7 @@ mod tests {
     }
 
     fn rlen(v: &Vm) -> usize {
-        (v.rp - v.rs_addr()) / Vm::SIZE
+        (v.rp - v.rs_addr()) / SIZE
     }
 
     fn rpeek(v: &mut Vm, d: &mut Data<[u8; MEM]>) -> usize {
@@ -552,7 +549,7 @@ mod tests {
     #[test]
     fn reserved_correct() {
         let (v, _) = vm();
-        assert_eq!(v.reserved(), (DS_LEN + RS_LEN + 1) * Vm::SIZE);
+        assert_eq!(v.reserved(), (DS_LEN + RS_LEN + 1) * SIZE);
     }
 
     // reset
@@ -662,7 +659,7 @@ mod tests {
     fn run_executes_thread() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let s = Vm::SIZE;
+        let s = SIZE;
         d.write_cell(base, Op::Halt as usize).unwrap();
         let thread = base + s;
         d.write_cell(thread, base).unwrap();
@@ -674,7 +671,7 @@ mod tests {
     fn run_returns_stop() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let s = Vm::SIZE;
+        let s = SIZE;
         d.write_cell(base, Op::Lit as usize).unwrap();
         d.write_cell(base + s, Op::Halt as usize).unwrap();
         let thread = base + 2 * s;
@@ -700,7 +697,7 @@ mod tests {
     fn call_docol_word() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let s = Vm::SIZE;
+        let s = SIZE;
         d.write_cell(base, Op::DoCol as usize).unwrap();
         d.write_cell(base + s, base + 2 * s).unwrap();
         d.write_cell(base + 2 * s, Op::Halt as usize).unwrap();
@@ -713,7 +710,7 @@ mod tests {
     fn resume_continues_after_yield() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let s = Vm::SIZE;
+        let s = SIZE;
         d.write_cell(base, Op::Yield as usize).unwrap();
         d.write_cell(base + s, 7usize).unwrap();
         d.write_cell(base + 2 * s, Op::Halt as usize).unwrap();
@@ -739,9 +736,9 @@ mod tests {
         let (mut v, mut d) = vm();
         let base = v.reserved();
         d.write_cell(base, Op::Yield as usize).unwrap();
-        d.write_cell(base + Vm::SIZE, 3usize).unwrap();
+        d.write_cell(base + SIZE, 3usize).unwrap();
         v.w = base;
-        v.ip = base + 2 * Vm::SIZE;
+        v.ip = base + 2 * SIZE;
         let stop = v.dispatch(&mut d).unwrap();
         assert!(matches!(stop, Some(Stop::Yield(ref t)) if t.index == 3));
     }
@@ -810,10 +807,10 @@ mod tests {
         let (mut v, mut d) = vm();
         let base = v.reserved();
         v.w = base;
-        v.ip = base + 2 * Vm::SIZE;
+        v.ip = base + 2 * SIZE;
         v.execute(&mut d, Op::DoCol).unwrap();
-        assert_eq!(v.ip, base + Vm::SIZE);
-        assert_eq!(v.rpop(&mut d).unwrap(), base + 2 * Vm::SIZE);
+        assert_eq!(v.ip, base + SIZE);
+        assert_eq!(v.rpop(&mut d).unwrap(), base + 2 * SIZE);
     }
 
     #[test]
@@ -840,7 +837,7 @@ mod tests {
         v.ip = base;
         v.execute(&mut d, Op::Lit).unwrap();
         assert_eq!(ds(&v, &d), vec![99]);
-        assert_eq!(v.ip, base + Vm::SIZE);
+        assert_eq!(v.ip, base + SIZE);
     }
 
     #[test]
@@ -863,14 +860,14 @@ mod tests {
         let base = v.reserved();
         let len: usize = 3;
         d.write_cell(base, len).unwrap();
-        d.write(base + Vm::SIZE, b"abc").unwrap();
+        d.write(base + SIZE, b"abc").unwrap();
         v.ip = base;
         v.execute(&mut d, Op::Str).unwrap();
-        let padded = (len + Vm::SIZE - 1) & !(Vm::SIZE - 1);
+        let padded = (len + SIZE - 1) & !(SIZE - 1);
         let stack = ds(&v, &d);
-        assert_eq!(stack[0], base + Vm::SIZE);
+        assert_eq!(stack[0], base + SIZE);
         assert_eq!(stack[1], len);
-        assert_eq!(v.ip, base + Vm::SIZE + padded);
+        assert_eq!(v.ip, base + SIZE + padded);
     }
 
     #[test]
@@ -891,7 +888,7 @@ mod tests {
     fn op_jmp_ok() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let target = base + 8 * Vm::SIZE;
+        let target = base + 8 * SIZE;
         d.write_cell(base, target).unwrap();
         v.ip = base;
         v.execute(&mut d, Op::Jmp).unwrap();
@@ -904,7 +901,7 @@ mod tests {
     fn op_jmpz_zero_jumps() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let target = base + 8 * Vm::SIZE;
+        let target = base + 8 * SIZE;
         d.write_cell(base, target).unwrap();
         v.ip = base;
         v.push(&mut d, 0).unwrap();
@@ -916,12 +913,12 @@ mod tests {
     fn op_jmpz_nonzero_falls_through() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let target = base + 8 * Vm::SIZE;
+        let target = base + 8 * SIZE;
         d.write_cell(base, target).unwrap();
         v.ip = base;
         v.push(&mut d, 1).unwrap();
         v.execute(&mut d, Op::JmpZ).unwrap();
-        assert_eq!(v.ip, base + Vm::SIZE);
+        assert_eq!(v.ip, base + SIZE);
     }
 
     #[test]
@@ -967,7 +964,7 @@ mod tests {
     fn op_qdo_equal_jumps() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let target = base + 4 * Vm::SIZE;
+        let target = base + 4 * SIZE;
         d.write_cell(base, target).unwrap();
         v.ip = base;
         v.push(&mut d, 3).unwrap();
@@ -986,7 +983,7 @@ mod tests {
         v.push(&mut d, 0).unwrap();
         v.push(&mut d, 5).unwrap();
         v.execute(&mut d, Op::QDo).unwrap();
-        assert_eq!(v.ip, base + Vm::SIZE);
+        assert_eq!(v.ip, base + SIZE);
         assert_eq!(rlen(&v), 2);
     }
 
@@ -1009,7 +1006,7 @@ mod tests {
         let fudged = index.wrapping_sub(limit).wrapping_add(isize::MIN as usize);
         v.rpush(&mut d, limit).unwrap();
         v.rpush(&mut d, fudged).unwrap();
-        let base = v.reserved() + 8 * Vm::SIZE;
+        let base = v.reserved() + 8 * SIZE;
         let back = base;
         d.write_cell(base, back).unwrap();
         v.ip = base;
@@ -1027,12 +1024,12 @@ mod tests {
         let fudged = index.wrapping_sub(limit).wrapping_add(isize::MIN as usize);
         v.rpush(&mut d, limit).unwrap();
         v.rpush(&mut d, fudged).unwrap();
-        let base = v.reserved() + 8 * Vm::SIZE;
+        let base = v.reserved() + 8 * SIZE;
         d.write_cell(base, 0usize).unwrap();
         v.ip = base;
         v.push(&mut d, 1usize).unwrap();
         v.execute(&mut d, Op::PlusLoop).unwrap();
-        assert_eq!(v.ip, base + Vm::SIZE);
+        assert_eq!(v.ip, base + SIZE);
         assert_eq!(rlen(&v), 0);
     }
 
@@ -1041,7 +1038,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.rpush(&mut d, 0).unwrap();
         v.rpush(&mut d, 0).unwrap();
-        let base = v.reserved() + 8 * Vm::SIZE;
+        let base = v.reserved() + 8 * SIZE;
         d.write_cell(base, 0usize).unwrap();
         v.ip = base;
         assert_eq!(
@@ -1221,7 +1218,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
         v.push(&mut d, 2).unwrap();
-        let target = Vm::DS_ADDR + Vm::SIZE;
+        let target = Vm::DS_ADDR + SIZE;
         v.push(&mut d, target).unwrap();
         v.execute(&mut d, Op::SpStore).unwrap();
         assert_eq!(v.sp, target);
@@ -1240,7 +1237,7 @@ mod tests {
     #[test]
     fn op_spstore_above_sp_max() {
         let (mut v, mut d) = vm();
-        let too_high = v.sp_max + Vm::SIZE;
+        let too_high = v.sp_max + SIZE;
         v.push(&mut d, too_high).unwrap();
         assert_eq!(
             v.execute(&mut d, Op::SpStore),
@@ -1348,7 +1345,7 @@ mod tests {
     #[test]
     fn op_rpstore_below_rs() {
         let (mut v, mut d) = vm();
-        let too_low = v.rs_addr() - Vm::SIZE;
+        let too_low = v.rs_addr() - SIZE;
         v.push(&mut d, too_low).unwrap();
         assert_eq!(
             v.execute(&mut d, Op::RpStore),
@@ -1359,7 +1356,7 @@ mod tests {
     #[test]
     fn op_rpstore_above_rp_max() {
         let (mut v, mut d) = vm();
-        let too_high = v.rp_max + Vm::SIZE;
+        let too_high = v.rp_max + SIZE;
         v.push(&mut d, too_high).unwrap();
         assert_eq!(
             v.execute(&mut d, Op::RpStore),
@@ -1625,7 +1622,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, -1isize as usize).unwrap();
         v.execute(&mut d, Op::LtZ).unwrap();
-        assert_eq!(ds(&v, &d), vec![usize::MAX]);
+        assert_eq!(ds(&v, &d), vec![TRUE]);
     }
 
     #[test]
@@ -1633,7 +1630,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0).unwrap();
         v.execute(&mut d, Op::LtZ).unwrap();
-        assert_eq!(ds(&v, &d), vec![0]);
+        assert_eq!(ds(&v, &d), vec![FALSE]);
     }
 
     #[test]
@@ -1649,7 +1646,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0).unwrap();
         v.execute(&mut d, Op::EqZ).unwrap();
-        assert_eq!(ds(&v, &d), vec![usize::MAX]);
+        assert_eq!(ds(&v, &d), vec![TRUE]);
     }
 
     #[test]
@@ -1657,7 +1654,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 5).unwrap();
         v.execute(&mut d, Op::EqZ).unwrap();
-        assert_eq!(ds(&v, &d), vec![0]);
+        assert_eq!(ds(&v, &d), vec![FALSE]);
     }
 
     #[test]
@@ -1673,10 +1670,10 @@ mod tests {
         let (mut v, mut d) = vm();
         let base = v.reserved();
         d.write_cell(base, Op::DoCreate as usize).unwrap();
-        d.write_cell(base + Vm::SIZE, 0usize).unwrap();
+        d.write_cell(base + SIZE, 0usize).unwrap();
         v.w = base;
         v.execute(&mut d, Op::DoCreate).unwrap();
-        assert_eq!(ds(&v, &d), vec![base + 2 * Vm::SIZE]);
+        assert_eq!(ds(&v, &d), vec![base + 2 * SIZE]);
         assert_eq!(rlen(&v), 0);
     }
 
@@ -1684,14 +1681,14 @@ mod tests {
     fn op_docreate_with_does() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        let does_addr = base + 8 * Vm::SIZE;
+        let does_addr = base + 8 * SIZE;
         d.write_cell(base, Op::DoCreate as usize).unwrap();
-        d.write_cell(base + Vm::SIZE, does_addr).unwrap();
+        d.write_cell(base + SIZE, does_addr).unwrap();
         v.w = base;
-        let saved_ip = base + 4 * Vm::SIZE;
+        let saved_ip = base + 4 * SIZE;
         v.ip = saved_ip;
         v.execute(&mut d, Op::DoCreate).unwrap();
-        assert_eq!(ds(&v, &d), vec![base + 2 * Vm::SIZE]);
+        assert_eq!(ds(&v, &d), vec![base + 2 * SIZE]);
         assert_eq!(rlen(&v), 1);
         assert_eq!(v.ip, does_addr);
         assert_eq!(v.rpop(&mut d).unwrap(), saved_ip);
@@ -1705,7 +1702,7 @@ mod tests {
         }
         let base = v.reserved();
         d.write_cell(base, Op::DoCreate as usize).unwrap();
-        d.write_cell(base + Vm::SIZE, 0usize).unwrap();
+        d.write_cell(base + SIZE, 0usize).unwrap();
         v.w = base;
         assert_eq!(v.execute(&mut d, Op::DoCreate), Err(VmError::StackOverflow));
     }

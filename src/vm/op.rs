@@ -267,16 +267,16 @@ ops! {
     RShift = 0x20,
 
     // Comparison
-    /// Push `true` ([`usize::MAX`]) to the data stack if the value at the top of the data stack is
-    /// less than 0, `false` (0) otherwise.
+    /// Push `TRUE` ([`usize::MAX`]) to the data stack if the value at the top of the data stack is
+    /// less than 0, `FALSE` (0) otherwise.
     ///
     /// ```text
     /// 0< ( x -- flag )
     /// ```
     LtZ = 0x21,
 
-    /// Push `true` ([`usize::MAX`]) to the data stack if the value at the top of the stack is
-    /// equal to 0, `false` (0) otherwise.
+    /// Push [`TRUE`] ([`usize::MAX`]) to the data stack if the value at the top of the stack is
+    /// equal to 0, `FALSE` (0) otherwise.
     ///
     /// ```text
     /// 0= ( x -- flag )
