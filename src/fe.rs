@@ -2,7 +2,7 @@
 use core::mem::offset_of;
 
 use crate::counted::CountedStr31;
-use crate::types::Double;
+use crate::types::{Double, SignedDouble};
 use crate::{Error, Result};
 
 use super::data::{Data, Mem};
@@ -43,7 +43,7 @@ pub struct Environment {
     pub address_unit_bits: usize,
     pub floored: bool,
     pub max_char: usize,
-    pub max_d: i128,
+    pub max_d: SignedDouble,
     pub max_n: isize,
     pub max_u: usize,
     pub max_ud: Double,
@@ -501,7 +501,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             address_unit_bits: 8,
             floored: false,
             max_char: 255,
-            max_d: i128::MAX,
+            max_d: SignedDouble::MAX,
             max_n: isize::MAX,
             max_u: usize::MAX,
             max_ud: Double::MAX,
@@ -525,7 +525,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         )?;
         self.compile(b"(floored)", 0, Op::DoCol, &[Token::Lit(flag(env.floored))])?;
         self.compile(b"(max-char)", 0, Op::DoCol, &[Token::Lit(env.max_char)])?;
-        let (lo, hi): (usize, usize) = Double(env.max_d as _).into();
+        let (lo, hi): (usize, usize) = Double(env.max_d.0 as _).into();
         self.compile(b"(max-d)", 0, Op::DoCol, &[Token::Lit(lo), Token::Lit(hi)])?;
         self.compile(b"(max-n)", 0, Op::DoCol, &[Token::Lit(env.max_n as usize)])?;
         self.compile(b"(max-u)", 0, Op::DoCol, &[Token::Lit(env.max_u)])?;

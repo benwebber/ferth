@@ -9,6 +9,24 @@ type DoubleInner = u64;
 #[cfg(target_pointer_width = "16")]
 type DoubleInner = u32;
 
+#[cfg(target_pointer_width = "64")]
+type SignedDoubleInner = i128;
+
+#[cfg(target_pointer_width = "32")]
+type SignedDoubleInner = i64;
+
+#[cfg(target_pointer_width = "16")]
+type SignedDoubleInner = i32;
+
+/// A signed double-cell value (*d*).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+pub struct SignedDouble(pub SignedDoubleInner);
+
+impl SignedDouble {
+    pub const MAX: Self = Self(SignedDoubleInner::MAX);
+}
+
 /// A double-cell value (*ud*).
 ///
 /// |Word size (bits)|Type|
