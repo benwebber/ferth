@@ -8,6 +8,29 @@ variable (dump-end)
 : (dim) 27 emit ." [2m" ;
 : (sgr0) 27 emit ." [0m" ;
 
+\ Helpers to write ANSI escape codes directly into a buffer.
+: (buf-sgr0!)  ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 0 over c! 1+ [char] m over c! 1+ ;
+: (buf-dim!)   ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 2 over c! 1+ [char] m over c! 1+ ;
+: (buf-green!) ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 3 over c! 1+ [char] 2 over c! 1+ [char] m over c! 1+ ;
+: (buf-blue!)  ( buf -- buf' ) $1b over c! 1+ [char] [ over c! 1+ [char] 3 over c! 1+ [char] 6 over c! 1+ [char] m over c! 1+ ;
+
+\ Colourize a byte in the ASCII column.
+: (dump-ascii!) ( buf char -- buf' )
+  dup 0= if
+    \ 0x00: dim
+    drop (buf-dim!) [char] . over c! 1+ (buf-sgr0!) exit
+  then
+  dup $20 $7f within if
+    \ printable: green
+    swap (buf-green!) swap over c! 1+ (buf-sgr0!) exit
+  then
+  dup $ff = if
+    \ 0xff: blue
+    drop (buf-blue!) [char] . over c! 1+ (buf-sgr0!) exit
+  then
+  \ other: default
+  drop [char] . over c! 1+ ;
+
 : (dump-byte) 0 <# # # #> type ;
 
 : (emit-byte)
@@ -26,7 +49,6 @@ variable (dump-end)
   then
 ;
 
-: (dump-printable) ( char -- char' ) dup $20 $7f within 0= if drop [char] . then ;
 : (dump-addr) ( addr -- ) 0 <# (dump-width) @ 0 ?do # loop #> type ;
 
 : (dump?) ( addr -- addr flag ) dup (dump-end) @ u< ;
@@ -42,16 +64,14 @@ variable (dump-end)
     i (dump-end) @ u< if
       i c@                                ( ascii char )
       dup (emit-byte) space               ( ascii char )
-      (dump-printable) over c!            ( ascii )
+      (dump-ascii!)                       ( ascii' )
     else
       3 spaces
-      bl over c!                          ( ascii )
+      bl over c! 1+                       ( ascii' )
     then
-    1+
   loop
-  drop
   space
-  pad (/hold) + 16 type
+  pad (/hold) + swap over - type
 ;
 
 \ Count digits used to represent number in the current base.
