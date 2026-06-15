@@ -328,6 +328,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"refill", Self::refill, 0),
             (b"(header)", Self::header, 0),
             (b">number", Self::to_number, 0),
+            (b"(undefined)", Self::undefined, 0),
+            (b"(number?)", Self::numberq, 0),
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
@@ -820,7 +822,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         self.find()?;
         let flag = self.pop()? as isize;
         if flag == 0 {
-            return Err(self.undefined(caddr));
+            return Err(self.make_undefined(caddr));
         }
         Ok(())
     }
@@ -854,7 +856,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         self.find()?;
         let flag = self.pop()? as isize;
         if flag == 0 {
-            return Err(self.undefined(caddr));
+            return Err(self.make_undefined(caddr));
         }
         let xt = self.pop()?;
         let is_immediate = flag == 1;
@@ -931,7 +933,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
                         self.push(v)?;
                     }
                 } else {
-                    return Err(self.undefined(v));
+                    return Err(self.make_undefined(v));
                 }
             }
         }
@@ -1055,7 +1057,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         Ok(cfa)
     }
 
-    fn undefined(&self, c_addr: usize) -> Error {
+    fn make_undefined(&self, c_addr: usize) -> Error {
         let len = self.data.read_char(c_addr).unwrap_or(0) as usize;
         // Return an empty name for an invalid address instead of panicking.
         let bytes = self.data.read(c_addr + 1, len).unwrap_or(&[]);
@@ -1064,6 +1066,32 @@ impl<M: Mem, I: Io> Fe<M, I> {
             .and_then(|s| CountedStr31::try_from(s).ok())
             .unwrap_or_default();
         Error::UndefinedWord(name)
+    }
+
+    fn undefined(&mut self) -> Result<()> {
+        let len = self.pop()?;
+        let caddr = self.pop()?;
+        let mut buf = [0u8; MAX_WORD_LEN];
+        buf[..len].copy_from_slice(self.data.read(caddr, len)?);
+        let name = core::str::from_utf8(&buf[..len])
+            .ok()
+            .and_then(|s| CountedStr31::try_from(s).ok())
+            .unwrap_or_default();
+        Err(Error::UndefinedWord(name))
+    }
+
+    fn numberq(&mut self) -> Result<()> {
+        let len = self.pop()?;
+        let caddr = self.pop()?;
+        let base = self.data.read_cell(self.layout_addr(Layout::BASE))?;
+        if let Some(n) = parser::parse_num(self.data.read(caddr, len)?, base as u32) {
+            self.push(n)?;
+            self.push(1)
+        } else {
+            self.push(caddr)?;
+            self.push(len)?;
+            self.push(0)
+        }
     }
 }
 

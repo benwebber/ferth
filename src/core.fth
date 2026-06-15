@@ -378,6 +378,45 @@ variable (leave-list)
   0 ?do i cells (sp0) @ + @ . loop
 ;
 
+: parse-name ( "<spaces>name<space>" -- c-addr u )
+  \ Skip leading whitespace characters.
+  begin
+    >in @ source  ( >in source-addr source-len )
+    swap drop     ( >in source-len )
+    < if
+      source drop ( source-addr )
+      >in @       ( source-addr >in )
+      + c@        ( char )
+      \ Skip all ASCII control and whitespace characters (up to and including
+      \ BL/0x20/SPACE.)
+      bl 1+ <     ( flag )
+    else
+      false
+    then
+  while
+    1 >in +!
+  repeat
+  bl parse
+;
+
+: (interpret)
+  begin
+    parse-name                  ( c-addr u )
+  dup while                     ( c-addr u )
+    2dup (find) ?dup if         ( c-addr u xt flag )
+      2swap 2drop               ( xt flag )
+      0< state @ and if , else execute then
+    else                        ( c-addr u )
+      (number?) if              ( n )
+        state @ if postpone literal then \ Left on stack if in interpretation mode.
+      else
+        (undefined)             \ TODO: -13 throw
+      then
+    then
+  repeat
+  2drop
+;
+
 : quit
   \ TODO: Set source-id, and set input device to user input.
   (rp0) @ (rp!)
