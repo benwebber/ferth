@@ -29,6 +29,7 @@
 : cell+ 1 cells + ;
 : c,  here c! 1 allot ;
 : >body 2 cells + ;
+: create bl parse (header) ['] (docreate) @ , 0 , ;
 : does> r> (latest) @ cell+ ! ;
 : chars ( -- ) ;
 
@@ -37,6 +38,8 @@
 : until ['] (jmpz) , , ; immediate
 : again ['] (jmp) , , ; immediate
 
+: [ false state ! ; immediate
+: ] true state ! ;
 : constant >r : r> postpone literal postpone ; ;
 : variable align here 0 , constant ;
 

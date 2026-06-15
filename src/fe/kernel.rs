@@ -239,6 +239,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         let opcodes: &[(&[u8], Op)] = &[
             (b"!", Op::Store),
             (b"(docol)", Op::DoCol),
+            (b"(docreate)", Op::DoCreate),
             (b"(exit)", Op::Exit),
             (b"(jmp)", Op::Jmp),
             (b"(jmpz)", Op::JmpZ),
@@ -375,19 +376,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         );
 
         // Finally, compile the compilation words.
-
-        // : ] true state ! ;
-        compile!(b"]", 0, [L(TRUE), addr!(STATE), N(b"!")]);
-        // : [ false state ! ;
-        compile!(b"[", IMMEDIATE, [L(FALSE), addr!(STATE), N(b"!")]);
-
-        // : create ( "<spaces>name" -- ) bl parse (header) (docreate) , 0 , ;
-        compile!(
-            b"create",
-            0,
-            [bl, N(b"parse"), N(b"(header)"), L(Op::DoCreate as usize), N(b","), L(0), N(b",")]
-        );
-
         // (hidden-flag)
         compile!(b"(hidden-flag)", 0, [L(HIDDEN.into())]);
         // (immediate-flag)
