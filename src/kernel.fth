@@ -1,7 +1,7 @@
+: source (source-addr) @ (source-len) @ ;
 : invert dup (nand) ;
 : or invert swap invert (nand) ;
 : immediate (latest) @ (flags-addr) dup c@ (immediate-flag) or swap c! ;
-: source (source-addr) @ (source-len) @ ;
 : \ source >in ! drop ; immediate
 
 \ KERNEL
@@ -40,7 +40,7 @@
 \
 \ Hand-compiled
 \ -------------
-\ : ; , literal
+\ : ; , (cells, !+, allot) literal (hidden-flag) (immediate-flag)
 
 \ 1. PATCH
 \ ========
@@ -75,29 +75,75 @@
 : - invert 1 + + ;
 : and (nand) invert ;
 
-\ 2. (INTERPRET)
-\ ==============
+\ 2. DEFINING WORDS
+\ ================
+\
+\ Provided by the kernel so that every layer above (core, core-ext, tools, and
+\ anything Fe loads) has the defining words and the exception mechanism.
 
 : ( $29 parse drop drop ; immediate
 
-: and (nand) invert ;
-: - invert 1 + + ;
-
-\ < does not need to be overflow safe here
-: < - 0< ;
-
+: bl $20 ;
 : here (here) @ ;
+: aligned ( addr -- a-addr ) 1 cells -1 + + 1 cells -1 + invert and ;
+: align ( -- ) here aligned here - allot ;
+: create bl parse (header) ['] (docreate) @ , 0 , ;
+: constant >r : r> postpone literal postpone ; ;
+: variable align here 0 , constant ;
 
-: ['] ' postpone literal ; immediate
 : if ['] (jmpz) , here 0 , ; immediate
 : then here swap ! ; immediate
 : else ['] (jmp) , here 0 , swap here swap ! ; immediate
 
+: ?dup dup if dup then ;
+
+\ 3. EXCEPTIONS
+\ =============
+\
+\ catch/throw use a linked list of handler frames threaded through the return
+\ stack. handler holds the return-stack pointer of the innermost frame.
+
+variable handler
+
+: catch ( xt -- 0 | n )
+  \ Save data stack depth.
+  (sp@) >r
+  \ Save enclosing handler.
+  handler @ >r
+  \ Make this frame the current handler.
+  (rp@) handler !
+  \ Execute XT.
+  execute
+  \ Success: restore enclosing handler.
+  r> handler !
+  \ Drop saved SP and exit with success (0).
+  r> drop 0
+;
+
+: throw ( n -- )
+  ?dup if
+    \ Unwind the return stack to the saved handler frame.
+    handler @ (rp!)
+    \ Restore the enclosing handler.
+    r> handler !
+    \ Pop saved SP from the return stack, push n to the return stack.
+    r> swap >r
+    \ Restore data stack depth.
+    (sp!)
+    \ Discard saved XT. Leave n on top.
+    drop r>
+  then
+;
+
+\ 4. (INTERPRET)
+\ ==============
+
+\ < does not need to be overflow safe here
+: < - 0< ;
+
 : begin here ; immediate
 : while ['] (jmpz) , here 0 , swap ; immediate
 : repeat ['] (jmp) , , here swap ! ; immediate
-
-: bl $20 ;
 
 : parse-name ( "<spaces>name<space>" -- c-addr u )
   \ Skip leading whitespace characters.
@@ -122,7 +168,6 @@
 
 : over >r dup r> swap ;
 : rot >r swap r> swap ;
-: ?dup dup if dup then ;
 : 2dup over over ;
 : 2drop drop drop ;
 : 2swap rot >r rot r> ;

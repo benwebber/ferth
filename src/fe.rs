@@ -121,4 +121,32 @@ mod tests {
         fe.evaluate(br#"s" UNKNOWN" environment?"#).unwrap();
         assert_eq!(fe.pop().unwrap(), FALSE);
     }
+
+    #[test]
+    fn test_catch_throw() {
+        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+
+        // Success. `catch` returns 0 and the protected word is next on stack.
+        fe.evaluate(b": ok 42 ;").unwrap();
+        fe.evaluate(b"' ok catch").unwrap();
+        assert_eq!(fe.pop().unwrap(), 0);
+        assert_eq!(fe.pop().unwrap(), 42);
+
+        // Success. `0 throw` does not raise exception.
+        fe.evaluate(b": fine 7 0 throw ;").unwrap();
+        fe.evaluate(b"' fine catch").unwrap();
+        assert_eq!(fe.pop().unwrap(), 0);
+        assert_eq!(fe.pop().unwrap(), 7);
+
+        // Failure. On `throw`, `catch` returns the thrown code.
+        fe.evaluate(b": foo -1 throw ;").unwrap();
+        fe.evaluate(b"' foo catch").unwrap();
+        assert_eq!(fe.pop().unwrap(), -1isize as usize);
+
+        // Failure. Restore data stack to the depth it was before `catch`.
+        fe.evaluate(b": junk 1 2 3 42 throw ;").unwrap();
+        fe.evaluate(b"47 ' junk catch").unwrap();
+        assert_eq!(fe.pop().unwrap(), 42);
+        assert_eq!(fe.pop().unwrap(), 47);
+    }
 }
