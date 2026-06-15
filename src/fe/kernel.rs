@@ -417,47 +417,36 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         //   -1 state !
         // ;
         //
-        // Parse a word, create a definition for it, mark it hidden, and compile `DoCol` to the
-        // code address.
+        // Parse a word, create a definition for it and compile `DoCol` to the code address.
         compile!(
             b":",
             0,
             Op::DoCol,
             [
                 bl, N(b"parse"), N(b"(header)"),
-                // Want to remove this:
-                addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"), N(b"or"), N(b"swap"), N(b"c!"),
                 L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),
-                // And inline this:
-                N(b"]"),
+                L(TRUE), N(b"state"), N(b"!"),
             ]
         );
 
         // : ;
         //   ['] (exit) ,
-        //   \ Store bodylen.
-        //   (latest) @ 3 cells - swap 1 cells add here swap - swap !
-        //   \ Unset hidden flag.
         //   (latest) @ (flags-addr) dup c@ (hidden-flag) invert and swap c!
-        //   [
+        //   0 state !
         // ; immediate
         //
-        // Compile a literal to compile `exit`, then unset the hidden flag.
+        // Compile a literal to compile `exit`, unset the hidden flag, then exit compilation mode.
+        // Unlike the patched `;`, this does not compute bodylen.
         compile!(
             b";",
             IMMEDIATE,
             Op::DoCol,
             [
                 L(self.op_xt(Op::Exit)), N(b","),
-                // Store bodylen.
-                addr!(LATEST), N(b"@"),
-                N(b"dup"), L((3 * SIZE).wrapping_neg()), N(b"+"),
-                N(b"swap"), L(SIZE), N(b"+"),
-                addr!(HERE), N(b"@"), N(b"swap"), N(b"-"),
-                N(b"swap"), N(b"!"),
-                // Unset hidden flag.
+                // The bootstrap : doesn't set the hidden flag, but the Forth version does, and
+                // *this* version of ; closes the Forth version's definitions until we define ;.
                 addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"), N(b"invert"), N(b"and"), N(b"swap"), N(b"c!"),
-                N(b"["),
+                L(0), N(b"state"), N(b"!"),
             ]
         );
 

@@ -42,6 +42,38 @@
 \ -------------
 \ : ; , literal
 
+\ 1. PATCH
+\ ========
+
+: ['] ' postpone literal ; immediate
+: :
+  $20 parse (header)
+  (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
+  ['] (docol) @ ,
+  -1 state !
+;
+
+: ;
+  ['] (exit) ,
+  \ Store bodylen.
+  (latest) @ dup 3 cells - swap 1 cells + (here) @ swap - swap !
+  \ Unset hidden flag.
+  (latest) @ (flags-addr) dup c@ (hidden-flag) invert and swap c!
+  0 state !
+; immediate
+
+\ Redefine dependencies to fix bodylen.
+\ TODO: Consider patching without completely redefining them.
+: invert dup (nand) ;
+: or invert swap invert (nand) ;
+: immediate (latest) @ (flags-addr) dup c@ (immediate-flag) or swap c! ;
+: source (source-addr) @ (source-len) @ ;
+: \ source >in ! drop ; immediate
+: ['] ' postpone literal ; immediate
+
+\ 2. (INTERPRET)
+\ ==============
+
 : ( $29 parse drop drop ; immediate
 
 : and (nand) invert ;
