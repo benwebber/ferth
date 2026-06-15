@@ -58,14 +58,21 @@ impl<const N: usize> TryFrom<&str> for CountedStr<N> {
     type Error = Error;
 
     fn try_from(s: &str) -> Result<Self> {
-        let b = s.as_bytes();
-        if b.len() > N {
-            return Err(Error::CountedStrTooLong(b.len()));
+        s.as_bytes().try_into()
+    }
+}
+
+impl<const N: usize> TryFrom<&[u8]> for CountedStr<N> {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() > N {
+            return Err(Error::CountedStrTooLong(bytes.len()));
         }
         let mut data = [0u8; N];
-        data[..b.len()].copy_from_slice(b);
+        data[..bytes.len()].copy_from_slice(bytes);
         Ok(Self {
-            len: b.len() as u8,
+            len: bytes.len() as u8,
             data,
         })
     }

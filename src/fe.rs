@@ -226,51 +226,40 @@ impl<M: Mem, I: Io> Fe<M, I> {
     ///
     /// This function hand compiles a minimal set of primitive Forth words used to bootstrap a
     /// working Forth system. Notably, it even bootstraps the compiler words like `:` and `;`.
-    #[rustfmt::skip]
     fn bootstrap(&mut self) -> Result<()> {
-        macro_rules! compile {
-            ($s:expr, $flags:expr, $code:expr) => {
-                self.compile($s, $flags, $code, &[])?;
-            };
-            ($s:expr, $flags:expr, $code:expr, [$($body:expr),* $(,)?]) => {
-                self.compile($s, $flags, $code, &[$($body),*])?;
-            };
-            ($name:ident, $s:expr, $flags:expr, $code:expr) => {
-                let $name = Xt(self.compile($s, $flags, $code, &[])?);
-            };
-            ($name:ident, $s:expr, $flags:expr, $code:expr, [$($body:expr),* $(,)?]) => {
-                let $name = Xt(self.compile($s, $flags, $code, &[$($body),*])?);
-            };
-        }
+        self.reserve_variables()?;
+        self.compile_opcodes()?;
+        self.register_builtins()?;
+        self.compile_kernel()?;
+        self.define_variables()?;
+        self.compile_environment()?;
+        self.load_wordlists()
+    }
 
-        macro_rules! addr {
-            ($name:ident) => {
-                L(self.layout_addr(Layout::$name))
-            };
-        }
-
-        use Token::{Lit as L, Xt};
-
-        // 1. Reserve cells for system variables.
-        let variables: &[(&[u8], usize, usize)] = &[
-            (b"(here)", Layout::HERE, self.layout_base + Layout::DATA),
-            (b"(latest)", Layout::LATEST, 0),
-            (b"(source-addr)", Layout::SOURCE_ADDR, self.layout_base + Layout::INPUT),
-            (b"(source-len)", Layout::SOURCE_LEN, 0),
-            (b">in", Layout::TO_IN, 0),
-            (b"base", Layout::BASE, 10),
-            (b"state", Layout::STATE, 0),
-            (b"(sp0)", Layout::SP0, Vm::DS_ADDR),
-            (b"(rp0)", Layout::RP0, self.vm.rs_addr() + SIZE),
+    /// Reserve cells for system variables.
+    fn reserve_variables(&mut self) -> Result<()> {
+        let variables: &[(usize, usize)] = &[
+            (Layout::HERE, self.layout_base + Layout::DATA),
+            (Layout::LATEST, 0),
+            (Layout::SOURCE_ADDR, self.layout_base + Layout::INPUT),
+            (Layout::SOURCE_LEN, 0),
+            (Layout::TO_IN, 0),
+            (Layout::BASE, 10),
+            (Layout::STATE, 0),
+            (Layout::SP0, Vm::DS_ADDR),
+            (Layout::RP0, self.vm.rs_addr() + SIZE),
         ];
-        for (_, offset, value) in variables {
+        for (offset, value) in variables {
             self.data.write_cell(self.layout_base + offset, *value)?;
         }
+        Ok(())
+    }
 
-        // 2. Compile inner interpreter words ("opcodes").
-        //
-        // The inner interpreter implements these words directly. They comprise the most
-        // fundamental set of execution, stack, memory, and arithmetic operations.
+    /// Compile inner interpreter words ("opcodes").
+    ///
+    /// The inner interpreter implements these words directly. They comprise the most fundamental
+    /// set of execution, stack, memory, and arithmetic operations.
+    fn compile_opcodes(&mut self) -> Result<()> {
         let opcodes: &[(&[u8], Op)] = &[
             (b"!", Op::Store),
             (b"(docol)", Op::DoCol),
@@ -310,15 +299,15 @@ impl<M: Mem, I: Io> Fe<M, I> {
             let xt = self.compile(name, 0, *op, &[])?;
             self.op_xts[*op as usize] = xt;
         }
+        Ok(())
+    }
 
-        // 3. Compile outer interpreter words ("builtins").
-        //
-        // These words concern parsing and I/O. They may exist as builtins for several reasons.
-        // The parsing words are difficult, or inefficient, to express in Forth. The inner
-        // interpreter lacks any I/O facilities, so the outer interpret naturally has to provide
-        // these.
-        let mut header = 0;
-        let mut parse = 0;
+    /// Compile outer interpreter words ("builtins").
+    ///
+    /// These words concern parsing and I/O. They may exist as builtins for several reasons. The
+    /// parsing words are difficult, or inefficient, to express in Forth. The inner interpreter
+    /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
+    fn register_builtins(&mut self) -> Result<()> {
         let builtins: &[(&[u8], Builtin<M, I>, u8)] = &[
             (b"'", Self::tick, 0),
             (b"(interpret)", Self::interpret, 0),
@@ -335,21 +324,44 @@ impl<M: Mem, I: Io> Fe<M, I> {
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
-            // HACK: Figure out a better way to capture these XTs.
-            if name == b"(header)" {
-                header = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
-            } else if name == b"parse" {
-                parse = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
-            }
+        }
+        Ok(())
+    }
+
+    /// Compile compiler words.
+    #[rustfmt::skip]
+    fn compile_kernel(&mut self) -> Result<()> {
+        macro_rules! compile {
+            ($s:expr, $flags:expr, $code:expr) => {
+                self.compile($s, $flags, $code, &[])?;
+            };
+            ($s:expr, $flags:expr, $code:expr, [$($body:expr),* $(,)?]) => {
+                self.compile($s, $flags, $code, &[$($body),*])?;
+            };
+            ($name:ident, $s:expr, $flags:expr, $code:expr) => {
+                let $name = Xt(self.compile($s, $flags, $code, &[])?);
+            };
+            ($name:ident, $s:expr, $flags:expr, $code:expr, [$($body:expr),* $(,)?]) => {
+                let $name = Xt(self.compile($s, $flags, $code, &[$($body),*])?);
+            };
         }
 
-        // 4. Compile compiler words.
-        //
+        macro_rules! addr {
+            ($name:ident) => {
+                L(self.layout_addr(Layout::$name))
+            };
+        }
+
+        use Token::{Lit as L, Xt};
+
         // This sequence hand-compiles the words `:`, `;`, `create`, and their direct dependencies.
         // This code *is* Forth, just not written as text. Consider it Forth "assembly".
         //
         // Any reference to an XT that should be a data value at runtime must be a literal
         // (`L(xt)`). Do not use `'`, which consumes from the input stream.
+        let header = self.xt(b"(header)")?;
+        let parse = self.xt(b"parse")?;
+
         // TODO: Remove this warning after implementing errors and removing `'` from the builtins.
         let header = Xt(header);
         let parse = Xt(parse);
@@ -512,25 +524,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             ]
         );
 
-        // 5. Initialize system variables.
-        for (name, offset, _) in variables {
-            self.compile(name, 0, Op::DoCol, &[Token::Lit(self.layout_base + offset)])?;
-        }
-
-        // 6. Initialize environment constants.
-        self.compile_environment()?;
-
-        // 7. Bootstrap core wordlists.
-        //
-        // With the compiler words bootstrapped, we can bootstrap the rest of the system in Forth.
-        for src in &[CORE, CORE_EXT, TOOLS] {
-            for line in src.split(|&b| b == b'\n') {
-                if !line.is_empty() {
-                    self.evaluate(line)?;
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -585,6 +578,39 @@ impl<M: Mem, I: Io> Fe<M, I> {
             Op::DoCol,
             &[Token::Lit(self.env.stack_cells)],
         )?;
+        Ok(())
+    }
+
+    /// Define variables for the system variable addresses.
+    fn define_variables(&mut self) -> Result<()> {
+        let variables: &[(&[u8], usize)] = &[
+            (b"(here)", Layout::HERE),
+            (b"(latest)", Layout::LATEST),
+            (b"(source-addr)", Layout::SOURCE_ADDR),
+            (b"(source-len)", Layout::SOURCE_LEN),
+            (b">in", Layout::TO_IN),
+            (b"base", Layout::BASE),
+            (b"state", Layout::STATE),
+            (b"(sp0)", Layout::SP0),
+            (b"(rp0)", Layout::RP0),
+        ];
+        for (name, offset) in variables {
+            self.compile(name, 0, Op::DoCol, &[Token::Lit(self.layout_base + offset)])?;
+        }
+        Ok(())
+    }
+
+    /// Load wordlists.
+    ///
+    /// With the compiler words bootstrapped, we can bootstrap the rest of the system in Forth.
+    fn load_wordlists(&mut self) -> Result<()> {
+        for src in &[CORE, CORE_EXT, TOOLS] {
+            for line in src.split(|&b| b == b'\n') {
+                if !line.is_empty() {
+                    self.evaluate(line)?;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -775,36 +801,43 @@ impl<M: Mem, I: Io> Fe<M, I> {
     fn find(&mut self) -> Result<()> {
         let len = self.pop()?;
         let addr = self.pop()?;
-        if len > MAX_WORD_LEN {
-            return self.push(0);
-        }
-
-        let mut xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
-        let mut found: Option<(usize, isize)> = None;
-        while xt != 0 {
-            let info = self.data.read_cell(xt - INFO_FROM_CFA)?;
-            let flags = (info >> 8) as u8;
-            let wlen = info & 0xFF;
-            if flags & HIDDEN == 0 && wlen == len {
-                let name_at = xt - INFO_FROM_CFA - SIZE - wlen;
-                let a = self.data.read(addr, len)?;
-                let b = self.data.read(name_at, wlen)?;
-                if a.eq_ignore_ascii_case(b) {
-                    let flag = if flags & IMMEDIATE != 0 { 1 } else { -1 };
-                    found = Some((xt, flag));
-                    break;
-                }
-            }
-            xt = self.data.read_cell(xt - SIZE)?;
-        }
-
-        match found {
+        let mut buf = [0u8; MAX_WORD_LEN];
+        buf[..len].copy_from_slice(self.data.read(addr, len)?);
+        match self.lookup(&buf[..len])? {
             Some((xt, flag)) => {
                 self.push(xt)?;
                 self.push(flag as usize)
             }
             None => self.push(0),
         }
+    }
+
+    fn lookup(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
+        if name.len() > MAX_WORD_LEN {
+            return Ok(None);
+        }
+        let mut xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
+        while xt != 0 {
+            let info = self.data.read_cell(xt - INFO_FROM_CFA)?;
+            let flags = (info >> 8) as u8;
+            let wlen = info & 0xFF;
+            if flags & HIDDEN == 0 && wlen == name.len() {
+                let name_at = xt - INFO_FROM_CFA - SIZE - wlen;
+                let b = self.data.read(name_at, wlen)?;
+                if name.eq_ignore_ascii_case(b) {
+                    let flag = if flags & IMMEDIATE != 0 { 1 } else { -1 };
+                    return Ok(Some((xt, flag)));
+                }
+            }
+            xt = self.data.read_cell(xt - SIZE)?;
+        }
+        Ok(None)
+    }
+
+    fn xt(&mut self, name: &[u8]) -> Result<usize> {
+        self.lookup(name)?
+            .map(|(xt, _)| xt)
+            .ok_or_else(|| Error::UndefinedWord(name.try_into().unwrap_or_default()))
     }
 
     /// ( "<spaces>name" -- xt )
