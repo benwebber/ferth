@@ -29,6 +29,8 @@
 : cell+ 1 cells + ;
 : c,  here c! 1 allot ;
 : >body 2 cells + ;
+: aligned ( addr -- a-addr ) 1 cells 1- + 1 cells 1- invert and ;
+: align ( -- ) here aligned here - allot ;
 : create bl parse (header) ['] (docreate) @ , 0 , ;
 : does> r> (latest) @ cell+ ! ;
 : chars ( -- ) ;

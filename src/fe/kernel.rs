@@ -322,46 +322,25 @@ impl<M: Mem, I: Io> Kernel<M, I> {
 
         use Token::{Lit as L, Name as N};
 
-        // This sequence hand-compiles the words `:`, `;`, `create`, and their direct dependencies.
-        // This code *is* Forth, just not written as text. Consider it Forth "assembly".
+        // This sequence hand-compiles the words `:`, `;`, `literal`, and their direct
+        // dependencies. This code *is* Forth, just not written as text. Consider it Forth
+        // "assembly".
         //
         // `N(name)` compiles a call to a previously defined word. Any reference to an XT that
         // should be a data value at runtime must be a literal (`L(xt)`), not a call.
-        let bl = L(BL);
-
-        // : invert ( x1 -- x2 ) dup (nand) ;
-        compile!(b"invert", 0, [N(b"dup"), N(b"(nand)")]);
-        // : or ( x1 x2 -- x3 ) invert swap invert (nand) ;
-        compile!(b"or", 0, [N(b"invert"), N(b"swap"), N(b"invert"), N(b"(nand)")]);
-        // : and ( x1 x2 -- x3 ) (nand) invert ;
-        compile!(b"and", 0, [N(b"(nand)"), N(b"invert")]);
-        // : - ( n1 n2 -- n3 ) invert 1+ + ;
-        compile!(b"-", 0, [N(b"invert"), L(1), N(b"+"), N(b"+")]);
         // cells
         compile!(b"cells", 0, [L(SIZE), N(b"um*"), N(b"drop")]);
-        // : r@ ( -- x ) ( R: x -- x ) (rp@) 2 cells - @ ;
-        //
         // : +! ( u addr -- ) dup >r @ + r> ! ;
         compile!(b"+!", 0, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
         // : allot ( n -- ) (here) +! ;
         compile!(b"allot", 0, [addr!(HERE), N(b"+!")]);
-        // : aligned ( addr -- a-addr ) 1 cells 1- + 1 cells 1- invert and ;
-        compile!(
-            b"aligned",
-            0,
-            [L(1), N(b"cells"), L(-1isize as usize), N(b"+"), N(b"+"), L(1), N(b"cells"), L(-1isize as usize), N(b"+"), N(b"invert"), N(b"and")]
-        );
-        // : align ( -- ) here aligned here - allot ;
-        compile!(
-            b"align",
-            0,
-            [addr!(HERE), N(b"@"), N(b"aligned"), addr!(HERE), N(b"@"), N(b"-"), N(b"allot")]
-        );
-        // : , ( x -- ) align here ! 1 cells allot ;
+        // : , ( x -- ) here ! 1 cells allot ;
+        //
+        // `here` is always cell-aligned at this stage so it is safe call `,` without `align`.
         compile!(
             b",",
             0,
-            [N(b"align"), addr!(HERE), N(b"@"), N(b"!"), L(1), N(b"cells"), N(b"allot")]
+            [addr!(HERE), N(b"@"), N(b"!"), L(1), N(b"cells"), N(b"allot")]
         );
 
         // : literal ( x -- ) ['] (lit) , , ; immediate
@@ -375,12 +354,10 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             [L(self.op_xt(Op::Lit)), N(b","), N(b",")]
         );
 
-        // Finally, compile the compilation words.
         // (hidden-flag)
         compile!(b"(hidden-flag)", 0, [L(HIDDEN.into())]);
         // (immediate-flag)
         compile!(b"(immediate-flag)", 0, [L(IMMEDIATE.into())]);
-
         // (flags-addr)
         //
         // Return the address of the flags byte, calculated from the code address (XT).
@@ -389,6 +366,13 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             0,
             [L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+")]
         );
+
+        // Finally, compile basic versions of `:` and `;`.
+        //
+        // These basic versions skip some bookkeeping. `:` does not set the hidden bit, and `;`
+        // does not set the bodylen field. We use them to bootstrap proper definitions. Any word
+        // defined by these words in the kernel must be redefined afterwards with the replaced
+        // versions.
 
         // : :
         //   bl parse (header)
@@ -401,7 +385,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             b":",
             0,
             [
-                bl, N(b"parse"), N(b"(header)"),
+                L(0x20), N(b"parse"), N(b"(header)"),
                 L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),
                 L(TRUE), N(b"state"), N(b"!"),
             ]
@@ -420,9 +404,13 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             IMMEDIATE,
             [
                 L(self.op_xt(Op::Exit)), N(b","),
-                // The bootstrap : doesn't set the hidden flag, but the Forth version does, and
-                // *this* version of ; closes the Forth version's definitions until we define ;.
-                addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"), N(b"invert"), N(b"and"), N(b"swap"), N(b"c!"),
+                // The bootstrap `:` doesn't set the hidden flag, but the Forth version does, and
+                // *this* version of `;` closes the Forth version's definitions until we redefine
+                // `;`.
+                addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"),
+                N(b"dup"), N(b"(nand)"), // invert
+                N(b"(nand)"), N(b"dup"), N(b"(nand)"), // and ((nand) invert)
+                N(b"swap"), N(b"c!"),
                 L(0), N(b"state"), N(b"!"),
             ]
         );

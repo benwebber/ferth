@@ -53,6 +53,8 @@
   -1 state !
 ;
 
+: - invert 1 + + ;
+: and (nand) invert ;
 : ;
   ['] (exit) ,
   \ Store bodylen.
@@ -70,6 +72,8 @@
 : source (source-addr) @ (source-len) @ ;
 : \ source >in ! drop ; immediate
 : ['] ' postpone literal ; immediate
+: - invert 1 + + ;
+: and (nand) invert ;
 
 \ 2. (INTERPRET)
 \ ==============
