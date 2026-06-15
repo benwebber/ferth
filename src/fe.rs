@@ -363,14 +363,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
         compile!(b"cells", 0, Op::DoCol, [L(SIZE), N(b"um*"), N(b"drop")]);
         // : r@ ( -- x ) ( R: x -- x ) (rp@) 2 cells - @ ;
         //
-        // RP points to the next cell, and DoCol pushes a call frame onto the stack. Thus we need
-        // to subtract 2 cells from RP.
-        compile!(
-            b"r@",
-            0,
-            Op::DoCol,
-            [N(b"(rp@)"), L(-2isize as usize), N(b"cells"), N(b"+"), N(b"@")]
-        );
         // : +! ( u addr -- ) dup >r @ + r> ! ;
         compile!(b"+!", 0, Op::DoCol, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
         // : allot ( n -- ) (here) +! ;

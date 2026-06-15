@@ -33,7 +33,8 @@
 : <> = 0= ;
 : 0<> 0= invert ;
 
-: +! dup >r @ + r> ! ;
+\ (rp@) points to the next cell, and (docol) pushes a call frame onto the stack.
+: r@ (rp@) 2 cells - @ ;
 
 : here (here) @ ;
 : cell+ 1 cells + ;
