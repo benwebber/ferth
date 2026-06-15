@@ -308,11 +308,8 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     #[rustfmt::skip]
     fn compile_kernel(&mut self) -> Result<()> {
         macro_rules! compile {
-            ($s:expr, $flags:expr, $code:expr) => {
-                self.compile($s, $flags, $code, &[])?;
-            };
-            ($s:expr, $flags:expr, $code:expr, [$($body:expr),* $(,)?]) => {
-                self.compile($s, $flags, $code, &[$($body),*])?;
+            ($s:expr, $flags:expr, [$($body:expr),* $(,)?]) => {
+                self.compile($s, $flags, Op::DoCol, &[$($body),*])?;
             };
         }
 
@@ -332,40 +329,37 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         let bl = L(BL);
 
         // : invert ( x1 -- x2 ) dup (nand) ;
-        compile!(b"invert", 0, Op::DoCol, [N(b"dup"), N(b"(nand)")]);
+        compile!(b"invert", 0, [N(b"dup"), N(b"(nand)")]);
         // : or ( x1 x2 -- x3 ) invert swap invert (nand) ;
-        compile!(b"or", 0, Op::DoCol, [N(b"invert"), N(b"swap"), N(b"invert"), N(b"(nand)")]);
+        compile!(b"or", 0, [N(b"invert"), N(b"swap"), N(b"invert"), N(b"(nand)")]);
         // : and ( x1 x2 -- x3 ) (nand) invert ;
-        compile!(b"and", 0, Op::DoCol, [N(b"(nand)"), N(b"invert")]);
+        compile!(b"and", 0, [N(b"(nand)"), N(b"invert")]);
         // : - ( n1 n2 -- n3 ) invert 1+ + ;
-        compile!(b"-", 0, Op::DoCol, [N(b"invert"), L(1), N(b"+"), N(b"+")]);
+        compile!(b"-", 0, [N(b"invert"), L(1), N(b"+"), N(b"+")]);
         // cells
-        compile!(b"cells", 0, Op::DoCol, [L(SIZE), N(b"um*"), N(b"drop")]);
+        compile!(b"cells", 0, [L(SIZE), N(b"um*"), N(b"drop")]);
         // : r@ ( -- x ) ( R: x -- x ) (rp@) 2 cells - @ ;
         //
         // : +! ( u addr -- ) dup >r @ + r> ! ;
-        compile!(b"+!", 0, Op::DoCol, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
+        compile!(b"+!", 0, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
         // : allot ( n -- ) (here) +! ;
-        compile!(b"allot", 0, Op::DoCol, [addr!(HERE), N(b"+!")]);
+        compile!(b"allot", 0, [addr!(HERE), N(b"+!")]);
         // : aligned ( addr -- a-addr ) 1 cells 1- + 1 cells 1- invert and ;
         compile!(
             b"aligned",
             0,
-            Op::DoCol,
             [L(1), N(b"cells"), L(-1isize as usize), N(b"+"), N(b"+"), L(1), N(b"cells"), L(-1isize as usize), N(b"+"), N(b"invert"), N(b"and")]
         );
         // : align ( -- ) here aligned here - allot ;
         compile!(
             b"align",
             0,
-            Op::DoCol,
             [addr!(HERE), N(b"@"), N(b"aligned"), addr!(HERE), N(b"@"), N(b"-"), N(b"allot")]
         );
         // : , ( x -- ) align here ! 1 cells allot ;
         compile!(
             b",",
             0,
-            Op::DoCol,
             [N(b"align"), addr!(HERE), N(b"@"), N(b"!"), L(1), N(b"cells"), N(b"allot")]
         );
 
@@ -377,29 +371,27 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         compile!(
             b"literal",
             IMMEDIATE,
-            Op::DoCol,
             [L(self.op_xt(Op::Lit)), N(b","), N(b",")]
         );
 
         // Finally, compile the compilation words.
 
         // : ] true state ! ;
-        compile!(b"]", 0, Op::DoCol, [L(TRUE), addr!(STATE), N(b"!")]);
+        compile!(b"]", 0, [L(TRUE), addr!(STATE), N(b"!")]);
         // : [ false state ! ;
-        compile!(b"[", IMMEDIATE, Op::DoCol, [L(FALSE), addr!(STATE), N(b"!")]);
+        compile!(b"[", IMMEDIATE, [L(FALSE), addr!(STATE), N(b"!")]);
 
         // : create ( "<spaces>name" -- ) bl parse (header) (docreate) , 0 , ;
         compile!(
             b"create",
             0,
-            Op::DoCol,
             [bl, N(b"parse"), N(b"(header)"), L(Op::DoCreate as usize), N(b","), L(0), N(b",")]
         );
 
         // (hidden-flag)
-        compile!(b"(hidden-flag)", 0, Op::DoCol, [L(HIDDEN.into())]);
+        compile!(b"(hidden-flag)", 0, [L(HIDDEN.into())]);
         // (immediate-flag)
-        compile!(b"(immediate-flag)", 0, Op::DoCol, [L(IMMEDIATE.into())]);
+        compile!(b"(immediate-flag)", 0, [L(IMMEDIATE.into())]);
 
         // (flags-addr)
         //
@@ -407,7 +399,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         compile!(
             b"(flags-addr)",
             0,
-            Op::DoCol,
             [L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+")]
         );
 
@@ -421,7 +412,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         compile!(
             b":",
             0,
-            Op::DoCol,
             [
                 bl, N(b"parse"), N(b"(header)"),
                 L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),
@@ -440,7 +430,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         compile!(
             b";",
             IMMEDIATE,
-            Op::DoCol,
             [
                 L(self.op_xt(Op::Exit)), N(b","),
                 // The bootstrap : doesn't set the hidden flag, but the Forth version does, and
