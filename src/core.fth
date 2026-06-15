@@ -1,24 +1,14 @@
-: immediate (latest) @ (flags-addr) dup c@ (immediate-flag) or swap c! ;
-: source (source-addr) @ (source-len) @ ;
-: \ source >in ! drop ; immediate
-
 \ core word set
 \ <https://forth-standard.org/standard/core>
 \
 \ This word set must only contain words belonging to the core set, not core-ext.
 \ Exceptions: 2r>, 2>r, needed to implement 2over
 
-: ( $29 parse drop drop ; immediate
-
-: bl $20 ;
 : true -1 ;
 : false 0 ;
 
 : decimal #10 base ! ;
 : hex $10 base ! ;
-
-: over >r dup r> swap ;
-: rot >r swap r> swap ;
 
 : xor over over and invert >r or r> and ;
 : negate invert 1 + ;
@@ -36,9 +26,7 @@
 \ (rp@) points to the next cell, and (docol) pushes a call frame onto the stack.
 : r@ (rp@) 2 cells - @ ;
 
-: here (here) @ ;
 : cell+ 1 cells + ;
-: ['] ' postpone literal ; immediate
 : c,  here c! 1 allot ;
 : >body 2 cells + ;
 : does> r> (latest) @ cell+ ! ;
@@ -46,22 +34,11 @@
 
 : exit ['] (exit) , ; immediate
 
-: if ['] (jmpz) , here 0 , ; immediate
-: then here swap ! ; immediate
-: else ['] (jmp) , here 0 , swap here swap ! ; immediate
-
-: begin here ; immediate
 : until ['] (jmpz) , , ; immediate
 : again ['] (jmp) , , ; immediate
-: while ['] (jmpz) , here 0 , swap ; immediate
-: repeat ['] (jmp) , , here swap ! ; immediate
 
 : constant >r : r> postpone literal postpone ; ;
 : variable align here 0 , constant ;
-
-: 2dup over over ;
-: 2drop drop drop ;
-: 2swap rot >r rot r> ;
 
 \ Overflow-safe comparison operators.
 \ TODO: explain
@@ -70,7 +47,6 @@
 : > swap < ;
 : 0> 0 > ;
 
-: ?dup ( x -- 0 | x x ) dup if dup then ;
 : abs dup 0< if negate then ;
 : min ( n1 n2 -- n3 ) 2dup < if drop else swap drop then ;
 : max ( n1 n2 -- n3 ) 2dup > if drop else swap drop then ;
@@ -381,24 +357,6 @@ variable (leave-list)
     1 >in +!
   repeat
   bl parse
-;
-
-: (interpret)
-  begin
-    parse-name                  ( c-addr u )
-  dup while                     ( c-addr u )
-    2dup (find) ?dup if         ( c-addr u xt flag )
-      2swap 2drop               ( xt flag )
-      0< state @ and if , else execute then
-    else                        ( c-addr u )
-      (number?) if              ( n )
-        state @ if postpone literal then \ Left on stack if in interpretation mode.
-      else
-        (undefined)             \ TODO: -13 throw
-      then
-    then
-  repeat
-  2drop
 ;
 
 : evaluate ( i*x c-addr u -- j*x )

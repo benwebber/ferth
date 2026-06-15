@@ -25,6 +25,7 @@ const HIDDEN: u8 = 0b10;
 
 const BL: usize = 0x20;
 
+const KERNEL: &[u8] = include_bytes!("../kernel.fth");
 const CORE: &[u8] = include_bytes!("../core.fth");
 const CORE_EXT: &[u8] = include_bytes!("../core-ext.fth");
 const TOOLS: &[u8] = include_bytes!("../tools.fth");
@@ -205,9 +206,9 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.reserve_variables()?;
         self.compile_opcodes()?;
         self.register_builtins()?;
-        self.compile_kernel()?;
-        self.define_variables()?;
         self.compile_environment()?;
+        self.define_variables()?;
+        self.compile_kernel()?;
         self.load_wordlists()
     }
 
@@ -412,9 +413,8 @@ impl<M: Mem, I: Io> Kernel<M, I> {
 
         // : :
         //   bl parse (header)
-        //   (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
         //   ' (docol) @ ,
-        //   ]
+        //   -1 state !
         // ;
         //
         // Parse a word, create a definition for it, mark it hidden, and compile `DoCol` to the
@@ -425,8 +425,10 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             Op::DoCol,
             [
                 bl, N(b"parse"), N(b"(header)"),
+                // Want to remove this:
                 addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"), N(b"or"), N(b"swap"), N(b"c!"),
                 L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),
+                // And inline this:
                 N(b"]"),
             ]
         );
@@ -458,6 +460,15 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                 N(b"["),
             ]
         );
+
+        for src in &[KERNEL] {
+            for line in src.split(|&b| b == b'\n') {
+                if !line.is_empty() {
+                    self.set_source(line)?;
+                    self.interpret()?;
+                }
+            }
+        }
 
         Ok(())
     }
