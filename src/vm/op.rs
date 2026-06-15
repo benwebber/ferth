@@ -290,6 +290,8 @@ ops! {
     /// (docreate) ( -- a-addr )
     /// ```
     DoCreate = 0x23,
+
+    Execute = 0x24,
 }
 
 #[cfg(test)]

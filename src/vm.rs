@@ -266,6 +266,10 @@ impl Vm {
             Op::Exit => {
                 self.ip = self.rpop(data)?;
             }
+            Op::Execute => {
+                self.w = self.pop(data)?;
+                return self.dispatch(data);
+            }
             Op::DoCol => {
                 self.rpush(data, self.ip)?;
                 self.ip = self.w + SIZE;

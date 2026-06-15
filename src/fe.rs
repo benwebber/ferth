@@ -201,12 +201,23 @@ impl<M: Mem, I: Io> Fe<M, I> {
         self.data
             .write_cell(self.layout_addr(Layout::SOURCE_LEN), code.len())?;
         self.data.write_cell(self.layout_addr(Layout::TO_IN), 0)?;
-        let result = self.interpret();
-        if result.is_err() {
-            let _ = self.data.write_cell(self.layout_addr(Layout::STATE), 0);
-            self.vm.reset();
+        let (interpret_xt, _) = self.lookup(b"(interpret)")?.unwrap(); // unwrap: temporary
+        let mut stop = self.vm.call(&mut self.data, interpret_xt)?;
+        loop {
+            match stop {
+                Stop::Halt => return Ok(()),
+                Stop::Yield(token) => {
+                    let f = self.builtins[token.index]
+                        .ok_or(Error::InvalidBuiltin(token.index as u8))?;
+                    if let Err(e) = f(self) {
+                        let _ = self.data.write_cell(self.layout_addr(Layout::STATE), FALSE);
+                        self.vm.reset();
+                        return Err(e);
+                    }
+                    stop = self.vm.resume(&mut self.data, token)?;
+                }
+            }
         }
-        result
     }
 
     /// Reset the data and return stacks.
@@ -290,6 +301,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"lshift", Op::LShift),
             (b"rshift", Op::RShift),
             (b"um/mod", Op::UmDivMod),
+            (b"execute", Op::Execute),
         ];
         for (name, op) in opcodes {
             let xt = self.compile(name, 0, *op, &[])?;
@@ -309,7 +321,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             (b"(interpret)", Self::interpret, 0),
             (b"(number)", Self::number, 0),
             (b"emit", Self::emit, 0),
-            (b"execute", Self::execute, 0),
             (b"(find)", Self::find, 0),
             (b"key", Self::key, 0),
             (b"parse", Self::parse, 0),
