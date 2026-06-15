@@ -286,7 +286,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     fn register_builtins(&mut self) -> Result<()> {
         let builtins: &[(&[u8], Builtin<M, I>, u8)] = &[
             (b"'", Self::tick, 0),
-            (b"(number)", Self::number, 0),
             (b"emit", Self::emit, 0),
             (b"(find)", Self::find, 0),
             (b"key", Self::key, 0),
@@ -691,41 +690,28 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         Ok(())
     }
 
-    /// ( "<spaces>" -- c-addr )
-    // TODO: Remove after implementing ', (interpret), find, etc. in Forth.
-    fn parse_word(&mut self, delim: u8) -> Result<usize> {
+    /// Parse the next token in the parse area, skipping leading whitespace.
+    ///
+    /// ```text
+    /// parse-name ( "<spaces>name<space>" -- c-addr u )
+    /// ```
+    ///
+    /// See [`PARSE-NAME`](https://forth-standard.org/standard/core/PARSE-NAME).
+    // TODO: Thread this through the stack like the other words.
+    fn parse_name(&mut self) -> Result<(usize, usize)> {
         let src = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
         let src_len = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
         let mut to_in = self.data.read_cell(self.layout_addr(Layout::TO_IN))?;
-        let is_delim = |c: u8| {
-            if delim == b' ' {
-                c.is_ascii_whitespace()
-            } else {
-                c == delim
-            }
-        };
-        while to_in < src_len && is_delim(self.data.read_char(src + to_in)?) {
+        while to_in < src_len && self.data.read_char(src + to_in)?.is_ascii_whitespace() {
             to_in += 1;
         }
         self.data
             .write_cell(self.layout_addr(Layout::TO_IN), to_in)?;
-        self.push(delim as usize)?;
+        self.push(BL)?;
         self.parse()?;
-        let u = self.pop()?;
-        let caddr = self.pop()?;
-        // TODO: return error instead of truncating
-        let len = u.min(255);
-        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
-        if here + 1 + len > self.data.len() {
-            return Err(crate::vm::VmError::AddressOutOfRange(here).into());
-        }
-        // We need to read into a temporary buffer because `read` takes an immutable reference and
-        // `write` takes a mutable one. `Data` could provide a `copy_within` method to avoid this.
-        let mut buf = [0u8; 256];
-        buf[..len].copy_from_slice(self.data.read(caddr, len)?);
-        self.data.write_char(here, len as u8)?;
-        self.data.write(here + 1, &buf[..len])?;
-        Ok(here)
+        let len = self.pop()?;
+        let addr = self.pop()?;
+        Ok((addr, len))
     }
 
     /// A variant of `find` that reads a Forth string `( c-addr u )` instead of a counted string `(
@@ -783,48 +769,26 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// ( "<spaces>name" -- xt )
     // TODO: after implementing errors, move this to Forth
     fn tick(&mut self) -> Result<()> {
-        let caddr = self.parse_word(BL as u8)?;
-        let len = self.data.read_char(caddr)? as usize;
-        self.push(caddr + 1)?;
+        let (addr, len) = self.parse_name()?;
+        self.push(addr)?;
         self.push(len)?;
         self.find()?;
         let flag = self.pop()? as isize;
         if flag == 0 {
-            return Err(self.make_undefined(caddr));
+            return Err(self.make_undefined(addr, len));
         }
         Ok(())
     }
 
-    /// Parse a number.
-    ///
-    /// ```text
-    /// (number) ( c-addr -- n 1 | c-addr 0 )
-    /// ```
-    // TODO: Reimplement and expose this as `>number`.
-    fn number(&mut self) -> Result<()> {
-        let caddr = self.pop()?;
-        let len = self.data.read_char(caddr)? as usize;
-        let base = self.data.read_cell(self.layout_addr(Layout::BASE))?;
-
-        if let Some(n) = parser::parse_num(self.data.read(caddr + 1, len)?, base as u32) {
-            self.push(n)?;
-            self.push(1)
-        } else {
-            self.push(caddr)?;
-            self.push(0)
-        }
-    }
-
     // TODO: Move this to Forth.
     fn postpone(&mut self) -> Result<()> {
-        let caddr = self.parse_word(BL as u8)?;
-        let len = self.data.read_char(caddr)? as usize;
-        self.push(caddr + 1)?;
+        let (addr, len) = self.parse_name()?;
+        self.push(addr)?;
         self.push(len)?;
         self.find()?;
         let flag = self.pop()? as isize;
         if flag == 0 {
-            return Err(self.make_undefined(caddr));
+            return Err(self.make_undefined(addr, len));
         }
         let xt = self.pop()?;
         let is_immediate = flag == 1;
@@ -870,12 +834,11 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// <https://forth-standard.org/standard/usage#section.3.4>
     fn interpret(&mut self) -> Result<()> {
         loop {
-            let c_addr = self.parse_word(BL as u8)?;
-            if self.data.read_char(c_addr)? == 0 {
+            let (addr, len) = self.parse_name()?;
+            if len == 0 {
                 return Ok(());
             }
-            let len = self.data.read_char(c_addr)? as usize;
-            self.push(c_addr + 1)?;
+            self.push(addr)?;
             self.push(len)?;
             self.find()?;
             let flag = self.pop()? as isize;
@@ -888,11 +851,12 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                     self.comma(x)?;
                 }
             } else {
-                self.push(c_addr)?;
-                self.number()?;
+                self.push(addr)?;
+                self.push(len)?;
+                self.numberq()?;
                 let ok = self.pop()? as isize;
-                let v = self.pop()?;
                 if ok == 1 {
+                    let v = self.pop()?;
                     if state != 0 {
                         self.comma(self.op_xts[Op::Lit as usize])?;
                         self.comma(v)?;
@@ -900,7 +864,10 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                         self.push(v)?;
                     }
                 } else {
-                    return Err(self.make_undefined(v));
+                    // numberq leaves ( c-addr u ) on failure; discard and report the word.
+                    self.pop()?;
+                    self.pop()?;
+                    return Err(self.make_undefined(addr, len));
                 }
             }
         }
@@ -1024,10 +991,9 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         Ok(cfa)
     }
 
-    fn make_undefined(&self, c_addr: usize) -> Error {
-        let len = self.data.read_char(c_addr).unwrap_or(0) as usize;
+    fn make_undefined(&self, addr: usize, len: usize) -> Error {
         // Return an empty name for an invalid address instead of panicking.
-        let bytes = self.data.read(c_addr + 1, len).unwrap_or(&[]);
+        let bytes = self.data.read(addr, len).unwrap_or(&[]);
         let name = core::str::from_utf8(bytes)
             .ok()
             .and_then(|s| CountedStr31::try_from(s).ok())
