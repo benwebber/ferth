@@ -35,7 +35,7 @@ pub type Builtin<M, I> = fn(&mut Fe<M, I>) -> Result<()>;
 #[derive(Clone, Copy)]
 enum Token {
     Lit(usize),
-    Xt(usize),
+    Name(&'static [u8]),
 }
 
 /// System environment configuration.
@@ -334,12 +334,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             ($s:expr, $flags:expr, $code:expr, [$($body:expr),* $(,)?]) => {
                 self.compile($s, $flags, $code, &[$($body),*])?;
             };
-            ($name:ident, $s:expr, $flags:expr, $code:expr) => {
-                let $name = Xt(self.compile($s, $flags, $code, &[])?);
-            };
-            ($name:ident, $s:expr, $flags:expr, $code:expr, [$($body:expr),* $(,)?]) => {
-                let $name = Xt(self.compile($s, $flags, $code, &[$($body),*])?);
-            };
         }
 
         macro_rules! addr {
@@ -348,45 +342,25 @@ impl<M: Mem, I: Io> Fe<M, I> {
             };
         }
 
-        use Token::{Lit as L, Xt};
+        use Token::{Lit as L, Name as N};
 
         // This sequence hand-compiles the words `:`, `;`, `create`, and their direct dependencies.
         // This code *is* Forth, just not written as text. Consider it Forth "assembly".
         //
-        // Any reference to an XT that should be a data value at runtime must be a literal
-        // (`L(xt)`). Do not use `'`, which consumes from the input stream.
-        let header = self.xt(b"(header)")?;
-        let parse = self.xt(b"parse")?;
-
-        // TODO: Remove this warning after implementing errors and removing `'` from the builtins.
-        let header = Xt(header);
-        let parse = Xt(parse);
-
-        let nand = Xt(self.op_xt(Op::Nand));
-        let add = Xt(self.op_xt(Op::Add));
-        let fetch = Xt(self.op_xt(Op::Fetch));
-        let store = Xt(self.op_xt(Op::Store));
-        let to_r = Xt(self.op_xt(Op::ToR));
-        let r_from = Xt(self.op_xt(Op::RFrom));
-        let ummul = Xt(self.op_xt(Op::UmMul));
-        let c_fetch = Xt(self.op_xt(Op::CFetch));
-        let c_store = Xt(self.op_xt(Op::CStore));
-        let swap = Xt(self.op_xt(Op::Swap));
-        let rp_fetch = Xt(self.op_xt(Op::RpFetch));
-        let drop = Xt(self.op_xt(Op::Drop));
-        let dup = Xt(self.op_xt(Op::Dup));
+        // `N(name)` compiles a call to a previously defined word. Any reference to an XT that
+        // should be a data value at runtime must be a literal (`L(xt)`), not a call.
         let bl = L(BL);
 
         // : invert ( x1 -- x2 ) dup (nand) ;
-        compile!(invert, b"invert", 0, Op::DoCol, [dup, nand]);
+        compile!(b"invert", 0, Op::DoCol, [N(b"dup"), N(b"(nand)")]);
         // : or ( x1 x2 -- x3 ) invert swap invert (nand) ;
-        compile!(or, b"or", 0, Op::DoCol, [invert, swap, invert, nand]);
+        compile!(b"or", 0, Op::DoCol, [N(b"invert"), N(b"swap"), N(b"invert"), N(b"(nand)")]);
         // : and ( x1 x2 -- x3 ) (nand) invert ;
-        compile!(and, b"and", 0, Op::DoCol, [nand, invert]);
+        compile!(b"and", 0, Op::DoCol, [N(b"(nand)"), N(b"invert")]);
         // : - ( n1 n2 -- n3 ) invert 1+ + ;
-        compile!(minus, b"-", 0, Op::DoCol, [invert, L(1), add, add]);
+        compile!(b"-", 0, Op::DoCol, [N(b"invert"), L(1), N(b"+"), N(b"+")]);
         // cells
-        compile!(cells, b"cells", 0, Op::DoCol, [L(SIZE), ummul, drop]);
+        compile!(b"cells", 0, Op::DoCol, [L(SIZE), N(b"um*"), N(b"drop")]);
         // : r@ ( -- x ) ( R: x -- x ) (rp@) 2 cells - @ ;
         //
         // RP points to the next cell, and DoCol pushes a call frame onto the stack. Thus we need
@@ -395,35 +369,32 @@ impl<M: Mem, I: Io> Fe<M, I> {
             b"r@",
             0,
             Op::DoCol,
-            [rp_fetch, L(-2isize as usize), cells, add, fetch]
+            [N(b"(rp@)"), L(-2isize as usize), N(b"cells"), N(b"+"), N(b"@")]
         );
         // : +! ( u addr -- ) dup >r @ + r> ! ;
-        compile!(plus_store, b"+!", 0, Op::DoCol, [dup, to_r, fetch, add, r_from, store]);
+        compile!(b"+!", 0, Op::DoCol, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
         // : allot ( n -- ) (here) +! ;
-        compile!(allot, b"allot", 0, Op::DoCol, [addr!(HERE), plus_store]);
+        compile!(b"allot", 0, Op::DoCol, [addr!(HERE), N(b"+!")]);
         // : aligned ( addr -- a-addr ) 1 cells 1- + 1 cells 1- invert and ;
         compile!(
-            aligned,
             b"aligned",
             0,
             Op::DoCol,
-            [L(1), cells, L(-1isize as usize), add, add, L(1), cells, L(-1isize as usize), add, invert, and]
+            [L(1), N(b"cells"), L(-1isize as usize), N(b"+"), N(b"+"), L(1), N(b"cells"), L(-1isize as usize), N(b"+"), N(b"invert"), N(b"and")]
         );
         // : align ( -- ) here aligned here - allot ;
         compile!(
-            align,
             b"align",
             0,
             Op::DoCol,
-            [addr!(HERE), fetch, aligned, addr!(HERE), fetch, minus, allot]
+            [addr!(HERE), N(b"@"), N(b"aligned"), addr!(HERE), N(b"@"), N(b"-"), N(b"allot")]
         );
         // : , ( x -- ) align here ! 1 cells allot ;
         compile!(
-            comma,
             b",",
             0,
             Op::DoCol,
-            [align, addr!(HERE), fetch, store, L(1), cells, allot]
+            [N(b"align"), addr!(HERE), N(b"@"), N(b"!"), L(1), N(b"cells"), N(b"allot")]
         );
 
         // : literal ( x -- ) ['] (lit) , , ; immediate
@@ -435,26 +406,26 @@ impl<M: Mem, I: Io> Fe<M, I> {
             b"literal",
             IMMEDIATE,
             Op::DoCol,
-            [L(self.op_xt(Op::Lit)), comma, comma]
+            [L(self.op_xt(Op::Lit)), N(b","), N(b",")]
         );
 
         // Finally, compile the compilation words.
 
         // : ] true state ! ;
-        compile!(rbracket, b"]", 0, Op::DoCol, [L(TRUE), addr!(STATE), store]);
+        compile!(b"]", 0, Op::DoCol, [L(TRUE), addr!(STATE), N(b"!")]);
         // : [ false state ! ;
-        compile!(lbracket, b"[", IMMEDIATE, Op::DoCol, [L(FALSE), addr!(STATE), store]);
+        compile!(b"[", IMMEDIATE, Op::DoCol, [L(FALSE), addr!(STATE), N(b"!")]);
 
         // : create ( "<spaces>name" -- ) bl parse (header) (docreate) , 0 , ;
         compile!(
             b"create",
             0,
             Op::DoCol,
-            [bl, parse, header, L(Op::DoCreate as usize), comma, L(0), comma]
+            [bl, N(b"parse"), N(b"(header)"), L(Op::DoCreate as usize), N(b","), L(0), N(b",")]
         );
 
         // (hidden-flag)
-        compile!(hidden_flag, b"(hidden-flag)", 0, Op::DoCol, [L(HIDDEN.into())]);
+        compile!(b"(hidden-flag)", 0, Op::DoCol, [L(HIDDEN.into())]);
         // (immediate-flag)
         compile!(b"(immediate-flag)", 0, Op::DoCol, [L(IMMEDIATE.into())]);
 
@@ -462,11 +433,10 @@ impl<M: Mem, I: Io> Fe<M, I> {
         //
         // Return the address of the flags byte, calculated from the code address (XT).
         compile!(
-            flags_addr,
             b"(flags-addr)",
             0,
             Op::DoCol,
-            [L((2 * SIZE).wrapping_neg()), add, L(1), add]
+            [L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+")]
         );
 
         // : :
@@ -483,10 +453,10 @@ impl<M: Mem, I: Io> Fe<M, I> {
             0,
             Op::DoCol,
             [
-                bl, parse, header,
-                addr!(LATEST), fetch, flags_addr, dup, c_fetch, hidden_flag, or, swap, c_store,
-                L(self.op_xt(Op::DoCol)), fetch, comma,
-                rbracket,
+                bl, N(b"parse"), N(b"(header)"),
+                addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"), N(b"or"), N(b"swap"), N(b"c!"),
+                L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),
+                N(b"]"),
             ]
         );
 
@@ -505,16 +475,16 @@ impl<M: Mem, I: Io> Fe<M, I> {
             IMMEDIATE,
             Op::DoCol,
             [
-                L(self.op_xt(Op::Exit)), comma,
+                L(self.op_xt(Op::Exit)), N(b","),
                 // Store bodylen.
-                addr!(LATEST), fetch,
-                dup, L((3 * SIZE).wrapping_neg()), add,
-                swap, L(SIZE), add,
-                addr!(HERE), fetch, swap, minus,
-                swap, store,
+                addr!(LATEST), N(b"@"),
+                N(b"dup"), L((3 * SIZE).wrapping_neg()), N(b"+"),
+                N(b"swap"), L(SIZE), N(b"+"),
+                addr!(HERE), N(b"@"), N(b"swap"), N(b"-"),
+                N(b"swap"), N(b"!"),
                 // Unset hidden flag.
-                addr!(LATEST), fetch, flags_addr, dup, c_fetch, hidden_flag, invert, and, swap, c_store,
-                lbracket,
+                addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"), N(b"invert"), N(b"and"), N(b"swap"), N(b"c!"),
+                N(b"["),
             ]
         );
 
@@ -722,10 +692,13 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let lit_xt = self.op_xts[Op::Lit as usize];
         for &token in body {
             match token {
-                Token::Xt(x) => self.comma(x)?,
                 Token::Lit(v) => {
                     self.comma(lit_xt)?;
                     self.comma(v)?;
+                }
+                Token::Name(name) => {
+                    let xt = self.xt(name)?;
+                    self.comma(xt)?;
                 }
             }
         }
@@ -828,7 +801,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         Ok(None)
     }
 
-    fn xt(&mut self, name: &[u8]) -> Result<usize> {
+    fn xt(&self, name: &[u8]) -> Result<usize> {
         self.lookup(name)?
             .map(|(xt, _)| xt)
             .ok_or_else(|| Error::UndefinedWord(name.try_into().unwrap_or_default()))
