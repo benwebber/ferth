@@ -297,22 +297,6 @@ variable hld
 
 : recurse (latest) @ , ; immediate
 
-: evaluate ( i*x c-addr u -- j*x )
-  \ Save input source specification.
-  (source-addr) @ >r
-  (source-len) @ >r
-  >in @ >r
-  \ Set input source to string.
-  (source-len) !
-  (source-addr) !
-  0 >in !
-  (interpret)
-  \ Restore input source specification.
-  r> >in !
-  r> (source-len) !
-  r> (source-addr) !
-;
-
 \ ==============================================================================
 \ LOOPS
 \ ==============================================================================
@@ -415,6 +399,22 @@ variable (leave-list)
     then
   repeat
   2drop
+;
+
+: evaluate ( i*x c-addr u -- j*x )
+  \ Save input source specification.
+  (source-addr) @ >r
+  (source-len) @ >r
+  >in @ >r
+  \ Set input source to string.
+  (source-len) !
+  (source-addr) !
+  0 >in !
+  (interpret)
+  \ Restore input source specification.
+  r> >in !
+  r> (source-len) !
+  r> (source-addr) !
 ;
 
 : quit

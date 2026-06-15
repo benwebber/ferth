@@ -286,7 +286,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     fn register_builtins(&mut self) -> Result<()> {
         let builtins: &[(&[u8], Builtin<M, I>, u8)] = &[
             (b"'", Self::tick, 0),
-            (b"(interpret)", Self::interpret, 0),
             (b"(number)", Self::number, 0),
             (b"emit", Self::emit, 0),
             (b"(find)", Self::find, 0),
@@ -869,7 +868,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// The main interpreter loop.
     ///
     /// <https://forth-standard.org/standard/usage#section.3.4>
-    // TODO: Move this to Forth.
     fn interpret(&mut self) -> Result<()> {
         loop {
             let c_addr = self.parse_word(BL as u8)?;
