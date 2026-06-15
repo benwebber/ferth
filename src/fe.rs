@@ -138,9 +138,6 @@ pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
     io: I,
     // lookup table for Op CFAs
     op_xts: [usize; 256],
-    // The XT of `,`. Saved during bootstrap for `postpone`.
-    // TODO: Figure out a better way to define both comma and postpone.
-    comma_xt: usize,
     builtins: [Option<Builtin<M, I>>; MAX_BUILTINS],
     builtins_len: usize,
     layout_base: usize,
@@ -166,7 +163,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             builtins: [None; MAX_BUILTINS],
             builtins_len: 0,
             op_xts: [0; 256],
-            comma_xt: 0,
             layout_base,
             env,
         };
@@ -429,8 +425,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             Op::DoCol,
             [align, addr!(HERE), fetch, store, L(1), cells, allot]
         );
-        let Xt(comma_xt) = comma else { unreachable!() };
-        self.comma_xt = comma_xt;
 
         // : literal ( x -- ) ['] (lit) , , ; immediate
         //
@@ -895,7 +889,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
             // Compile `(lit) xt ,` so that the current word *compiles* the target when it runs.
             self.comma(self.op_xts[Op::Lit as usize])?;
             self.comma(xt)?;
-            self.comma(self.comma_xt)
+            let comma_xt = self.xt(b",")?;
+            self.comma(comma_xt)
         }
     }
 
