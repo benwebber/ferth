@@ -27,7 +27,6 @@ impl_ior!(
     UNDEFINED_WORD = -13,
     PARSED_STRING_OVERFLOW = -18,
     DEFINITION_NAME_TOO_LONG = -19,
-    UNSUPPORTED_OPERATION = -21,
 );
 
 impl From<Ior> for isize {
@@ -41,7 +40,7 @@ impl TryFrom<Error> for Ior {
 
     fn try_from(e: Error) -> std::result::Result<Self, Self::Error> {
         Ok(match e {
-            Error::Vm(v) => Ior::from(v),
+            Error::Vm(v) => Ior::try_from(v).map_err(Error::Vm)?,
             Error::Throw(n) => Ior(n),
             Error::UndefinedWord(_) => Ior(Ior::UNDEFINED_WORD),
             Error::CountedStrTooLong(_) => Ior(Ior::DEFINITION_NAME_TOO_LONG),
@@ -52,9 +51,10 @@ impl TryFrom<Error> for Ior {
     }
 }
 
-impl From<VmError> for Ior {
-    fn from(e: VmError) -> Self {
-        Self(match e {
+impl TryFrom<VmError> for Ior {
+    type Error = VmError;
+    fn try_from(e: VmError) -> core::result::Result<Self, VmError> {
+        Ok(Self(match e {
             VmError::StackOverflow => Self::STACK_OVERFLOW,
             VmError::StackUnderflow => Self::STACK_UNDERFLOW,
             VmError::ReturnStackOverflow => Self::RETURN_STACK_OVERFLOW,
@@ -63,8 +63,8 @@ impl From<VmError> for Ior {
                 Self::INVALID_MEMORY_ADDRESS
             }
             VmError::DivisionByZero => Self::DIVISION_BY_ZERO,
-            VmError::InvalidOpCode(_) => Self::UNSUPPORTED_OPERATION,
-        })
+            VmError::InvalidOpCode(_) => return Err(e),
+        }))
     }
 }
 
