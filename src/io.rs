@@ -1,6 +1,9 @@
 //! System I/O.
 use crate::{Error, Result};
 
+#[cfg(feature = "repl")]
+pub mod repl;
+
 pub trait Io {
     /// Read a single character (byte) from the input source.
     ///
