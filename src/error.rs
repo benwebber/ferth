@@ -47,11 +47,7 @@ impl TryFrom<Error> for Ior {
             Error::CountedStrTooLong(_) => Ior(Ior::DEFINITION_NAME_TOO_LONG),
             Error::LineTooLong => Ior(Ior::PARSED_STRING_OVERFLOW),
             // All others fall through as normal.
-            e @ (Error::Io
-            | Error::InvalidUtf8(_)
-            | Error::InvalidBuiltin(_)
-            | Error::BuiltinTableFull
-            | Error::StacksTooSmall) => return Err(e),
+            e @ (Error::Io | Error::Fault(_)) => return Err(e),
         })
     }
 }
@@ -83,22 +79,34 @@ pub enum Error {
     CountedStrTooLong(usize),
     /// The name does not match a known word in the dictionary.
     UndefinedWord(CountedStr31),
-    /// A string is not valid UTF-8.
-    InvalidUtf8(core::str::Utf8Error),
     /// A generic error for I/O errors.
     Io,
+    /// The line length (in bytes) exceeds the size of the terminal input buffer.
+    LineTooLong,
+    Throw(isize),
+    Fault(Fault),
+}
+
+/// An irrecoverable error.
+#[derive(Debug, PartialEq)]
+pub enum Fault {
     /// No builtin exists with the wrapped index.
     InvalidBuiltin(u8),
     /// The builtins table is full.
     BuiltinTableFull,
-    /// The line length (in bytes) exceeds the size of the terminal input buffer.
-    LineTooLong,
     /// The stacks are too small.
     ///
     /// The data space must start above the opcode range in order to distinguish between opcodes
     /// and defined words.
     StacksTooSmall,
-    Throw(isize),
+    /// A string is not valid UTF-8.
+    InvalidUtf8(core::str::Utf8Error),
+}
+
+impl From<Fault> for Error {
+    fn from(e: Fault) -> Self {
+        Self::Fault(e)
+    }
 }
 
 impl From<VmError> for Error {
@@ -113,13 +121,21 @@ impl core::fmt::Display for Error {
             Self::Vm(e) => write!(f, "{e}"),
             Self::CountedStrTooLong(len) => write!(f, "counted string too long: {len}"),
             Self::UndefinedWord(name) => write!(f, "undefined word: {name}"),
-            Self::InvalidUtf8(e) => write!(f, "invalid UTF-8: {e}"),
             Self::Io => write!(f, "I/O error"),
+            Self::LineTooLong => write!(f, "line too long"),
+            Self::Throw(n) => write!(f, "error: {n}"),
+            Self::Fault(fault) => write!(f, "fatal error: {}", fault),
+        }
+    }
+}
+
+impl core::fmt::Display for Fault {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidUtf8(e) => write!(f, "invalid UTF-8: {e}"),
             Self::InvalidBuiltin(idx) => write!(f, "invalid builtin: 0x{idx:02x}"),
             Self::BuiltinTableFull => write!(f, "builtin table full"),
-            Self::LineTooLong => write!(f, "line too long"),
             Self::StacksTooSmall => write!(f, "stacks too small"),
-            Self::Throw(n) => write!(f, "error: {n}"),
         }
     }
 }
@@ -128,6 +144,15 @@ impl core::error::Error for Error {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Vm(e) => Some(e),
+            Self::Fault(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl core::error::Error for Fault {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
             Self::InvalidUtf8(e) => Some(e),
             _ => None,
         }
