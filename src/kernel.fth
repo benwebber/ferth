@@ -53,28 +53,6 @@
   -1 state !
 ;
 
-: - invert 1 + + ;
-: and (nand) invert ;
-: ;
-  ['] (exit) ,
-  \ Store bodylen.
-  (latest) @ dup 3 cells - swap 1 cells + (here) @ swap - swap !
-  \ Unset hidden flag.
-  (latest) @ (flags-addr) dup c@ (hidden-flag) invert and swap c!
-  0 state !
-; immediate
-
-\ Redefine dependencies to fix bodylen.
-\ TODO: Consider patching without completely redefining them.
-: invert dup (nand) ;
-: or invert swap invert (nand) ;
-: immediate (latest) @ (flags-addr) dup c@ (immediate-flag) or swap c! ;
-: source (source-addr) @ (source-len) @ ;
-: \ source >in ! drop ; immediate
-: ['] ' postpone literal ; immediate
-: - invert 1 + + ;
-: and (nand) invert ;
-
 \ 2. DEFINING WORDS
 \ ================
 \
@@ -82,6 +60,9 @@
 \ anything Fe loads) has the defining words and the exception mechanism.
 
 : ( $29 parse drop drop ; immediate
+
+: and (nand) invert ;
+: - invert 1 + + ;
 
 : bl $20 ;
 : here (here) @ ;

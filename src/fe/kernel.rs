@@ -367,12 +367,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             [L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+")]
         );
 
-        // Finally, compile basic versions of `:` and `;`.
-        //
-        // These basic versions skip some bookkeeping. `:` does not set the hidden bit, and `;`
-        // does not set the bodylen field. We use them to bootstrap proper definitions. Any word
-        // defined by these words in the kernel must be redefined afterwards with the replaced
-        // versions.
+        // Finally, compile the bootstrap `:` and `;`.
 
         // : :
         //   bl parse (header)
@@ -380,7 +375,8 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         //   -1 state !
         // ;
         //
-        // Parse a word, create a definition for it and compile `DoCol` to the code address.
+        // Parse a word, create a definition for it and compile `DoCol` to the code address. This
+        // simple definition does not set the hidden flag. The Forth kernel replaces it.
         compile!(
             b":",
             0,
@@ -393,23 +389,45 @@ impl<M: Mem, I: Io> Kernel<M, I> {
 
         // : ;
         //   ['] (exit) ,
-        //   (latest) @ (flags-addr) dup c@ (hidden-flag) invert and swap c!
+        //   \ Calculate and set bodylen.
+        //   (latest) @                 ( latest )
+        //   dup 3 cells -              ( latest bodylen-addr )
+        //   swap 1 cells +             ( bodylen-addr body-addr )
+        //   here swap -                ( bodylen-addr bodylen )
+        //   swap !                     ( )
+        //   \ Unset hidden flag.
+        //   (latest) @                 ( latest )
+        //   (flags-addr) dup c@        ( flags-addr flags )
+        //   (hidden-flag) invert and   ( flags-addr flags' )
+        //   swap c!
         //   0 state !
         // ; immediate
         //
-        // Compile a literal to compile `exit`, unset the hidden flag, then exit compilation mode.
-        // Unlike the patched `;`, this does not compute bodylen.
+        // Compile a literal to compile `exit`, store the bodylen, unset the hidden flag, then exit
+        // compilation mode.
+        //
+        // Unlike `:`, this definition must be functionally complete. It must unset the hidden flag
+        // and set bodylen. We cannot define a simpler version of `;` here and redefine a more
+        // complete version in in Forth because this `;` would terminate that definition.
+        //
+        // It should be possible, however, to implement an optimizing `;` in Forth that compiles
+        // jumps for tail calls.
         compile!(
             b";",
             IMMEDIATE,
             [
                 L(self.op_xt(Op::Exit)), N(b","),
-                // The bootstrap `:` doesn't set the hidden flag, but the Forth version does, and
-                // *this* version of `;` closes the Forth version's definitions until we redefine
-                // `;`.
-                addr!(LATEST), N(b"@"), N(b"(flags-addr)"), N(b"dup"), N(b"c@"), N(b"(hidden-flag)"),
-                N(b"dup"), N(b"(nand)"), // invert
-                N(b"(nand)"), N(b"dup"), N(b"(nand)"), // and ((nand) invert)
+                // Calculate and set bodylen.
+                addr!(LATEST), N(b"@"),
+                N(b"dup"), L((3 * SIZE).wrapping_neg()), N(b"+"),
+                N(b"swap"), L(SIZE), N(b"+"),
+                addr!(HERE), N(b"@"), N(b"swap"),
+                N(b"dup"), N(b"(nand)"), L(SIZE), N(b"+"), N(b"+"), // inline -
+                N(b"swap"), N(b"!"),
+                // Unset hidden flag.
+                addr!(LATEST), N(b"@"),
+                N(b"(flags-addr)"), N(b"dup"), N(b"c@"),
+                N(b"(hidden-flag)"), N(b"dup"), N(b"(nand)"), N(b"(nand)"), N(b"dup"), N(b"(nand)"), // inline invert, and
                 N(b"swap"), N(b"c!"),
                 L(0), N(b"state"), N(b"!"),
             ]
