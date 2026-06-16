@@ -41,7 +41,6 @@ impl TryFrom<Error> for Ior {
         Ok(match e {
             Error::Vm(v) => Ior::try_from(v).map_err(Error::Vm)?,
             Error::Throw(n) => Ior(n),
-            Error::LineTooLong => Ior(Ior::PARSED_STRING_OVERFLOW),
             // All others fall through as normal.
             e @ (Error::Io | Error::Fault(_)) => return Err(e),
         })
@@ -72,8 +71,6 @@ pub enum Error {
     Vm(VmError),
     /// A generic error for I/O errors.
     Io,
-    /// The line length (in bytes) exceeds the size of the terminal input buffer.
-    LineTooLong,
     Throw(isize),
     Fault(Fault),
 }
@@ -111,7 +108,6 @@ impl core::fmt::Display for Error {
         match self {
             Self::Vm(e) => write!(f, "{e}"),
             Self::Io => write!(f, "I/O error"),
-            Self::LineTooLong => write!(f, "line too long"),
             Self::Throw(n) => write!(f, "error: {n}"),
             Self::Fault(fault) => write!(f, "fatal error: {}", fault),
         }

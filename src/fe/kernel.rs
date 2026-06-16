@@ -1077,7 +1077,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
 
     pub(super) fn set_source(&mut self, code: &[u8]) -> Result<()> {
         if code.len() > INPUT_BUFFER_SIZE {
-            return Err(Error::LineTooLong);
+            return Err(Error::Throw(Ior::PARSED_STRING_OVERFLOW));
         }
         let input_addr = self.layout_addr(Layout::INPUT);
         self.data.write(input_addr, code)?;
