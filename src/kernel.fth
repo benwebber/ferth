@@ -32,7 +32,7 @@
 \
 \ Builtins
 \ --------
-\ ' postpone parse (find) (number?) (undefined)
+\ ' postpone parse (find) (number?)
 \
 \ Variables
 \ ---------
@@ -164,7 +164,7 @@ variable handler
       (number?) if              ( n )
         state @ if postpone literal then \ Left on stack if in interpretation mode.
       else
-        (undefined)             \ TODO: -13 throw
+        -13 throw
       then
     then
   repeat

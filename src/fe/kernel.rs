@@ -3,6 +3,7 @@ use core::mem::offset_of;
 
 use crate::counted::CountedStr31;
 use crate::data::{Data, Mem};
+use crate::error::UNDEFINED_WORD;
 use crate::io::{Io, NoIo};
 use crate::parser;
 use crate::types::{Double, SignedDouble};
@@ -108,6 +109,10 @@ pub struct Layout {
     source_addr: usize,
     /// The current input buffer length (`(source-len)`).
     source_len: usize,
+    /// The input source.
+    ///
+    /// String: -1, user input device: 0.
+    source_id: usize,
     /// The initial data stack pointer (`(sp0)`).
     sp0: usize,
     /// The initial return stack pointer (`(rp0)`).
@@ -125,6 +130,7 @@ impl Layout {
     pub const TO_IN: usize = offset_of!(Self, to_in);
     pub const SOURCE_ADDR: usize = offset_of!(Self, source_addr);
     pub const SOURCE_LEN: usize = offset_of!(Self, source_len);
+    pub const SOURCE_ID: usize = offset_of!(Self, source_id);
     pub const SP0: usize = offset_of!(Self, sp0);
     pub const RP0: usize = offset_of!(Self, rp0);
     pub const INPUT: usize = offset_of!(Self, input);
@@ -219,6 +225,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             (Layout::LATEST, 0),
             (Layout::SOURCE_ADDR, self.layout_base + Layout::INPUT),
             (Layout::SOURCE_LEN, 0),
+            (Layout::SOURCE_ID, 0),
             (Layout::TO_IN, 0),
             (Layout::BASE, 10),
             (Layout::STATE, 0),
@@ -296,7 +303,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             (b"refill", Self::refill, 0),
             (b"(header)", Self::header, 0),
             (b">number", Self::to_number, 0),
-            (b"(undefined)", Self::undefined, 0),
             (b"(number?)", Self::numberq, 0),
         ];
         for (name, f, flags) in builtins {
@@ -506,6 +512,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             (b"(latest)", Layout::LATEST),
             (b"(source-addr)", Layout::SOURCE_ADDR),
             (b"(source-len)", Layout::SOURCE_LEN),
+            (b"(source-id)", Layout::SOURCE_ID),
             (b">in", Layout::TO_IN),
             (b"base", Layout::BASE),
             (b"state", Layout::STATE),
@@ -856,6 +863,20 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         }
     }
 
+    pub(super) fn catch_interpret(&mut self) -> Result<()> {
+        let (interpret, _) = self
+            .lookup(b"(interpret)")?
+            .ok_or(Error::Throw(UNDEFINED_WORD))?;
+        let (catch, _) = self.lookup(b"catch")?.ok_or(Error::Throw(UNDEFINED_WORD))?;
+        self.push(interpret)?;
+        self.run(catch)?;
+        let code = self.pop()? as isize;
+        if code != 0 {
+            return Err(Error::Throw(code));
+        }
+        Ok(())
+    }
+
     /// Parse the next token in the parse area.
     ///
     /// ```text
@@ -923,7 +944,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// ```
     ///
     /// See [`REFILL`](https://forth-standard.org/standard/core/REFILL).
-    fn refill(&mut self) -> Result<()> {
+    pub(super) fn refill(&mut self) -> Result<()> {
         let mut buf = [0u8; INPUT_BUFFER_SIZE];
         let input_addr = self.layout_addr(Layout::INPUT);
         match self.io.read_line(&mut buf) {
@@ -984,18 +1005,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         Error::UndefinedWord(name)
     }
 
-    fn undefined(&mut self) -> Result<()> {
-        let len = self.pop()?;
-        let caddr = self.pop()?;
-        let mut buf = [0u8; MAX_WORD_LEN];
-        buf[..len].copy_from_slice(self.data.read(caddr, len)?);
-        let name = core::str::from_utf8(&buf[..len])
-            .ok()
-            .and_then(|s| CountedStr31::try_from(s).ok())
-            .unwrap_or_default();
-        Err(Error::UndefinedWord(name))
-    }
-
     fn numberq(&mut self) -> Result<()> {
         let len = self.pop()?;
         let caddr = self.pop()?;
@@ -1039,6 +1048,8 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             .write_cell(self.layout_addr(Layout::SOURCE_ADDR), input_addr)?;
         self.data
             .write_cell(self.layout_addr(Layout::SOURCE_LEN), code.len())?;
+        self.data
+            .write_cell(self.layout_addr(Layout::SOURCE_ID), -1isize as usize)?;
         self.data.write_cell(self.layout_addr(Layout::TO_IN), 0)?;
         Ok(())
     }

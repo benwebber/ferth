@@ -5,6 +5,8 @@ use crate::vm::VmError;
 /// The result type of this crate.
 pub type Result<T> = core::result::Result<T, Error>;
 
+pub const UNDEFINED_WORD: isize = -13;
+
 /// Errors returned by this crate.
 #[derive(Debug, PartialEq)]
 pub enum Error {
@@ -29,6 +31,7 @@ pub enum Error {
     /// The data space must start above the opcode range in order to distinguish between opcodes
     /// and defined words.
     StacksTooSmall,
+    Throw(isize),
 }
 
 impl From<VmError> for Error {
@@ -49,6 +52,7 @@ impl core::fmt::Display for Error {
             Self::BuiltinTableFull => write!(f, "builtin table full"),
             Self::LineTooLong => write!(f, "line too long"),
             Self::StacksTooSmall => write!(f, "stacks too small"),
+            Self::Throw(n) => write!(f, "error: {n}"),
         }
     }
 }

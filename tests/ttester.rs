@@ -35,7 +35,7 @@ macro_rules! ttester {
             let result = (|| -> ferth::Result<()> {
                 let io = BufIo::new(&src, &mut dest);
                 let mut fe = Fe::new([0u8; 65536], io)?;
-                fe.evaluate(b"quit")
+                fe.load()
             })();
             result.map_err(|error| {
                 let end = dest.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);

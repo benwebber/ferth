@@ -1,7 +1,6 @@
-use crate::counted::CountedStr31;
 use crate::data::Mem;
 use crate::io::{Io, NoIo};
-use crate::{Error, Result};
+use crate::{Error, FALSE, Result};
 
 mod kernel;
 
@@ -23,13 +22,27 @@ impl<M: Mem, I: Io> Fe<M, I> {
         })
     }
 
-    pub fn evaluate(&mut self, code: &[u8]) -> Result<()> {
-        self.kernel.set_source(code)?;
-        let s = CountedStr31::try_from(b"(interpret)".as_slice())?;
-        let (xt, _) = self
-            .kernel
-            .lookup(b"(interpret)")?
-            .ok_or(Error::UndefinedWord(s))?;
+    pub fn evaluate(&mut self, code: impl AsRef<[u8]>) -> Result<()> {
+        for line in code.as_ref().split(|&u| u == b'\n') {
+            self.kernel.set_source(line)?;
+            self.kernel.catch_interpret()?;
+        }
+        Ok(())
+    }
+
+    pub fn load(&mut self) -> Result<()> {
+        loop {
+            self.kernel.refill()?;
+            if self.kernel.pop()? == FALSE {
+                break;
+            }
+            self.kernel.catch_interpret()?;
+        }
+        Ok(())
+    }
+
+    pub fn quit(&mut self) -> Result<()> {
+        let (xt, _) = self.kernel.lookup(b"quit")?.ok_or(Error::Throw(-13))?;
         self.kernel.run(xt)
     }
 
@@ -57,7 +70,7 @@ mod tests {
     #[test]
     fn test_undefined_word() {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
-        assert!(matches!(fe.evaluate(b"nope"), Err(Error::UndefinedWord(_))));
+        assert!(matches!(fe.evaluate(b"nope"), Err(Error::Throw(-13))));
     }
 
     #[test]
