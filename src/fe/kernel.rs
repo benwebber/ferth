@@ -1,7 +1,6 @@
 //! The outer interpreter.
 use core::mem::offset_of;
 
-use crate::counted::CountedStr31;
 use crate::data::{Data, Mem};
 use crate::error::{Fault, Ior, UNDEFINED_WORD};
 use crate::io::{Io, NoIo};
@@ -119,6 +118,10 @@ pub struct Layout {
     rp0: usize,
     /// The terminal input buffer.
     input: [u8; INPUT_BUFFER_SIZE],
+    /// The address of a buffer containing a diagnostic message.
+    diagnostic_addr: usize,
+    /// The length of the message in the diagnostic buffer.
+    diagnostic_len: usize,
 }
 
 impl Layout {
@@ -134,6 +137,8 @@ impl Layout {
     pub const SP0: usize = offset_of!(Self, sp0);
     pub const RP0: usize = offset_of!(Self, rp0);
     pub const INPUT: usize = offset_of!(Self, input);
+    pub const DIAGNOSTIC_ADDR: usize = offset_of!(Self, diagnostic_addr);
+    pub const DIAGNOSTIC_LEN: usize = offset_of!(Self, diagnostic_len);
     pub const DATA: usize = size_of::<Self>();
 }
 
@@ -231,6 +236,8 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             (Layout::STATE, 0),
             (Layout::SP0, Vm::DS_ADDR),
             (Layout::RP0, self.vm.rs_addr() + SIZE),
+            (Layout::DIAGNOSTIC_ADDR, 0),
+            (Layout::DIAGNOSTIC_LEN, 0),
         ];
         for (offset, value) in variables {
             self.data.write_cell(self.layout_base + offset, *value)?;
@@ -518,6 +525,8 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             (b"state", Layout::STATE),
             (b"(sp0)", Layout::SP0),
             (b"(rp0)", Layout::RP0),
+            (b"(diagnostic-addr)", Layout::DIAGNOSTIC_ADDR),
+            (b"(diagnostic-len)", Layout::DIAGNOSTIC_LEN),
         ];
         for (name, offset) in variables {
             self.compile(name, 0, Op::DoCol, &[Token::Lit(self.layout_base + offset)])?;
@@ -585,10 +594,11 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// After `(header)` executes, `here` points to the `code` field address.
     fn header(&mut self) -> Result<()> {
         let len = self.pop()?;
-        if len > MAX_WORD_LEN {
-            return Err(Error::CountedStrTooLong(len));
-        }
         let addr = self.pop()?;
+        if len > MAX_WORD_LEN {
+            self.diagnostic(addr, len)?;
+            return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
+        }
         let mut buf = [0u8; MAX_WORD_LEN];
         buf[..len].copy_from_slice(self.data.read(addr, len)?);
         let cfa = self.write_header(&buf[..len], 0)?;
@@ -628,7 +638,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         let len: u8 = name
             .len()
             .try_into()
-            .map_err(|_| Error::CountedStrTooLong(name.len()))?;
+            .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
         let latest = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
         // pad the name so as to always align info
@@ -753,7 +763,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     fn xt(&self, name: &[u8]) -> Result<usize> {
         self.lookup(name)?
             .map(|(xt, _)| xt)
-            .ok_or_else(|| Error::UndefinedWord(name.try_into().unwrap_or_default()))
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))
     }
 
     /// ( "<spaces>name" -- xt )
@@ -765,7 +775,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.find()?;
         let flag = self.pop()? as isize;
         if flag == 0 {
-            return Err(self.make_undefined(addr, len));
+            return self.undefined(addr, len);
         }
         Ok(())
     }
@@ -778,7 +788,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.find()?;
         let flag = self.pop()? as isize;
         if flag == 0 {
-            return Err(self.make_undefined(addr, len));
+            return self.undefined(addr, len);
         }
         let xt = self.pop()?;
         let is_immediate = flag == 1;
@@ -857,7 +867,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                     // numberq leaves ( c-addr u ) on failure; discard and report the word.
                     self.pop()?;
                     self.pop()?;
-                    return Err(self.make_undefined(addr, len));
+                    return self.undefined(addr, len);
                 }
             }
         }
@@ -995,14 +1005,9 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         Ok(cfa)
     }
 
-    fn make_undefined(&self, addr: usize, len: usize) -> Error {
-        // Return an empty name for an invalid address instead of panicking.
-        let bytes = self.data.read(addr, len).unwrap_or(&[]);
-        let name = core::str::from_utf8(bytes)
-            .ok()
-            .and_then(|s| CountedStr31::try_from(s).ok())
-            .unwrap_or_default();
-        Error::UndefinedWord(name)
+    fn undefined(&mut self, addr: usize, len: usize) -> Result<()> {
+        self.diagnostic(addr, len)?;
+        Err(Error::Throw(Ior::UNDEFINED_WORD))
     }
 
     fn numberq(&mut self) -> Result<()> {
@@ -1058,6 +1063,14 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             // Bootstrap errors bubble up.
             None => Err(Error::Throw(ior.into())),
         }
+    }
+
+    fn diagnostic(&mut self, addr: usize, len: usize) -> Result<()> {
+        self.data
+            .write_cell(self.layout_addr(Layout::DIAGNOSTIC_ADDR), addr)?;
+        self.data
+            .write_cell(self.layout_addr(Layout::DIAGNOSTIC_LEN), len)?;
+        Ok(())
     }
 
     pub(super) fn set_source(&mut self, code: &[u8]) -> Result<()> {

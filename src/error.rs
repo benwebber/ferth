@@ -1,5 +1,4 @@
 //! Error and result types.
-use crate::counted::CountedStr31;
 use crate::vm::VmError;
 
 macro_rules! impl_ior {
@@ -38,12 +37,10 @@ impl From<Ior> for isize {
 impl TryFrom<Error> for Ior {
     type Error = Error;
 
-    fn try_from(e: Error) -> std::result::Result<Self, Self::Error> {
+    fn try_from(e: Error) -> core::result::Result<Self, Self::Error> {
         Ok(match e {
             Error::Vm(v) => Ior::try_from(v).map_err(Error::Vm)?,
             Error::Throw(n) => Ior(n),
-            Error::UndefinedWord(_) => Ior(Ior::UNDEFINED_WORD),
-            Error::CountedStrTooLong(_) => Ior(Ior::DEFINITION_NAME_TOO_LONG),
             Error::LineTooLong => Ior(Ior::PARSED_STRING_OVERFLOW),
             // All others fall through as normal.
             e @ (Error::Io | Error::Fault(_)) => return Err(e),
@@ -75,10 +72,6 @@ pub const UNDEFINED_WORD: isize = -13;
 pub enum Error {
     /// An error raised by the inner interpreter.
     Vm(VmError),
-    /// The length of a string is too long for the Forth counted string type (255 bytes).
-    CountedStrTooLong(usize),
-    /// The name does not match a known word in the dictionary.
-    UndefinedWord(CountedStr31),
     /// A generic error for I/O errors.
     Io,
     /// The line length (in bytes) exceeds the size of the terminal input buffer.
@@ -119,8 +112,6 @@ impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Vm(e) => write!(f, "{e}"),
-            Self::CountedStrTooLong(len) => write!(f, "counted string too long: {len}"),
-            Self::UndefinedWord(name) => write!(f, "undefined word: {name}"),
             Self::Io => write!(f, "I/O error"),
             Self::LineTooLong => write!(f, "line too long"),
             Self::Throw(n) => write!(f, "error: {n}"),

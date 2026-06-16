@@ -18,7 +18,6 @@
 //! ```
 #![cfg_attr(not(feature = "std"), no_std)]
 
-mod counted;
 mod data;
 mod error;
 mod fe;
