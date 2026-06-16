@@ -1037,17 +1037,17 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                     stop = match f(self) {
                         Ok(()) => match self.vm.resume(&mut self.data, token) {
                             Ok(s) => s,
-                            Err(e) => self.throw_error(e.into())?,
+                            Err(e) => self.throw(e.into())?,
                         },
-                        Err(e) => self.throw_error(e)?,
+                        Err(e) => self.throw(e)?,
                     };
                 }
             }
         }
     }
 
-    /// Throw a VmError as a Forth exception.
-    fn throw_error(&mut self, e: Error) -> Result<Stop> {
+    /// Throw an [`Error`] as a Forth exception.
+    fn throw(&mut self, e: Error) -> Result<Stop> {
         let ior = match Ior::try_from(e) {
             Ok(ior) => ior,
             Err(e) => {
