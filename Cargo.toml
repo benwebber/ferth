@@ -17,7 +17,7 @@ unsafe = []
 
 [[bin]]
 name = "fe"
-required-features = ["repl"]
+required-features = ["std"]
 
 [[bench]]
 name = "forth"

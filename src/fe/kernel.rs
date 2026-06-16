@@ -3,7 +3,7 @@ use core::mem::offset_of;
 
 use crate::counted::CountedStr31;
 use crate::data::{Data, Mem};
-use crate::error::UNDEFINED_WORD;
+use crate::error::{Ior, UNDEFINED_WORD};
 use crate::io::{Io, NoIo};
 use crate::parser;
 use crate::types::{Double, SignedDouble};
@@ -1027,14 +1027,36 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                 Stop::Yield(token) => {
                     let f = self.builtins[token.index]
                         .ok_or(Error::InvalidBuiltin(token.index as u8))?;
-                    if let Err(e) = f(self) {
-                        let _ = self.data.write_cell(self.layout_addr(Layout::STATE), FALSE);
-                        self.vm.reset();
-                        return Err(e);
-                    }
-                    stop = self.vm.resume(&mut self.data, token)?;
+                    stop = match f(self) {
+                        Ok(()) => match self.vm.resume(&mut self.data, token) {
+                            Ok(s) => s,
+                            Err(e) => self.throw_error(e.into())?,
+                        },
+                        Err(e) => self.throw_error(e)?,
+                    };
                 }
             }
+        }
+    }
+
+    /// Throw a VmError as a Forth exception.
+    fn throw_error(&mut self, e: Error) -> Result<Stop> {
+        let ior = match Ior::try_from(e) {
+            Ok(ior) => ior,
+            Err(e) => {
+                let _ = self.data.write_cell(self.layout_addr(Layout::STATE), FALSE);
+                self.vm.reset();
+                return Err(e);
+            }
+        };
+        match self.lookup(b"throw")? {
+            Some((throw_xt, _)) => {
+                // TODO: This push will fail if the data stack is already full.
+                self.push(isize::from(ior) as usize)?;
+                Ok(self.vm.call(&mut self.data, throw_xt)?)
+            }
+            // Bootstrap errors bubble up.
+            None => Err(Error::Throw(ior.into())),
         }
     }
 

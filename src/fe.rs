@@ -1,4 +1,5 @@
 use crate::data::Mem;
+use crate::error::Ior;
 use crate::io::{Io, NoIo};
 use crate::{Error, FALSE, Result};
 
@@ -42,7 +43,10 @@ impl<M: Mem, I: Io> Fe<M, I> {
     }
 
     pub fn quit(&mut self) -> Result<()> {
-        let (xt, _) = self.kernel.lookup(b"quit")?.ok_or(Error::Throw(-13))?;
+        let (xt, _) = self
+            .kernel
+            .lookup(b"quit")?
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
         self.kernel.run(xt)
     }
 
@@ -70,7 +74,10 @@ mod tests {
     #[test]
     fn test_undefined_word() {
         let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
-        assert!(matches!(fe.evaluate(b"nope"), Err(Error::Throw(-13))));
+        assert!(matches!(
+            fe.evaluate(b"nope"),
+            Err(Error::Throw(Ior::UNDEFINED_WORD))
+        ));
     }
 
     #[test]
@@ -81,7 +88,10 @@ mod tests {
         assert!(fe.evaluate(&ok).is_ok());
         // A name that is too long returns an error instead of panicking.
         let long = [b": ".as_slice(), &[b'a'; 40], b" 1 ;"].concat();
-        assert_eq!(fe.evaluate(&long), Err(Error::CountedStrTooLong(40)));
+        assert_eq!(
+            fe.evaluate(&long),
+            Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))
+        );
     }
 
     #[test]

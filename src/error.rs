@@ -5,6 +5,65 @@ use crate::vm::VmError;
 /// The result type of this crate.
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// An error code.
+#[derive(Debug, Clone, Copy)]
+pub struct Ior(pub isize);
+
+impl Ior {
+    pub const STACK_OVERFLOW: isize = -3;
+    pub const STACK_UNDERFLOW: isize = -4;
+    pub const RETURN_STACK_OVERFLOW: isize = -5;
+    pub const RETURN_STACK_UNDERFLOW: isize = -6;
+    pub const INVALID_MEMORY_ADDRESS: isize = -9;
+    pub const DIVISION_BY_ZERO: isize = -10;
+    pub const UNDEFINED_WORD: isize = -13;
+    pub const PARSED_STRING_OVERFLOW: isize = -18;
+    pub const DEFINITION_NAME_TOO_LONG: isize = -19;
+    pub const UNSUPPORTED_OPERATION: isize = -21;
+}
+
+impl From<Ior> for isize {
+    fn from(ior: Ior) -> Self {
+        ior.0
+    }
+}
+
+impl TryFrom<Error> for Ior {
+    type Error = Error;
+
+    fn try_from(e: Error) -> std::result::Result<Self, Self::Error> {
+        Ok(match e {
+            Error::Vm(v) => Ior::from(v),
+            Error::Throw(n) => Ior(n),
+            Error::UndefinedWord(_) => Ior(Ior::UNDEFINED_WORD),
+            Error::CountedStrTooLong(_) => Ior(Ior::DEFINITION_NAME_TOO_LONG),
+            Error::LineTooLong => Ior(Ior::PARSED_STRING_OVERFLOW),
+            // All others fall through as normal.
+            e @ (Error::Io
+            | Error::InvalidUtf8(_)
+            | Error::InvalidBuiltin(_)
+            | Error::BuiltinTableFull
+            | Error::StacksTooSmall) => return Err(e),
+        })
+    }
+}
+
+impl From<VmError> for Ior {
+    fn from(e: VmError) -> Self {
+        Self(match e {
+            VmError::StackOverflow => Self::STACK_OVERFLOW,
+            VmError::StackUnderflow => Self::STACK_UNDERFLOW,
+            VmError::ReturnStackOverflow => Self::RETURN_STACK_OVERFLOW,
+            VmError::ReturnStackUnderflow => Self::RETURN_STACK_UNDERFLOW,
+            VmError::AddressOutOfRange(_) | VmError::AddressMisaligned(_) => {
+                Self::INVALID_MEMORY_ADDRESS
+            }
+            VmError::DivisionByZero => Self::DIVISION_BY_ZERO,
+            VmError::InvalidOpCode(_) => Self::UNSUPPORTED_OPERATION,
+        })
+    }
+}
+
 pub const UNDEFINED_WORD: isize = -13;
 
 /// Errors returned by this crate.

@@ -109,11 +109,18 @@ impl Io for StdIo {
 
     fn emit(&mut self, u: u8) -> Result<()> {
         use std::io::Write;
-        std::io::stdout().write_all(&[u]).map_err(|_| Error::Io)
+        let mut stdout = std::io::stdout();
+        stdout.write_all(&[u]).map_err(|_| Error::Io)?;
+        if u == b'\n' {
+            stdout.flush().map_err(|_| Error::Io)?;
+        }
+        Ok(())
     }
 
     fn read_line(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
-        use std::io::BufRead;
+        // Flush pending output before waiting on the prompt.
+        use std::io::{BufRead, Write};
+        std::io::stdout().flush().map_err(|_| Error::Io)?;
         let mut stdin = std::io::stdin().lock();
         let mut line = Vec::new();
         let n = stdin.read_until(b'\n', &mut line).map_err(|_| Error::Io)?;
