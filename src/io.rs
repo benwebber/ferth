@@ -16,7 +16,7 @@ pub trait Io {
     /// Read a line of input into `buf`.
     ///
     /// Returns `Ok(None)` if there is no more data to read.
-    fn read_line(&mut self, buf: &mut [u8]) -> Result<Option<usize>>;
+    fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>>;
 }
 
 /// An [`Io`] implementation that returns an error for any I/O operation.
@@ -34,7 +34,7 @@ impl Io for NoIo {
         Err(Error::Io)
     }
 
-    fn read_line(&mut self, _buf: &mut [u8]) -> Result<Option<usize>> {
+    fn refill(&mut self, _buf: &mut [u8]) -> Result<Option<usize>> {
         Err(Error::Io)
     }
 }
@@ -75,7 +75,7 @@ impl Io for BufIo<'_> {
         Ok(())
     }
 
-    fn read_line(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
+    fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
         if self.input_pos >= self.input.len() {
             return Ok(None);
         }
@@ -120,7 +120,7 @@ impl Io for StdIo {
         Ok(())
     }
 
-    fn read_line(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
+    fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
         // Flush pending output before waiting on the prompt.
         use std::io::{BufRead, Write};
         std::io::stdout().flush().map_err(|_| Error::Io)?;

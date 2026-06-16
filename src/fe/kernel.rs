@@ -947,7 +947,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     pub(super) fn refill(&mut self) -> Result<()> {
         let mut buf = [0u8; INPUT_BUFFER_SIZE];
         let input_addr = self.layout_addr(Layout::INPUT);
-        match self.io.read_line(&mut buf) {
+        match self.io.refill(&mut buf) {
             Ok(Some(len)) => {
                 self.data.write(input_addr, &buf[..len])?;
                 self.data

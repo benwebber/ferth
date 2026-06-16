@@ -58,7 +58,7 @@ impl Io for ReplIo {
         Ok(())
     }
 
-    fn read_line(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
+    fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
         match self.editor.read_line("")? {
             Some(line) => {
                 let bytes = line.as_bytes();
