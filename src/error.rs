@@ -65,8 +65,6 @@ impl TryFrom<VmError> for Ior {
     }
 }
 
-pub const UNDEFINED_WORD: isize = -13;
-
 /// Errors returned by this crate.
 #[derive(Debug, PartialEq)]
 pub enum Error {

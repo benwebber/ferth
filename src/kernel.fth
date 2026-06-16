@@ -164,6 +164,7 @@ variable handler
       (number?) if              ( n )
         state @ if postpone literal then \ Left on stack if in interpretation mode.
       else
+        (diagnostic-len) ! (diagnostic-addr) !
         -13 throw
       then
     then

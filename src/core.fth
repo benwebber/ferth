@@ -375,6 +375,12 @@ variable (leave-list)
   r> (source-addr) !
 ;
 
+: (diagnostic)
+  (diagnostic-len) @ ?dup if
+    (diagnostic-addr) @ swap type
+  then
+;
+
 : quit
   (rp0) @ (rp!)
   0 (source-id) !
@@ -390,10 +396,11 @@ variable (leave-list)
       dup -6 = if drop ." return stack underflow " else
       dup -9 = if drop ." invalid memory address " else
       dup -10 = if drop ." division by zero " else
-      dup -13 = if drop ." undefined word " else
+      dup -13 = if drop ." undefined word: " (diagnostic) else
+      dup -19 = if drop ." definition name too long: " (diagnostic) else
       dup -20 = if drop ." parsed string overflow " else
       dup -21 = if drop ." unsupported operation " else
-      ." error: " . then then then then then then then then then cr
+      ." error: " . then then then then then then then then then then cr
       \ Reset compilation state and clear stack.
       postpone [
       (sp0) @ (sp!)

@@ -2,7 +2,7 @@
 use core::mem::offset_of;
 
 use crate::data::{Data, Mem};
-use crate::error::{Fault, Ior, UNDEFINED_WORD};
+use crate::error::{Fault, Ior};
 use crate::io::{Io, NoIo};
 use crate::parser;
 use crate::types::{Double, SignedDouble};
@@ -876,8 +876,10 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     pub(super) fn catch_interpret(&mut self) -> Result<()> {
         let (interpret, _) = self
             .lookup(b"(interpret)")?
-            .ok_or(Error::Throw(UNDEFINED_WORD))?;
-        let (catch, _) = self.lookup(b"catch")?.ok_or(Error::Throw(UNDEFINED_WORD))?;
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
+        let (catch, _) = self
+            .lookup(b"catch")?
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
         self.push(interpret)?;
         self.run(catch)?;
         let code = self.pop()? as isize;
