@@ -2,6 +2,14 @@
 use crate::counted::CountedStr31;
 use crate::vm::VmError;
 
+macro_rules! impl_ior {
+    ($($(#[$attr:meta])* $name:ident = $val:literal),+ $(,)?) => {
+        impl Ior {
+            $($(#[$attr])* pub const $name: isize = $val;)+
+        }
+    }
+}
+
 /// The result type of this crate.
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -9,18 +17,18 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug, Clone, Copy)]
 pub struct Ior(pub isize);
 
-impl Ior {
-    pub const STACK_OVERFLOW: isize = -3;
-    pub const STACK_UNDERFLOW: isize = -4;
-    pub const RETURN_STACK_OVERFLOW: isize = -5;
-    pub const RETURN_STACK_UNDERFLOW: isize = -6;
-    pub const INVALID_MEMORY_ADDRESS: isize = -9;
-    pub const DIVISION_BY_ZERO: isize = -10;
-    pub const UNDEFINED_WORD: isize = -13;
-    pub const PARSED_STRING_OVERFLOW: isize = -18;
-    pub const DEFINITION_NAME_TOO_LONG: isize = -19;
-    pub const UNSUPPORTED_OPERATION: isize = -21;
-}
+impl_ior!(
+    STACK_OVERFLOW = -3,
+    STACK_UNDERFLOW = -4,
+    RETURN_STACK_OVERFLOW = -5,
+    RETURN_STACK_UNDERFLOW = -6,
+    INVALID_MEMORY_ADDRESS = -9,
+    DIVISION_BY_ZERO = -10,
+    UNDEFINED_WORD = -13,
+    PARSED_STRING_OVERFLOW = -18,
+    DEFINITION_NAME_TOO_LONG = -19,
+    UNSUPPORTED_OPERATION = -21,
+);
 
 impl From<Ior> for isize {
     fn from(ior: Ior) -> Self {
