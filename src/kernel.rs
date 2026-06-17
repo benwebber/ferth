@@ -3,7 +3,7 @@ use core::mem::offset_of;
 
 use crate::data::{Data, Mem};
 use crate::double::{Double, SignedDouble};
-use crate::error::{Fault, Ior};
+use crate::error::{Ior, KernelError};
 use crate::io::{Io, NoIo};
 use crate::log::debug;
 use crate::parser;
@@ -828,7 +828,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                         .get(token.index)
                         .copied()
                         .flatten()
-                        .ok_or(Fault::InvalidBuiltin(token.index as u8))?;
+                        .ok_or(KernelError::InvalidBuiltin(token.index as u8))?;
                     f(self)?;
                     stop = self.vm.resume(&mut self.data, token)?;
                 }
@@ -996,7 +996,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     fn register_builtin(&mut self, name: &[u8], f: Builtin<M, I>, flags: u8) -> Result<()> {
         let idx = self.builtins_len;
         if idx >= MAX_BUILTINS {
-            return Err(Fault::BuiltinTableFull.into());
+            return Err(KernelError::BuiltinTableFull.into());
         }
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
@@ -1040,7 +1040,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                 Stop::Halt => return Ok(()),
                 Stop::Yield(token) => {
                     let f = self.builtins[token.index]
-                        .ok_or(Fault::InvalidBuiltin(token.index as u8))?;
+                        .ok_or(KernelError::InvalidBuiltin(token.index as u8))?;
                     stop = match f(self) {
                         Ok(()) => match self.vm.resume(&mut self.data, token) {
                             Ok(s) => s,

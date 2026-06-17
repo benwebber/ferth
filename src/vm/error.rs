@@ -16,7 +16,7 @@ pub enum VmError {
     AddressOutOfRange(usize),
     /// The address is not aligned to the cell size.
     AddressMisaligned(usize),
-    /// The opcode is not valid.
+    /// Irrecoverable. The opcode is not valid.
     InvalidOpCode(u8),
     /// Attempted to divide by zero.
     DivisionByZero,

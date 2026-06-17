@@ -42,7 +42,7 @@ impl TryFrom<Error> for Ior {
             Error::Vm(v) => Ior::try_from(v).map_err(Error::Vm)?,
             Error::Throw(n) => Ior(n),
             // All others fall through as normal.
-            e @ (Error::Io | Error::Fault(_)) => return Err(e),
+            e @ (Error::Io | Error::Kernel(_)) => return Err(e),
         })
     }
 }
@@ -73,22 +73,22 @@ pub enum Error {
     Io,
     /// A Forth exception.
     Throw(isize),
-    /// An irrecoverable error.
-    Fault(Fault),
+    /// An kernel error.
+    Kernel(KernelError),
 }
 
-/// An irrecoverable error.
+/// A kernel error.
 #[derive(Debug, PartialEq)]
-pub enum Fault {
-    /// No builtin exists with the wrapped index.
+pub enum KernelError {
+    /// Irrecoverable. No builtin exists with the wrapped index.
     InvalidBuiltin(u8),
-    /// The builtins table is full.
+    /// Irrecoverable. The builtins table is full.
     BuiltinTableFull,
 }
 
-impl From<Fault> for Error {
-    fn from(e: Fault) -> Self {
-        Self::Fault(e)
+impl From<KernelError> for Error {
+    fn from(e: KernelError) -> Self {
+        Self::Kernel(e)
     }
 }
 
@@ -104,12 +104,12 @@ impl core::fmt::Display for Error {
             Self::Vm(e) => write!(f, "{e}"),
             Self::Io => write!(f, "I/O error"),
             Self::Throw(n) => write!(f, "error: {n}"),
-            Self::Fault(fault) => write!(f, "fatal error: {}", fault),
+            Self::Kernel(fault) => write!(f, "fatal error: {}", fault),
         }
     }
 }
 
-impl core::fmt::Display for Fault {
+impl core::fmt::Display for KernelError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::InvalidBuiltin(idx) => write!(f, "invalid builtin: 0x{idx:02x}"),
