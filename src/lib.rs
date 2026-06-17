@@ -9,7 +9,7 @@
 //! use ferth::io::NoIo;
 //!
 //! let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
-//! fe.evaluate(b"
+//! fe.evaluate("
 //! : square ( n -- n ) dup * ;
 //! 2 dup square dup square dup square
 //! ").unwrap();
@@ -19,16 +19,20 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod data;
-mod error;
+mod double;
+pub mod error;
 mod fe;
 pub mod io;
+mod kernel;
 mod parser;
-mod types;
 mod vm;
 
 pub use error::{Error, Result};
 pub use fe::Fe;
 
+/// The size of a cell in bytes.
 pub const SIZE: usize = size_of::<usize>();
+/// Boolean true. A cell with all bits set ([`usize::MAX`]).
 pub const TRUE: usize = usize::MAX;
+/// Boolean false. A cell with no bits set (`0`).
 pub const FALSE: usize = 0;

@@ -27,6 +27,7 @@ impl LineEditor for DefaultEditor {
     }
 }
 
+/// An [`Io`] implementation that uses [`rustyline`].
 pub struct ReplIo {
     editor: Box<dyn LineEditor>,
 }

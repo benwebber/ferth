@@ -1,4 +1,4 @@
-use crate::types::Double;
+use crate::double::Double;
 
 pub fn parse_num(bytes: &[u8], base: u32) -> Option<usize> {
     if bytes.is_empty() {

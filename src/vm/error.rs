@@ -1,7 +1,7 @@
 /// The result type of the inner interpreter.
 pub type VmResult<T> = core::result::Result<T, VmError>;
 
-/// Errors raised by the inner interpreter.
+/// An error raised by the inner interpreter.
 #[derive(Debug, PartialEq)]
 pub enum VmError {
     /// The data stack overflowed.

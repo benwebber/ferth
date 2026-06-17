@@ -2,10 +2,10 @@
 use core::mem::offset_of;
 
 use crate::data::{Data, Mem};
+use crate::double::{Double, SignedDouble};
 use crate::error::{Fault, Ior};
 use crate::io::{Io, NoIo};
 use crate::parser;
-use crate::types::{Double, SignedDouble};
 use crate::vm::{Op, Stop, Vm};
 use crate::{Error, FALSE, Result, SIZE, TRUE};
 
@@ -25,10 +25,10 @@ const HIDDEN: u8 = 0b10;
 
 const BL: usize = 0x20;
 
-const KERNEL: &[u8] = include_bytes!("../kernel.fth");
-const CORE: &[u8] = include_bytes!("../core.fth");
-const CORE_EXT: &[u8] = include_bytes!("../core-ext.fth");
-const TOOLS: &[u8] = include_bytes!("../tools.fth");
+const KERNEL: &[u8] = include_bytes!("kernel.fth");
+const CORE: &[u8] = include_bytes!("core.fth");
+const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
+const TOOLS: &[u8] = include_bytes!("tools.fth");
 
 pub type Builtin<M, I> = fn(&mut Kernel<M, I>) -> Result<()>;
 

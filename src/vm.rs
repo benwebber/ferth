@@ -1,6 +1,6 @@
 //! The inner interpreter.
 use crate::data::{Data, Mem};
-use crate::types::Double;
+use crate::double::Double;
 use crate::{FALSE, SIZE, TRUE};
 
 mod error;

@@ -1,28 +1,30 @@
 use crate::data::Mem;
 use crate::error::Ior;
 use crate::io::{Io, NoIo};
+use crate::kernel::{Environment, Kernel};
 use crate::{Error, FALSE, Result};
 
-mod kernel;
-
-use kernel::{Environment, Kernel};
-
+/// The Forth system.
 pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
     kernel: Kernel<M, I>,
 }
 
 impl<M: Mem, I: Io> Fe<M, I> {
+    /// Build an [`Fe`] with the default environment configuration.
     pub fn new(mem: M, io: I) -> Result<Self> {
         Ok(Self {
             kernel: Kernel::new(mem, io)?,
         })
     }
+
+    /// Build an [`Fe`] with a specific environment configuration.
     pub fn with_env(mem: M, io: I, env: Environment) -> Result<Self> {
         Ok(Self {
             kernel: Kernel::with_env(mem, io, env)?,
         })
     }
 
+    /// Evaluate Forth code.
     pub fn evaluate(&mut self, code: impl AsRef<[u8]>) -> Result<()> {
         for line in code.as_ref().split(|&u| u == b'\n') {
             self.kernel.set_source(line)?;
@@ -31,6 +33,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         Ok(())
     }
 
+    /// Load and interpret code from the current input source.
     pub fn load(&mut self) -> Result<()> {
         loop {
             self.kernel.refill()?;
@@ -42,6 +45,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
         Ok(())
     }
 
+    /// Run `quit`, the Forth interpreter loop.
+    ///
+    /// See [`QUIT`](https://forth-standard.org/standard/core/QUIT).
     pub fn quit(&mut self) -> Result<()> {
         let (xt, _) = self
             .kernel
@@ -50,15 +56,22 @@ impl<M: Mem, I: Io> Fe<M, I> {
         self.kernel.run(xt)
     }
 
+    /// Push a value onto the data stack.
     pub fn push(&mut self, x: usize) -> Result<()> {
         self.kernel.push(x)
     }
+
+    /// Pop a value from the data stack.
     pub fn pop(&mut self) -> Result<usize> {
         self.kernel.pop()
     }
+
+    /// Reset the data and return stacks.
     pub fn reset(&mut self) {
         self.kernel.reset()
     }
+
+    /// Iterate over the data stack.
     pub fn stack(&self) -> impl Iterator<Item = usize> + '_ {
         self.kernel.stack()
     }

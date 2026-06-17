@@ -1,5 +1,5 @@
 //! Error and result types.
-use crate::vm::VmError;
+pub use crate::vm::VmError;
 
 macro_rules! impl_ior {
     ($($(#[$attr:meta])* $name:ident = $val:literal),+ $(,)?) => {
@@ -12,7 +12,7 @@ macro_rules! impl_ior {
 /// The result type of this crate.
 pub type Result<T> = core::result::Result<T, Error>;
 
-/// An error code.
+/// A Forth error code (*ior*).
 #[derive(Debug, Clone, Copy)]
 pub struct Ior(pub isize);
 
@@ -64,14 +64,16 @@ impl TryFrom<VmError> for Ior {
     }
 }
 
-/// Errors returned by this crate.
+/// An error returned by this crate.
 #[derive(Debug, PartialEq)]
 pub enum Error {
     /// An error raised by the inner interpreter.
     Vm(VmError),
     /// A generic error for I/O errors.
     Io,
+    /// A Forth exception.
     Throw(isize),
+    /// An irrecoverable error.
     Fault(Fault),
 }
 

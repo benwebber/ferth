@@ -1,4 +1,4 @@
-//! Forth data types.
+//! Forth double types, sized for the target system.
 
 #[cfg(target_pointer_width = "64")]
 type DoubleInner = u128;
