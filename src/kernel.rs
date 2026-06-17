@@ -383,6 +383,17 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             [L(self.op_xt(Op::Lit)), N(b","), N(b",")]
         );
 
+        // : ['] bl parse (find) drop literal ; immediate
+        //
+        // This definition does not check the flag value because bootstrap input is trusted.
+        // `literal` is immediate, so in Forth, it would require `postpone literal` to compile into
+        // this definition. Here we can compile it directly.
+        compile!(
+            b"[']",
+            IMMEDIATE,
+            [L(0x20), N(b"parse"), N(b"(find)"), N(b"drop"), N(b"literal")]
+        );
+
         // (hidden-flag)
         compile!(b"(hidden-flag)", 0, [L(HIDDEN.into())]);
         // (immediate-flag)

@@ -49,7 +49,6 @@
 
 \ 1. PATCH
 \ ========
-: ['] $20 parse (find) drop postpone literal ; immediate
 : :
   $20 parse (header)
   (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
