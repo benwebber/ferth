@@ -26,9 +26,6 @@ const HIDDEN: u8 = 0b10;
 const BL: usize = 0x20;
 
 const KERNEL: &[u8] = include_bytes!("kernel.fth");
-const CORE: &[u8] = include_bytes!("core.fth");
-const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
-const TOOLS: &[u8] = include_bytes!("tools.fth");
 
 pub type Builtin<M, I> = fn(&mut Kernel<M, I>) -> Result<()>;
 
@@ -219,8 +216,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.register_builtins()?;
         self.compile_environment()?;
         self.define_variables()?;
-        self.compile_kernel()?;
-        self.load_wordlists()
+        self.compile_kernel()
     }
 
     /// Reserve cells for system variables.
@@ -530,21 +526,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         ];
         for (name, offset) in variables {
             self.compile(name, 0, Op::DoCol, &[Token::Lit(self.layout_base + offset)])?;
-        }
-        Ok(())
-    }
-
-    /// Load wordlists.
-    ///
-    /// With the compiler words bootstrapped, we can bootstrap the rest of the system in Forth.
-    fn load_wordlists(&mut self) -> Result<()> {
-        for src in &[CORE, CORE_EXT, TOOLS] {
-            for line in src.split(|&b| b == b'\n') {
-                if !line.is_empty() {
-                    self.set_source(line)?;
-                    self.interpret()?;
-                }
-            }
         }
         Ok(())
     }

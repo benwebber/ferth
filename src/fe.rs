@@ -4,6 +4,10 @@ use crate::io::{Io, NoIo};
 use crate::kernel::{Environment, Kernel};
 use crate::{Error, FALSE, Result};
 
+const CORE: &[u8] = include_bytes!("core.fth");
+const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
+const TOOLS: &[u8] = include_bytes!("tools.fth");
+
 /// The Forth system.
 pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
     kernel: Kernel<M, I>,
@@ -12,9 +16,13 @@ pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
 impl<M: Mem, I: Io> Fe<M, I> {
     /// Build an [`Fe`] with the default environment configuration.
     pub fn new(mem: M, io: I) -> Result<Self> {
-        Ok(Self {
+        let mut fe = Self {
             kernel: Kernel::new(mem, io)?,
-        })
+        };
+        for src in &[CORE, CORE_EXT, TOOLS] {
+            fe.evaluate(src)?;
+        }
+        Ok(fe)
     }
 
     /// Build an [`Fe`] with a specific environment configuration.
