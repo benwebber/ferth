@@ -743,6 +743,10 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     fn find(&mut self) -> Result<()> {
         let len = self.pop()?;
         let addr = self.pop()?;
+        if len > MAX_WORD_LEN {
+            self.diagnostic(addr, len)?;
+            return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
+        }
         let mut buf = [0u8; MAX_WORD_LEN];
         buf[..len].copy_from_slice(self.data.read(addr, len)?);
         match self.lookup(&buf[..len])? {
