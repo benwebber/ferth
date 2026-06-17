@@ -84,10 +84,6 @@ pub enum Fault {
     InvalidBuiltin(u8),
     /// The builtins table is full.
     BuiltinTableFull,
-    /// The stacks are too small.
-    ///
-    /// A string is not valid UTF-8.
-    InvalidUtf8(core::str::Utf8Error),
 }
 
 impl From<Fault> for Error {
@@ -116,7 +112,6 @@ impl core::fmt::Display for Error {
 impl core::fmt::Display for Fault {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::InvalidUtf8(e) => write!(f, "invalid UTF-8: {e}"),
             Self::InvalidBuiltin(idx) => write!(f, "invalid builtin: 0x{idx:02x}"),
             Self::BuiltinTableFull => write!(f, "builtin table full"),
         }
@@ -127,16 +122,6 @@ impl core::error::Error for Error {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Vm(e) => Some(e),
-            Self::Fault(e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
-impl core::error::Error for Fault {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        match self {
-            Self::InvalidUtf8(e) => Some(e),
             _ => None,
         }
     }
