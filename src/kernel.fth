@@ -37,7 +37,7 @@
 \
 \ Builtins
 \ --------
-\ postpone parse (find) (number?)
+\ parse (find) (number?)
 \
 \ Variables
 \ ---------
@@ -72,8 +72,6 @@
 : aligned ( addr -- a-addr ) 1 cells -1 + + 1 cells -1 + invert and ;
 : align ( -- ) here aligned here - allot ;
 : create bl parse (header) ['] (docreate) @ , 0 , ;
-: constant >r : r> postpone literal postpone ; ;
-: variable align here 0 , constant ;
 
 : if ['] (jmpz) , here 0 , ; immediate
 : then here swap ! ; immediate
@@ -87,7 +85,8 @@
 \ catch/throw use a linked list of handler frames threaded through the return
 \ stack. handler holds the return-stack pointer of the innermost frame.
 
-variable handler
+\ variable is not defined yet
+create handler 0 ,
 
 : catch ( xt -- 0 | n )
   \ Save data stack depth.
@@ -119,9 +118,6 @@ variable handler
   then
 ;
 
-\ 4. (INTERPRET)
-\ ==============
-
 \ < does not need to be overflow safe here
 : < - 0< ;
 
@@ -152,11 +148,47 @@ variable handler
 
 : ' parse-name (find) 0= if -13 throw then ;
 
+\ postpone's definition is difficult to grasp because it fuses two different
+\ times:
+\
+\   * T1: When postpone itself is compiled.
+\   * T2: When `postpone foo` executes, i.e., when a word W is being compiled.
+\
+\ Immediate words execute at T1. Non-immediate words execute at T2. ['] moves
+\ its operand from T1 to T2.
+\
+\ The end result is that `postpone foo` compiles `(lit) xt_foo ,` into W. (lit)
+\ pushes xt_foo and , compiles it.
+: postpone ( "<spaces>name" -- )
+  parse-name (find)         ( c-addr u 0 | xt flag )
+  dup 0= if -13 throw then  ( xt flag )
+  0< if
+    \ The word is not immediate.
+    ['] (lit) \ T1: Compile (lit) xt_lit into postpone
+              \ T2: ( xt -- xt xt_lit )
+    ,         \ T1: Compile a call to ,
+              \ T2: ( xt -- ) Store xt_lit in W
+    ,         \ T1: Compile a call to ,
+              \ T2: ( -- ) Store xt in W
+    ['] ,     \ T1: Compile (lit) xt_comma into postpone
+              \ T2: ( -- xt_comma )
+    ,         \ T1: Compile a call to ,
+              \ T2: ( -- ) Store xt_comma in W
+  else
+    \ The word is immediate.
+    ,         \ T1: Compile a call to ,
+              \ T2: Store xt in W
+  then
+; immediate
+
 : over >r dup r> swap ;
 : rot >r swap r> swap ;
 : 2dup over over ;
 : 2drop drop drop ;
 : 2swap rot >r rot r> ;
+
+: constant >r : r> postpone literal postpone ; ;
+: variable align here 0 , constant ;
 
 : (interpret)
   begin

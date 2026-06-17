@@ -322,7 +322,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             (b"(find)", Self::find, 0),
             (b"key", Self::key, 0),
             (b"parse", Self::parse, 0),
-            (b"postpone", Self::postpone, IMMEDIATE),
             (b"refill", Self::refill, 0),
             (b"(header)", Self::header, 0),
             (b">number", Self::to_number, 0),
@@ -781,30 +780,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.lookup(name)?
             .map(|(xt, _)| xt)
             .ok_or(Error::Throw(Ior::UNDEFINED_WORD))
-    }
-
-    // TODO: Move this to Forth.
-    fn postpone(&mut self) -> Result<()> {
-        let (addr, len) = self.parse_name()?;
-        self.push(addr)?;
-        self.push(len)?;
-        self.find()?;
-        let flag = self.pop()? as isize;
-        if flag == 0 {
-            return self.undefined(addr, len);
-        }
-        let xt = self.pop()?;
-        let is_immediate = flag == 1;
-        if is_immediate {
-            // Compile the XT directly so that the current word *executes* the target when it runs.
-            self.comma(xt)
-        } else {
-            // Compile `(lit) xt ,` so that the current word *compiles* the target when it runs.
-            self.comma(self.op_xts[Op::Lit as usize])?;
-            self.comma(xt)?;
-            let comma_xt = self.xt(b",")?;
-            self.comma(comma_xt)
-        }
     }
 
     /// Execute the word referred to by *xt*.
