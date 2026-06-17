@@ -11,17 +11,22 @@
 \ (opcodes and builtins) and hand-compiles basic versions of the Forth compiler
 \ words.
 \
-\ The kernel has two functions:
+\ The kernel has four functions:
 \
 \   1. Patch incomplete versions of compiler words. The basic version of :, for
 \      example, does not set the hidden flag. The kernel replaces it immediately
 \      with a version that does.
-\   2. Bootstrap the interpreter. The first part of the boot defines (interpret)
+\   2. Define defining words.
+\   3. Define exception handler words.
+\   4. Bootstrap the interpreter. The first part of the boot defines (interpret)
 \      and its dependencies.
 \
-\ Defines the minimum set of words required to define (interpret).
 \ In the future we will minimize it even further: inline definitions (e.g. for
 \ bitwise operations) and strip comments before execution.
+\
+\ At this stage, input is trusted, so we can use shortcuts like` parse` instead
+\ of the more correct `parse-name`. We will replace all the temporary
+\ definitions afterwards.
 \
 \ Dependencies
 \ ============
@@ -32,7 +37,7 @@
 \
 \ Builtins
 \ --------
-\ ' postpone parse (find) (number?)
+\ postpone parse (find) (number?)
 \
 \ Variables
 \ ---------
@@ -44,8 +49,7 @@
 
 \ 1. PATCH
 \ ========
-
-: ['] ' postpone literal ; immediate
+: ['] $20 parse (find) drop postpone literal ; immediate
 : :
   $20 parse (header)
   (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
@@ -146,6 +150,8 @@ variable handler
   repeat
   bl parse
 ;
+
+: ' parse-name (find) 0= if -13 throw then ;
 
 : over >r dup r> swap ;
 : rot >r swap r> swap ;

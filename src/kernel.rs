@@ -318,7 +318,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
     fn register_builtins(&mut self) -> Result<()> {
         let builtins: &[(&[u8], Builtin<M, I>, u8)] = &[
-            (b"'", Self::tick, 0),
             (b"emit", Self::emit, 0),
             (b"(find)", Self::find, 0),
             (b"key", Self::key, 0),
@@ -771,20 +770,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.lookup(name)?
             .map(|(xt, _)| xt)
             .ok_or(Error::Throw(Ior::UNDEFINED_WORD))
-    }
-
-    /// ( "<spaces>name" -- xt )
-    // TODO: after implementing errors, move this to Forth
-    fn tick(&mut self) -> Result<()> {
-        let (addr, len) = self.parse_name()?;
-        self.push(addr)?;
-        self.push(len)?;
-        self.find()?;
-        let flag = self.pop()? as isize;
-        if flag == 0 {
-            return self.undefined(addr, len);
-        }
-        Ok(())
     }
 
     // TODO: Move this to Forth.
