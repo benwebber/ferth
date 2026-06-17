@@ -86,9 +86,6 @@ pub enum Fault {
     BuiltinTableFull,
     /// The stacks are too small.
     ///
-    /// The data space must start above the opcode range in order to distinguish between opcodes
-    /// and defined words.
-    StacksTooSmall,
     /// A string is not valid UTF-8.
     InvalidUtf8(core::str::Utf8Error),
 }
@@ -122,7 +119,6 @@ impl core::fmt::Display for Fault {
             Self::InvalidUtf8(e) => write!(f, "invalid UTF-8: {e}"),
             Self::InvalidBuiltin(idx) => write!(f, "invalid builtin: 0x{idx:02x}"),
             Self::BuiltinTableFull => write!(f, "builtin table full"),
-            Self::StacksTooSmall => write!(f, "stacks too small"),
         }
     }
 }

@@ -138,7 +138,6 @@ impl Vm {
     pub const DS_ADDR: usize = SIZE;
 
     pub fn new(ds_len: usize, rs_len: usize) -> Self {
-        assert!(Self::layout_ok(ds_len, rs_len), "stacks too small");
         let sp_max = Self::DS_ADDR + ds_len * SIZE;
         let rp_max = sp_max + rs_len * SIZE;
         Self {
@@ -152,10 +151,6 @@ impl Vm {
             sp_max,
             rp_max,
         }
-    }
-
-    pub const fn layout_ok(ds_len: usize, rs_len: usize) -> bool {
-        (ds_len + rs_len + 1) * SIZE > Op::MAX
     }
 
     /// Execute instructions until a stop condition.
@@ -528,24 +523,6 @@ mod tests {
         let x = v.rpop(d).unwrap();
         v.rpush(d, x).unwrap();
         x
-    }
-
-    // layout_ok, new
-
-    #[test]
-    fn layout_ok_true() {
-        assert!(Vm::layout_ok(DS_LEN, RS_LEN));
-    }
-
-    #[test]
-    fn layout_ok_false() {
-        assert!(!Vm::layout_ok(0, 0));
-    }
-
-    #[test]
-    #[should_panic(expected = "stacks too small")]
-    fn new_panics_on_bad_layout() {
-        Vm::new(0, 0);
     }
 
     // reserved

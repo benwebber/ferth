@@ -173,9 +173,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             config,
             ..Default::default()
         };
-        if !Vm::layout_ok(env.config.stack_cells, env.config.return_stack_cells) {
-            return Err(Fault::StacksTooSmall.into());
-        }
         let data = Data::new(mem);
         let vm = Vm::new(env.config.stack_cells, env.config.return_stack_cells);
         let layout_base = vm.reserved();

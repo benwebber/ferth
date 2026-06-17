@@ -9,10 +9,6 @@ macro_rules! ops {
             $($(#[$attr])* $name = $val,)+
         }
 
-        impl Op {
-            pub const MAX: usize = u8::MAX as usize;
-        }
-
         impl TryFrom<usize> for Op {
             type Error = VmError;
 
@@ -297,11 +293,6 @@ ops! {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn max_is_u8_max() {
-        assert_eq!(Op::MAX, u8::MAX as usize);
-    }
 
     #[test]
     fn try_from_valid() {
