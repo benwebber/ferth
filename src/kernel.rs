@@ -786,31 +786,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             .ok_or(Error::Throw(Ior::UNDEFINED_WORD))
     }
 
-    /// Execute the word referred to by *xt*.
-    ///
-    /// ```text
-    /// execute ( i*x xt -- j*x )
-    /// ```
-    fn execute(&mut self) -> Result<()> {
-        let xt = self.vm.pop(&mut self.data)?;
-        let mut stop = self.vm.call(&mut self.data, xt)?;
-        loop {
-            match stop {
-                Stop::Halt => return Ok(()),
-                Stop::Yield(token) => {
-                    let f = self
-                        .builtins
-                        .get(token.index)
-                        .copied()
-                        .flatten()
-                        .ok_or(KernelError::InvalidBuiltin(token.index as u8))?;
-                    f(self)?;
-                    stop = self.vm.resume(&mut self.data, token)?;
-                }
-            }
-        }
-    }
-
     /// The main interpreter loop.
     ///
     /// <https://forth-standard.org/standard/usage#section.3.4>
@@ -826,11 +801,11 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             let flag = self.pop()? as isize;
             let state = self.data.read_cell(self.layout_addr(Layout::STATE))?;
             if flag != 0 {
+                let xt = self.pop()?;
                 if state == 0 || flag == 1 {
-                    self.execute()?;
+                    self.run(xt)?;
                 } else {
-                    let x = self.pop()?;
-                    self.comma(x)?;
+                    self.comma(xt)?;
                 }
             } else {
                 self.push(addr)?;
