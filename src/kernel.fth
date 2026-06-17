@@ -84,7 +84,6 @@
 \
 \ catch/throw use a linked list of handler frames threaded through the return
 \ stack. handler holds the return-stack pointer of the innermost frame.
-
 \ variable is not defined yet
 create handler 0 ,
 
@@ -118,6 +117,8 @@ create handler 0 ,
   then
 ;
 
+: (diagnostic!) (diagnostic-len) ! (diagnostic-addr) ! ;
+
 \ < does not need to be overflow safe here
 : < - 0< ;
 
@@ -146,7 +147,7 @@ create handler 0 ,
   bl parse
 ;
 
-: ' parse-name (find) 0= if -13 throw then ;
+: ' parse-name (find) 0= if (diagnostic!) -13 throw then ;
 
 \ postpone's definition is difficult to grasp because it fuses two different
 \ times:
@@ -161,7 +162,7 @@ create handler 0 ,
 \ pushes xt_foo and , compiles it.
 : postpone ( "<spaces>name" -- )
   parse-name (find)         ( c-addr u 0 | xt flag )
-  dup 0= if -13 throw then  ( xt flag )
+  dup 0= if (diagnostic!) -13 throw then  ( xt flag )
   0< if
     \ The word is not immediate.
     ['] (lit) \ T1: Compile (lit) xt_lit into postpone
@@ -201,8 +202,7 @@ create handler 0 ,
       (number?) if              ( n )
         state @ if postpone literal then \ Left on stack if in interpretation mode.
       else
-        (diagnostic-len) ! (diagnostic-addr) !
-        -13 throw
+        (diagnostic!) -13 throw
       then
     then
   repeat
