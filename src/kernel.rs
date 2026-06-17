@@ -34,17 +34,12 @@ enum Token {
     Name(&'static [u8]),
 }
 
-/// System environment configuration.
-// TODO: Split this into system invariants (type sizes) and user configuration (buffer sizes and
-// stack lengths).
 #[derive(Debug, Clone, Copy)]
-pub struct Environment {
+struct Environment {
+    /// User configuration.
+    pub config: Config,
     /// The maximum length of a counted string (bytes).
     pub counted_string: usize,
-    /// The size of the pictured numeric output buffer (bytes).
-    pub hold: usize,
-    /// The size of the `pad` scratch area (bytes).
-    pub pad: usize,
     /// The size of one address unit (bits).
     pub address_unit_bits: usize,
     /// Whether floored division is the default.
@@ -59,18 +54,37 @@ pub struct Environment {
     pub max_u: usize,
     /// The maximum value of an unsigned double.
     pub max_ud: Double,
+}
+
+/// System environment configuration.
+#[derive(Debug, Clone, Copy)]
+pub struct Config {
+    /// The size of the pictured numeric output buffer (bytes).
+    pub hold: usize,
+    /// The size of the `pad` scratch area (bytes).
+    pub pad: usize,
     /// The number of cells in the return stack.
     pub return_stack_cells: usize,
     /// The number of cells in the data stack.
     pub stack_cells: usize,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            hold: 64,
+            pad: 84,
+            return_stack_cells: 64,
+            stack_cells: 64,
+        }
+    }
+}
+
 impl Default for Environment {
     fn default() -> Self {
         Self {
+            config: Config::default(),
             counted_string: u8::MAX as usize,
-            hold: 64,
-            pad: 84,
             address_unit_bits: u8::BITS as usize,
             floored: false,
             max_char: u8::MAX as usize,
@@ -78,8 +92,6 @@ impl Default for Environment {
             max_n: isize::MAX,
             max_u: usize::MAX,
             max_ud: Double::MAX,
-            return_stack_cells: 64,
-            stack_cells: 64,
         }
     }
 }
@@ -153,15 +165,19 @@ pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo> {
 
 impl<M: Mem, I: Io> Kernel<M, I> {
     pub fn new(mem: M, io: I) -> Result<Self> {
-        Self::with_env(mem, io, Environment::default())
+        Self::with_config(mem, io, Config::default())
     }
 
-    pub fn with_env(mem: M, io: I, env: Environment) -> Result<Self> {
-        if !Vm::layout_ok(env.stack_cells, env.return_stack_cells) {
+    pub fn with_config(mem: M, io: I, config: Config) -> Result<Self> {
+        let env = Environment {
+            config,
+            ..Default::default()
+        };
+        if !Vm::layout_ok(env.config.stack_cells, env.config.return_stack_cells) {
             return Err(Fault::StacksTooSmall.into());
         }
         let data = Data::new(mem);
-        let vm = Vm::new(env.stack_cells, env.return_stack_cells);
+        let vm = Vm::new(env.config.stack_cells, env.config.return_stack_cells);
         let layout_base = vm.reserved();
         let mut fe = Self {
             vm,
@@ -470,8 +486,13 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             Op::DoCol,
             &[Token::Lit(self.env.counted_string)],
         )?;
-        self.compile(b"(/hold)", 0, Op::DoCol, &[Token::Lit(self.env.hold)])?;
-        self.compile(b"(/pad)", 0, Op::DoCol, &[Token::Lit(self.env.pad)])?;
+        self.compile(
+            b"(/hold)",
+            0,
+            Op::DoCol,
+            &[Token::Lit(self.env.config.hold)],
+        )?;
+        self.compile(b"(/pad)", 0, Op::DoCol, &[Token::Lit(self.env.config.pad)])?;
         self.compile(
             b"(address-unit-bits)",
             0,
@@ -505,13 +526,13 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             b"(return-stack-cells)",
             0,
             Op::DoCol,
-            &[Token::Lit(self.env.return_stack_cells)],
+            &[Token::Lit(self.env.config.return_stack_cells)],
         )?;
         self.compile(
             b"(stack-cells)",
             0,
             Op::DoCol,
-            &[Token::Lit(self.env.stack_cells)],
+            &[Token::Lit(self.env.config.stack_cells)],
         )?;
         Ok(())
     }

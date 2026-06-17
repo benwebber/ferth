@@ -1,7 +1,7 @@
 use crate::data::Mem;
 use crate::error::Ior;
 use crate::io::{Io, NoIo};
-use crate::kernel::{Environment, Kernel};
+use crate::kernel::{Config, Kernel};
 use crate::log::debug;
 use crate::{Error, FALSE, Result};
 
@@ -31,9 +31,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
     }
 
     /// Build an [`Fe`] with a specific environment configuration.
-    pub fn with_env(mem: M, io: I, env: Environment) -> Result<Self> {
+    pub fn with_config(mem: M, io: I, config: Config) -> Result<Self> {
         Ok(Self {
-            kernel: Kernel::with_env(mem, io, env)?,
+            kernel: Kernel::with_config(mem, io, config)?,
         })
     }
 
