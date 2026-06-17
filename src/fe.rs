@@ -2,11 +2,14 @@ use crate::data::Mem;
 use crate::error::Ior;
 use crate::io::{Io, NoIo};
 use crate::kernel::{Environment, Kernel};
+use crate::log::debug;
 use crate::{Error, FALSE, Result};
 
-const CORE: &[u8] = include_bytes!("core.fth");
-const CORE_EXT: &[u8] = include_bytes!("core-ext.fth");
-const TOOLS: &[u8] = include_bytes!("tools.fth");
+const WORDLISTS: &[(&str, &[u8])] = &[
+    ("core", include_bytes!("core.fth")),
+    ("core-ext", include_bytes!("core-ext.fth")),
+    ("tools", include_bytes!("tools.fth")),
+];
 
 /// The Forth system.
 pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
@@ -19,9 +22,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let mut fe = Self {
             kernel: Kernel::new(mem, io)?,
         };
-        for src in &[CORE, CORE_EXT, TOOLS] {
+        for (name, src) in WORDLISTS {
             fe.evaluate(src)?;
+            debug!("SYSTEM", "Loaded {} wordlist", name);
         }
+        debug!("SYSTEM", "Ready");
         Ok(fe)
     }
 

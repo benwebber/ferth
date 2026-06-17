@@ -5,9 +5,10 @@ use crate::data::{Data, Mem};
 use crate::double::{Double, SignedDouble};
 use crate::error::{Fault, Ior};
 use crate::io::{Io, NoIo};
+use crate::log::debug;
 use crate::parser;
 use crate::vm::{Op, Stop, Vm};
-use crate::{Error, FALSE, Result, SIZE, TRUE};
+use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
 /// The maximum word length in bytes.
 const MAX_WORD_LEN: usize = 31;
@@ -22,8 +23,6 @@ const INFO_FROM_CFA: usize = 2 * SIZE;
 const IMMEDIATE: u8 = 0b01;
 /// The hidden bitflag.
 const HIDDEN: u8 = 0b10;
-
-const BL: usize = 0x20;
 
 const KERNEL: &[u8] = include_bytes!("kernel.fth");
 
@@ -212,11 +211,20 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// working Forth system. Notably, it even bootstraps the compiler words like `:` and `;`.
     fn bootstrap(&mut self) -> Result<()> {
         self.reserve_variables()?;
+        debug!("KERNEL", "Reserved variables");
         self.compile_opcodes()?;
+        debug!("KERNEL", "Compiled opcodes");
         self.register_builtins()?;
+        debug!("KERNEL", "Registered builtins");
         self.compile_environment()?;
+        debug!("KERNEL", "Compiled environment");
         self.define_variables()?;
-        self.compile_kernel()
+        debug!("KERNEL", "Defined variables");
+        self.compile_compiler()?;
+        debug!("KERNEL", "Compiled compiler");
+        self.load_kernel()?;
+        debug!("KERNEL", "Loaded kernel");
+        Ok(())
     }
 
     /// Reserve cells for system variables.
@@ -316,7 +324,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
 
     /// Compile compiler words.
     #[rustfmt::skip]
-    fn compile_kernel(&mut self) -> Result<()> {
+    fn compile_compiler(&mut self) -> Result<()> {
         macro_rules! compile {
             ($s:expr, $flags:expr, [$($body:expr),* $(,)?]) => {
                 self.compile($s, $flags, Op::DoCol, &[$($body),*])?;
@@ -441,16 +449,16 @@ impl<M: Mem, I: Io> Kernel<M, I> {
                 L(0), N(b"state"), N(b"!"),
             ]
         );
+        Ok(())
+    }
 
-        for src in &[KERNEL] {
-            for line in src.split(|&b| b == b'\n') {
-                if !line.is_empty() {
-                    self.set_source(line)?;
-                    self.interpret()?;
-                }
+    fn load_kernel(&mut self) -> Result<()> {
+        for line in KERNEL.split(|&b| b == b'\n') {
+            if !line.is_empty() {
+                self.set_source(line)?;
+                self.interpret()?;
             }
         }
-
         Ok(())
     }
 

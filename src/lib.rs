@@ -24,6 +24,7 @@ pub mod error;
 mod fe;
 pub mod io;
 mod kernel;
+mod log;
 mod parser;
 mod vm;
 
@@ -36,3 +37,5 @@ pub const SIZE: usize = size_of::<usize>();
 pub const TRUE: usize = usize::MAX;
 /// Boolean false. A cell with no bits set (`0`).
 pub const FALSE: usize = 0;
+/// SPACE.
+const BL: usize = 0x20;
