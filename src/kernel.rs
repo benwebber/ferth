@@ -9,12 +9,14 @@ use crate::vm::{Op, Stop, Vm};
 use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
 mod env;
+mod host;
 mod layout;
 
 use env::Environment;
 use layout::{INPUT_BUFFER_SIZE, Layout};
 
 pub use env::Config;
+pub use host::Host;
 
 /// The maximum word length in bytes.
 const MAX_WORD_LEN: usize = 31;
@@ -30,7 +32,7 @@ const HIDDEN: u8 = 0b10;
 
 const KERNEL: &[u8] = include_bytes!("kernel.fth");
 
-pub type Builtin<M, I> = fn(&mut Kernel<M, I>) -> Result<()>;
+pub type Builtin = fn(&mut dyn Host) -> Result<()>;
 
 #[derive(Clone, Copy)]
 enum Token {
@@ -45,7 +47,7 @@ pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo> {
     io: I,
     // lookup table for Op CFAs
     op_xts: [usize; 256],
-    builtins: [Option<Builtin<M, I>>; MAX_BUILTINS],
+    builtins: [Option<Builtin>; MAX_BUILTINS],
     builtins_len: usize,
     layout_base: usize,
     env: Environment,
@@ -205,15 +207,15 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     /// parsing words are difficult, or inefficient, to express in Forth. The inner interpreter
     /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
     fn register_builtins(&mut self) -> Result<()> {
-        let builtins: &[(&[u8], Builtin<M, I>, u8)] = &[
-            (b"emit", Self::emit, 0),
-            (b"(find)", Self::find, 0),
-            (b"key", Self::key, 0),
-            (b"parse", Self::parse, 0),
-            (b"refill", Self::refill, 0),
-            (b"(header)", Self::header, 0),
-            (b">number", Self::to_number, 0),
-            (b"(number?)", Self::numberq, 0),
+        let builtins: &[(&[u8], Builtin, u8)] = &[
+            (b"emit", emit, 0),
+            (b"(find)", find, 0),
+            (b"key", key, 0),
+            (b"parse", parse, 0),
+            (b"refill", refill, 0),
+            (b"(header)", header, 0),
+            (b">number", to_number, 0),
+            (b"(number?)", numberq, 0),
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
@@ -453,91 +455,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         Ok(())
     }
 
-    /// Create a new dictionary header.
-    ///
-    /// ```text
-    /// (header) ( c-addr u -- )
-    /// ```
-    ///
-    /// The header starts with a variable-length `pad` field that ensures the `info` field always
-    /// aligns to a cell address.
-    ///
-    /// The length of the name follows as a single byte, then the bytes of the name.
-    ///
-    /// The `bodylen` field encodes the length of the body in cells.
-    ///
-    /// The `info` field packs the flags into the least significant byte and the length into the
-    /// next byte. It currently reserves two additional bytes of space.
-    ///
-    /// The `link` field links to the `code` field of the next word in the dictionary.
-    ///
-    /// The `code` field contains an [`Op`] code. The compiled `body` of the word, if it exists,
-    /// follows the `code` field.
-    ///
-    /// Assuming a 32-bit cell size, the header looks like this in memory:
-    ///
-    /// ```text
-    ///  0 1 2 3 4 5 6 7 8 9 a b c d e f 0 1 2 3 4 5 6 7 8 9 a b c d e f
-    /// +---------------+---------------+-------------------------------+
-    /// |      pad...   |      len      |             name...           |
-    /// +---------------+---------------+-------------------------------+
-    /// |                              name...                          |
-    /// +---------------------------------------------------------------+
-    /// |                            bodylen                            |
-    /// +---------------+---------------+-------------------------------+
-    /// |  info (len)   | info (flags)  |        info (reserved)        |
-    /// +---------------+---------------+-------------------------------+
-    /// |                              link                             |
-    /// +---------------------------------------------------------------+
-    /// |                              code                             |
-    /// +---------------------------------------------------------------+
-    /// |                              body...                          |
-    /// +---------------------------------------------------------------+
-    /// ```
-    ///
-    /// After `(header)` executes, `here` points to the `code` field address.
-    fn header(&mut self) -> Result<()> {
-        let len = self.pop()?;
-        let addr = self.pop()?;
-        if len > MAX_WORD_LEN {
-            self.diagnostic(addr, len)?;
-            return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
-        }
-        let mut buf = [0u8; MAX_WORD_LEN];
-        buf[..len].copy_from_slice(self.data.read(addr, len)?);
-        let cfa = self.write_header(&buf[..len], 0)?;
-        self.data
-            .write_cell(self.layout_addr(Layout::LATEST), cfa)?;
-        self.data.write_cell(self.layout_addr(Layout::HERE), cfa)?;
-        Ok(())
-    }
-
-    /// Parse digits and add them to an accumulator.
-    ///
-    /// ```text
-    /// >number ( ud1 c-addr1 u1 -- ud2 c-addr2 u2 )
-    /// ```
-    #[allow(clippy::wrong_self_convention)]
-    fn to_number(&mut self) -> Result<()> {
-        let u = self.pop()?;
-        let caddr = self.pop()?;
-        let hi = self.pop()?;
-        let lo = self.pop()?;
-        let acc = Double::from((lo, hi));
-        let bytes = self.data.read(caddr, u)?;
-        // TODO: Check base size.
-        let base = self.data.read_cell(self.layout_addr(Layout::BASE))? as u32;
-        let (acc, rest) = parser::to_number(acc, bytes, base);
-        let len = bytes.len() - rest.len();
-        let (lo, hi): (usize, usize) = acc.into();
-        let caddr2 = caddr + len;
-        let u2 = rest.len();
-        self.push(lo)?;
-        self.push(hi)?;
-        self.push(caddr2)?;
-        self.push(u2)
-    }
-
     fn write_header(&mut self, name: &[u8], flags: u8) -> Result<usize> {
         let len: u8 = name
             .len()
@@ -612,38 +529,10 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.data
             .write_cell(self.layout_addr(Layout::TO_IN), to_in)?;
         self.push(BL)?;
-        self.parse()?;
+        parse(self)?;
         let len = self.pop()?;
         let addr = self.pop()?;
         Ok((addr, len))
-    }
-
-    /// A variant of `find` that reads a Forth string `( c-addr u )` instead of a counted string `(
-    /// c-addr )`.
-    ///
-    /// ```text
-    /// (find) ( c-addr u -- 0 | xt 1 | xt -1 )
-    /// ```
-    ///
-    /// Similar to [`search-wordlist`] except it does not accept a wordlist ID.
-    ///
-    /// [`search-wordlist`]: https://forth-standard.org/standard/search/SEARCH-WORDLIST
-    fn find(&mut self) -> Result<()> {
-        let len = self.pop()?;
-        let addr = self.pop()?;
-        if len > MAX_WORD_LEN {
-            self.diagnostic(addr, len)?;
-            return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
-        }
-        let mut buf = [0u8; MAX_WORD_LEN];
-        buf[..len].copy_from_slice(self.data.read(addr, len)?);
-        match self.lookup(&buf[..len])? {
-            Some((xt, flag)) => {
-                self.push(xt)?;
-                self.push(flag as usize)
-            }
-            None => self.push(0),
-        }
     }
 
     pub(super) fn lookup(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
@@ -685,7 +574,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             }
             self.push(addr)?;
             self.push(len)?;
-            self.find()?;
+            find(self)?;
             let flag = self.pop()? as isize;
             let state = self.data.read_cell(self.layout_addr(Layout::STATE))?;
             if flag != 0 {
@@ -698,7 +587,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             } else {
                 self.push(addr)?;
                 self.push(len)?;
-                self.numberq()?;
+                numberq(self)?;
                 let ok = self.pop()? as isize;
                 if ok == 1 {
                     let v = self.pop()?;
@@ -734,95 +623,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         Ok(())
     }
 
-    /// Parse the next token in the parse area.
-    ///
-    /// ```text
-    /// parse ( char "ccc<char>" -- c-addr u )
-    /// ```
-    ///
-    /// See [`PARSE`](https://forth-standard.org/standard/core/PARSE).
-    fn parse(&mut self) -> Result<()> {
-        let delim = self.pop()? as u8;
-        let src = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
-        let src_len = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
-        let mut to_in = self.data.read_cell(self.layout_addr(Layout::TO_IN))?;
-        let start = to_in;
-        let is_delim = |c: u8| {
-            if delim == b' ' {
-                c.is_ascii_whitespace()
-            } else {
-                c == delim
-            }
-        };
-        while to_in < src_len && !is_delim(self.data.read_char(src + to_in)?) {
-            to_in += 1;
-        }
-        let len = to_in - start;
-        if to_in < src_len {
-            to_in += 1;
-        }
-        self.data
-            .write_cell(self.layout_addr(Layout::TO_IN), to_in)?;
-        self.push(src + start)?;
-        self.push(len)
-    }
-
-    /// Receive a single character from the input device.
-    ///
-    /// ```text
-    /// key ( -- char )
-    /// ```
-    ///
-    /// See [`KEY`](https://forth-standard.org/standard/core/KEY).
-    fn key(&mut self) -> Result<()> {
-        match self.io.key()? {
-            Some(c) => self.push(c as usize),
-            None => Err(Error::Io),
-        }
-    }
-
-    /// Display a single character.
-    ///
-    /// ```text
-    /// emit ( x -- )
-    /// ```
-    ///
-    /// See [`EMIT`](https://forth-standard.org/standard/core/EMIT).
-    fn emit(&mut self) -> Result<()> {
-        // TODO: What if the TOS is not a char?
-        let c = self.pop()? as u8;
-        self.io.emit(c)
-    }
-
-    /// Attempt to fill the input buffer from the input source.
-    ///
-    /// ```text
-    /// refill ( -- flag )
-    /// ```
-    ///
-    /// See [`REFILL`](https://forth-standard.org/standard/core/REFILL).
-    pub(super) fn refill(&mut self) -> Result<()> {
-        let mut buf = [0u8; INPUT_BUFFER_SIZE];
-        let input_addr = self.layout_addr(Layout::INPUT);
-        match self.io.refill(&mut buf) {
-            Ok(Some(len)) => {
-                self.data.write(input_addr, &buf[..len])?;
-                self.data
-                    .write_cell(self.layout_addr(Layout::SOURCE_ADDR), input_addr)?;
-                self.data
-                    .write_cell(self.layout_addr(Layout::SOURCE_LEN), len)?;
-                self.data.write_cell(self.layout_addr(Layout::TO_IN), 0)?;
-                self.push(TRUE)?;
-                Ok(())
-            }
-            Ok(None) => {
-                self.push(FALSE)?;
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     fn op_xt(&self, op: Op) -> usize {
         self.op_xts[op as usize]
     }
@@ -831,7 +631,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
         self.layout_base + offset
     }
 
-    fn register_builtin(&mut self, name: &[u8], f: Builtin<M, I>, flags: u8) -> Result<()> {
+    fn register_builtin(&mut self, name: &[u8], f: Builtin, flags: u8) -> Result<()> {
         let idx = self.builtins_len;
         if idx >= MAX_BUILTINS {
             return Err(KernelError::BuiltinTableFull.into());
@@ -855,20 +655,6 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     fn undefined(&mut self, addr: usize, len: usize) -> Result<()> {
         self.diagnostic(addr, len)?;
         Err(Error::Throw(Ior::UNDEFINED_WORD))
-    }
-
-    fn numberq(&mut self) -> Result<()> {
-        let len = self.pop()?;
-        let caddr = self.pop()?;
-        let base = self.data.read_cell(self.layout_addr(Layout::BASE))?;
-        if let Some(n) = parser::parse_num(self.data.read(caddr, len)?, base as u32) {
-            self.push(n)?;
-            self.push(1)
-        } else {
-            self.push(caddr)?;
-            self.push(len)?;
-            self.push(0)
-        }
     }
 
     pub(super) fn run(&mut self, xt: usize) -> Result<()> {
@@ -937,10 +723,270 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     }
 }
 
+impl<M: Mem, I: Io> Host for Kernel<M, I> {
+    fn push(&mut self, x: usize) -> Result<()> {
+        self.push(x)
+    }
+    fn pop(&mut self) -> Result<usize> {
+        self.pop()
+    }
+    fn read(&self, addr: usize, u: usize) -> Result<&[u8]> {
+        Ok(self.data.read(addr, u)?)
+    }
+    fn read_cell(&self, addr: usize) -> Result<usize> {
+        Ok(self.data.read_cell(addr)?)
+    }
+    fn read_char(&self, addr: usize) -> Result<u8> {
+        Ok(self.data.read_char(addr)?)
+    }
+    fn write(&mut self, addr: usize, bytes: &[u8]) -> Result<()> {
+        Ok(self.data.write(addr, bytes)?)
+    }
+    fn write_char(&mut self, addr: usize, c: u8) -> Result<()> {
+        Ok(self.data.write_char(addr, c)?)
+    }
+    fn write_cell(&mut self, addr: usize, x: usize) -> Result<()> {
+        Ok(self.data.write_cell(addr, x)?)
+    }
+    fn emit(&mut self, c: u8) -> Result<()> {
+        self.io.emit(c)
+    }
+    fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
+        self.io.refill(buf)
+    }
+    fn key(&mut self) -> Result<Option<u8>> {
+        self.io.key()
+    }
+    fn diagnostic(&mut self, addr: usize, u: usize) -> Result<()> {
+        self.diagnostic(addr, u)
+    }
+    fn lookup(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
+        self.lookup(name)
+    }
+    fn write_header(&mut self, name: &[u8], flags: u8) -> Result<usize> {
+        self.write_header(name, flags)
+    }
+    fn layout_addr(&self, offset: usize) -> usize {
+        self.layout_addr(offset)
+    }
+}
+
 /// Pack word flags and length into one cell.
 ///
 /// The flags occupy the least significant byte. The cell occupies the next most significant
 /// byte.
 fn pack_info(flags: u8, len: u8) -> usize {
     (len as usize) | ((flags as usize) << 8)
+}
+
+/// Receive a single character from the input device.
+///
+/// ```text
+/// key ( -- char )
+/// ```
+///
+/// See [`KEY`](https://forth-standard.org/standard/core/KEY).
+fn key(host: &mut dyn Host) -> Result<()> {
+    match host.key()? {
+        Some(c) => host.push(c as usize),
+        None => Err(Error::Io),
+    }
+}
+
+/// Display a single character.
+///
+/// ```text
+/// emit ( x -- )
+/// ```
+///
+/// See [`EMIT`](https://forth-standard.org/standard/core/EMIT).
+fn emit(host: &mut dyn Host) -> Result<()> {
+    // TODO: What if the TOS is not a char?
+    let c = host.pop()? as u8;
+    host.emit(c)
+}
+
+/// A variant of `find` that reads a Forth string `( c-addr u )` instead of a counted string `(
+/// c-addr )`.
+///
+/// ```text
+/// (find) ( c-addr u -- 0 | xt 1 | xt -1 )
+/// ```
+///
+/// Similar to [`search-wordlist`] except it does not accept a wordlist ID.
+///
+/// [`search-wordlist`]: https://forth-standard.org/standard/search/SEARCH-WORDLIST
+fn find(host: &mut dyn Host) -> Result<()> {
+    let len = host.pop()?;
+    let addr = host.pop()?;
+    if len > MAX_WORD_LEN {
+        host.diagnostic(addr, len)?;
+        return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
+    }
+    let mut buf = [0u8; MAX_WORD_LEN];
+    buf[..len].copy_from_slice(host.read(addr, len)?);
+    match host.lookup(&buf[..len])? {
+        Some((xt, flag)) => {
+            host.push(xt)?;
+            host.push(flag as usize)
+        }
+        None => host.push(0),
+    }
+}
+
+fn numberq(host: &mut dyn Host) -> Result<()> {
+    let len = host.pop()?;
+    let caddr = host.pop()?;
+    let base = host.read_cell(host.layout_addr(Layout::BASE))?;
+    if let Some(n) = parser::parse_num(host.read(caddr, len)?, base as u32) {
+        host.push(n)?;
+        host.push(1)
+    } else {
+        host.push(caddr)?;
+        host.push(len)?;
+        host.push(0)
+    }
+}
+
+/// Parse digits and add them to an accumulator.
+///
+/// ```text
+/// >number ( ud1 c-addr1 u1 -- ud2 c-addr2 u2 )
+/// ```
+#[allow(clippy::wrong_self_convention)]
+fn to_number(host: &mut dyn Host) -> Result<()> {
+    let u = host.pop()?;
+    let caddr = host.pop()?;
+    let hi = host.pop()?;
+    let lo = host.pop()?;
+    let acc = Double::from((lo, hi));
+    let bytes = host.read(caddr, u)?;
+    // TODO: Check base size.
+    let base = host.read_cell(host.layout_addr(Layout::BASE))? as u32;
+    let (acc, rest) = parser::to_number(acc, bytes, base);
+    let len = bytes.len() - rest.len();
+    let (lo, hi): (usize, usize) = acc.into();
+    let caddr2 = caddr + len;
+    let u2 = rest.len();
+    host.push(lo)?;
+    host.push(hi)?;
+    host.push(caddr2)?;
+    host.push(u2)
+}
+
+/// Parse the next token in the parse area.
+///
+/// ```text
+/// parse ( char "ccc<char>" -- c-addr u )
+/// ```
+///
+/// See [`PARSE`](https://forth-standard.org/standard/core/PARSE).
+fn parse(host: &mut dyn Host) -> Result<()> {
+    let delim = host.pop()? as u8;
+    let src = host.read_cell(host.layout_addr(Layout::SOURCE_ADDR))?;
+    let src_len = host.read_cell(host.layout_addr(Layout::SOURCE_LEN))?;
+    let mut to_in = host.read_cell(host.layout_addr(Layout::TO_IN))?;
+    let start = to_in;
+    let is_delim = |c: u8| {
+        if delim == b' ' {
+            c.is_ascii_whitespace()
+        } else {
+            c == delim
+        }
+    };
+    while to_in < src_len && !is_delim(host.read_char(src + to_in)?) {
+        to_in += 1;
+    }
+    let len = to_in - start;
+    if to_in < src_len {
+        to_in += 1;
+    }
+    host.write_cell(host.layout_addr(Layout::TO_IN), to_in)?;
+    host.push(src + start)?;
+    host.push(len)
+}
+
+/// Attempt to fill the input buffer from the input source.
+///
+/// ```text
+/// refill ( -- flag )
+/// ```
+///
+/// See [`REFILL`](https://forth-standard.org/standard/core/REFILL).
+pub(super) fn refill(host: &mut dyn Host) -> Result<()> {
+    let mut buf = [0u8; INPUT_BUFFER_SIZE];
+    let input_addr = host.layout_addr(Layout::INPUT);
+    match host.refill(&mut buf) {
+        Ok(Some(len)) => {
+            host.write(input_addr, &buf[..len])?;
+            host.write_cell(host.layout_addr(Layout::SOURCE_ADDR), input_addr)?;
+            host.write_cell(host.layout_addr(Layout::SOURCE_LEN), len)?;
+            host.write_cell(host.layout_addr(Layout::TO_IN), 0)?;
+            host.push(TRUE)?;
+            Ok(())
+        }
+        Ok(None) => {
+            host.push(FALSE)?;
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Create a new dictionary header.
+///
+/// ```text
+/// (header) ( c-addr u -- )
+/// ```
+///
+/// The header starts with a variable-length `pad` field that ensures the `info` field always
+/// aligns to a cell address.
+///
+/// The length of the name follows as a single byte, then the bytes of the name.
+///
+/// The `bodylen` field encodes the length of the body in cells.
+///
+/// The `info` field packs the flags into the least significant byte and the length into the
+/// next byte. It currently reserves two additional bytes of space.
+///
+/// The `link` field links to the `code` field of the next word in the dictionary.
+///
+/// The `code` field contains an [`Op`] code. The compiled `body` of the word, if it exists,
+/// follows the `code` field.
+///
+/// Assuming a 32-bit cell size, the header looks like this in memory:
+///
+/// ```text
+///  0 1 2 3 4 5 6 7 8 9 a b c d e f 0 1 2 3 4 5 6 7 8 9 a b c d e f
+/// +---------------+---------------+-------------------------------+
+/// |      pad...   |      len      |             name...           |
+/// +---------------+---------------+-------------------------------+
+/// |                              name...                          |
+/// +---------------------------------------------------------------+
+/// |                            bodylen                            |
+/// +---------------+---------------+-------------------------------+
+/// |  info (len)   | info (flags)  |        info (reserved)        |
+/// +---------------+---------------+-------------------------------+
+/// |                              link                             |
+/// +---------------------------------------------------------------+
+/// |                              code                             |
+/// +---------------------------------------------------------------+
+/// |                              body...                          |
+/// +---------------------------------------------------------------+
+/// ```
+///
+/// After `(header)` executes, `here` points to the `code` field address.
+fn header(host: &mut dyn Host) -> Result<()> {
+    let len = host.pop()?;
+    let addr = host.pop()?;
+    if len > MAX_WORD_LEN {
+        host.diagnostic(addr, len)?;
+        return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
+    }
+    let mut buf = [0u8; MAX_WORD_LEN];
+    buf[..len].copy_from_slice(host.read(addr, len)?);
+    let cfa = host.write_header(&buf[..len], 0)?;
+    host.write_cell(host.layout_addr(Layout::LATEST), cfa)?;
+    host.write_cell(host.layout_addr(Layout::HERE), cfa)?;
+    Ok(())
 }

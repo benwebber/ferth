@@ -1,7 +1,7 @@
 use crate::data::Mem;
 use crate::error::Ior;
 use crate::io::{Io, NoIo};
-use crate::kernel::{Config, Kernel};
+use crate::kernel::{Config, Kernel, refill};
 use crate::log::debug;
 use crate::{Error, FALSE, Result};
 
@@ -49,7 +49,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// Load and interpret code from the current input source.
     pub fn load(&mut self) -> Result<()> {
         loop {
-            self.kernel.refill()?;
+            refill(&mut self.kernel)?;
             if self.kernel.pop()? == FALSE {
                 break;
             }
