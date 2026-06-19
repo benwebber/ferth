@@ -34,11 +34,7 @@ enum Token {
 }
 
 impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
-    pub fn new(mem: M, io: I) -> Self {
-        Self::with_config(mem, io, Config::default())
-    }
-
-    pub fn with_config(mem: M, io: I, config: Config) -> Self {
+    pub fn new(mem: M, io: I, config: Config) -> Self {
         let env = Environment {
             config,
             ..Default::default()

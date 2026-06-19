@@ -19,8 +19,13 @@ pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
 impl<M: Mem, I: Io> Fe<M, I> {
     /// Build an [`Fe`] with the default environment configuration.
     pub fn new(mem: M, io: I) -> Result<Self> {
+        Self::with_config(mem, io, Config::default())
+    }
+
+    /// Build an [`Fe`] with a specific environment configuration.
+    pub fn with_config(mem: M, io: I, config: Config) -> Result<Self> {
         let mut fe = Self {
-            kernel: Kernel::new(mem, io).boot()?,
+            kernel: Kernel::new(mem, io, config).boot()?,
         };
         for (name, src) in WORDLISTS {
             fe.evaluate(src)?;
@@ -30,13 +35,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
         debug!("SYSTEM", "Passed boot checks");
         debug!("SYSTEM", "Ready");
         Ok(fe)
-    }
-
-    /// Build an [`Fe`] with a specific environment configuration.
-    pub fn with_config(mem: M, io: I, config: Config) -> Result<Self> {
-        Ok(Self {
-            kernel: Kernel::with_config(mem, io, config).boot()?,
-        })
     }
 
     /// Evaluate Forth code.
