@@ -1,7 +1,7 @@
 use crate::data::Mem;
 use crate::error::Ior;
 use crate::io::{Io, NoIo};
-use crate::kernel::{Config, Kernel, refill};
+use crate::kernel::{Config, Kernel, Ready, refill};
 use crate::log::debug;
 use crate::{Error, FALSE, Result};
 
@@ -13,7 +13,7 @@ const WORDLISTS: &[(&str, &[u8])] = &[
 
 /// The Forth system.
 pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
-    kernel: Kernel<M, I>,
+    kernel: Kernel<M, I, Ready>,
 }
 
 impl<M: Mem, I: Io> Fe<M, I> {

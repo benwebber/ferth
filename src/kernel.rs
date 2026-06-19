@@ -1,4 +1,5 @@
-//! The outer interpreter.
+use core::marker::PhantomData;
+
 use crate::data::{Data, Mem};
 use crate::double::Double;
 use crate::error::{Ior, KernelError};
@@ -34,6 +35,10 @@ const KERNEL: &[u8] = include_bytes!("kernel.fth");
 
 pub type Builtin = fn(&mut dyn Host) -> Result<()>;
 
+pub trait State {}
+pub enum Ready {}
+impl State for Ready {}
+
 #[derive(Clone, Copy)]
 enum Token {
     Lit(usize),
@@ -41,7 +46,7 @@ enum Token {
 }
 
 /// The outer interpreter.
-pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo> {
+pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Ready> {
     vm: Vm,
     data: Data<M>,
     io: I,
@@ -51,9 +56,10 @@ pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo> {
     builtins_len: usize,
     layout_base: usize,
     env: Environment,
+    _state: PhantomData<S>,
 }
 
-impl<M: Mem, I: Io> Kernel<M, I> {
+impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     pub fn new(mem: M, io: I) -> Result<Self> {
         Self::with_config(mem, io, Config::default())
     }
@@ -75,6 +81,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
             op_xts: [0; 256],
             layout_base,
             env,
+            _state: PhantomData,
         };
         fe.bootstrap()?;
         Ok(fe)
@@ -723,7 +730,7 @@ impl<M: Mem, I: Io> Kernel<M, I> {
     }
 }
 
-impl<M: Mem, I: Io> Host for Kernel<M, I> {
+impl<M: Mem, I: Io, S: State> Host for Kernel<M, I, S> {
     fn push(&mut self, x: usize) -> Result<()> {
         self.push(x)
     }
