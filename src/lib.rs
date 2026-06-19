@@ -30,6 +30,7 @@ mod vm;
 
 pub use error::{Error, Result};
 pub use fe::Fe;
+pub use kernel::Config;
 
 /// The size of a cell in bytes.
 pub const SIZE: usize = size_of::<usize>();
