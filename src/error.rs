@@ -34,34 +34,17 @@ impl From<Ior> for isize {
     }
 }
 
-impl TryFrom<Error> for Ior {
-    type Error = Error;
-
-    fn try_from(e: Error) -> core::result::Result<Self, Self::Error> {
-        Ok(match e {
-            Error::Vm(v) => Ior::try_from(v).map_err(Error::Vm)?,
-            Error::Throw(n) => Ior(n),
-            // All others fall through as normal.
-            e @ (Error::Io | Error::Kernel(_)) => return Err(e),
-        })
-    }
-}
-
-impl TryFrom<VmError> for Ior {
-    type Error = VmError;
-    fn try_from(e: VmError) -> core::result::Result<Self, VmError> {
-        Ok(Self(match e {
-            VmError::StackOverflow => Self::STACK_OVERFLOW,
-            VmError::StackUnderflow => Self::STACK_UNDERFLOW,
-            VmError::ReturnStackOverflow => Self::RETURN_STACK_OVERFLOW,
-            VmError::ReturnStackUnderflow => Self::RETURN_STACK_UNDERFLOW,
-            VmError::AddressOutOfRange(_) | VmError::AddressMisaligned(_) => {
-                Self::INVALID_MEMORY_ADDRESS
-            }
-            VmError::DivisionByZero => Self::DIVISION_BY_ZERO,
-            VmError::InvalidOpCode(_) => return Err(e),
-        }))
-    }
+/// The recoverability of an [`Error`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum Severity {
+    /// A catchable Forth exception.
+    ///
+    /// The kernel places the error code on the stack for `throw`.
+    Throw(isize),
+    /// An unrecoverable fault.
+    ///
+    /// The kernel resets and aborts to the host.
+    Abort,
 }
 
 /// An error returned by this crate.
@@ -75,6 +58,30 @@ pub enum Error {
     Throw(isize),
     /// An kernel error.
     Kernel(KernelError),
+}
+
+impl Error {
+    pub fn severity(&self) -> Severity {
+        use Severity::{Abort, Throw};
+        match self {
+            Error::Throw(n) => Throw(*n),
+            Error::Vm(v) => match v {
+                // Stack overflows are irrecoverable because the stack is too full to set up
+                // `throw`.
+                VmError::StackOverflow
+                | VmError::ReturnStackOverflow
+                // A malformed word should terminate the program.
+                | VmError::InvalidOpCode(_) => Abort,
+                VmError::StackUnderflow => Throw(Ior::STACK_UNDERFLOW),
+                VmError::ReturnStackUnderflow => Throw(Ior::RETURN_STACK_UNDERFLOW),
+                VmError::DivisionByZero => Throw(Ior::DIVISION_BY_ZERO),
+                VmError::AddressOutOfRange(_) | VmError::AddressMisaligned(_) => {
+                    Throw(Ior::INVALID_MEMORY_ADDRESS)
+                }
+            },
+            Error::Io | Error::Kernel(_) => Abort,
+        }
+    }
 }
 
 /// A kernel error.

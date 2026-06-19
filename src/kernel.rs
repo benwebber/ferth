@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use crate::data::{Data, Mem};
-use crate::error::{Ior, KernelError};
+use crate::error::{Ior, KernelError, Severity};
 use crate::io::{Io, NoIo};
 use crate::vm::{Stop, Vm};
 use crate::{Error, FALSE, Result, SIZE, TRUE};
@@ -156,7 +156,10 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     }
 
     pub(super) fn run(&mut self, xt: usize) -> Result<()> {
-        let mut stop = self.vm.call(&mut self.data, xt)?;
+        let mut stop = match self.vm.call(&mut self.data, xt) {
+            Ok(s) => s,
+            Err(e) => self.throw(e.into())?,
+        };
         loop {
             match stop {
                 Stop::Halt => return Ok(()),
@@ -175,25 +178,31 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         }
     }
 
-    /// Throw an [`Error`] as a Forth exception.
+    /// Raise a catachable error as a Forth exception, or abort.
     fn throw(&mut self, e: Error) -> Result<Stop> {
-        let ior = match Ior::try_from(e) {
-            Ok(ior) => ior,
-            Err(e) => {
-                let _ = self.data.write_cell(self.layout_addr(Layout::STATE), FALSE);
-                self.vm.reset();
-                return Err(e);
-            }
+        let ior = match e.severity() {
+            Severity::Throw(ior) => ior,
+            Severity::Abort => return Err(self.abort(e)),
         };
         match self.lookup(b"throw")? {
             Some((throw_xt, _)) => {
-                // TODO: This push will fail if the data stack is already full.
-                self.push(isize::from(ior) as usize)?;
-                Ok(self.vm.call(&mut self.data, throw_xt)?)
+                // Throw in Forth.
+                self.push(ior as usize)?;
+                match self.vm.call(&mut self.data, throw_xt) {
+                    Ok(stop) => Ok(stop),
+                    Err(e) => Err(self.abort(e.into())),
+                }
             }
-            // Bootstrap errors bubble up.
-            None => Err(Error::Throw(ior.into())),
+            // `throw` is not defined yet (bootstrap). Bubble up.
+            None => Err(Error::Throw(ior)),
         }
+    }
+
+    /// Abort and re-raise a fatal [`Error`].
+    fn abort(&mut self, e: Error) -> Error {
+        let _ = self.data.write_cell(self.layout_addr(Layout::STATE), FALSE);
+        self.vm.reset();
+        e
     }
 
     fn diagnostic(&mut self, addr: usize, len: usize) -> Result<()> {

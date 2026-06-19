@@ -195,4 +195,32 @@ mod tests {
         assert_eq!(fe.pop().unwrap(), 42);
         assert_eq!(fe.pop().unwrap(), 47);
     }
+
+    #[test]
+    fn test_abort_irrecoverable_error() {
+        use crate::error::VmError;
+        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+
+        // Force a a data stack overflow, an irrecoverable error.
+        fe.evaluate(b": overflow begin 1 again ;").unwrap();
+        assert!(matches!(
+            fe.evaluate(b"' overflow catch"),
+            Err(Error::Vm(VmError::StackOverflow))
+        ));
+
+        // The abort reset the machine, so the system is usable again.
+        fe.evaluate(b"1 2 +").unwrap();
+        assert_eq!(fe.pop().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_catch_recoverable_error() {
+        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+
+        // Re-raise recoverable errors (division by zero) as a Forth ception. `catch` returns its
+        // ior.
+        fe.evaluate(b": divzero 0 0 0 um/mod ;").unwrap();
+        fe.evaluate(b"' divzero catch").unwrap();
+        assert_eq!(fe.pop().unwrap() as isize, Ior::DIVISION_BY_ZERO);
+    }
 }
