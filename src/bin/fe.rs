@@ -1,12 +1,22 @@
+use std::io::IsTerminal;
+
 use ferth::Fe;
 use ferth::io::Io;
 
 fn main() {
+    let is_terminal = std::io::stdin().is_terminal();
     let io = make_io();
     let mut fe = Fe::new([0u8; 65536], io).expect("failed to initialize interpreter");
-    if let Err(e) = fe.quit() {
-        eprintln!("{e}");
-        std::process::exit(1);
+    loop {
+        match fe.quit() {
+            Ok(()) => break, // end of input
+            Err(e) => {
+                eprintln!("{e}");
+                if !is_terminal {
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 }
 
