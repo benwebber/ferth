@@ -27,6 +27,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
         let mut fe = Self {
             kernel: Kernel::new(mem, io, config).boot()?,
         };
+        #[allow(unused_variables)] // name in debug!
         for (name, src) in WORDLISTS {
             fe.evaluate(src)?;
             debug!("SYSTEM", "Loaded {} wordlist", name);
