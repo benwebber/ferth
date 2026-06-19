@@ -64,10 +64,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         self.load_kernel()?;
         debug!("KERNEL", "Loaded kernel");
         let xt = |name: &'static str| -> Result<usize> {
-            match self.lookup(name.as_bytes()) {
-                Ok(Some((xt, _))) => Ok(xt),
-                _ => Err(KernelError::MissingEntryPoint(name).into()),
-            }
+            self.find(name.as_bytes())?
+                .map(|(xt, _)| xt)
+                .ok_or(KernelError::MissingEntryPoint(name).into())
         };
         let state = Ready {
             xt_catch: xt("catch")?,
@@ -236,7 +235,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         compile!(
             b"[']",
             IMMEDIATE | BOOTSTRAP,
-            [L(0x20), N(b"parse"), N(b"(find)"), N(b"drop"), N(b"literal")]
+            [L(BL), N(b"parse"), N(b"(find)"), N(b"drop"), N(b"literal")]
         );
 
         // (hidden-flag)
@@ -266,7 +265,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             b":",
             BOOTSTRAP,
             [
-                L(0x20), N(b"parse"), N(b"(header)"),
+                L(BL), N(b"parse"), N(b"(header)"),
                 L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),
                 L(TRUE), N(b"state"), N(b"!"),
             ]
@@ -425,7 +424,10 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
                     self.comma(v)?;
                 }
                 Token::Name(name) => {
-                    let xt = self.xt(name)?;
+                    let xt = self
+                        .find(name)?
+                        .map(|(xt, _)| xt)
+                        .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
                     self.comma(xt)?;
                 }
             }
@@ -470,12 +472,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         Ok((addr, len))
     }
 
-    fn xt(&self, name: &[u8]) -> Result<usize> {
-        self.lookup(name)?
-            .map(|(xt, _)| xt)
-            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))
-    }
-
     /// The main interpreter loop.
     ///
     /// <https://forth-standard.org/standard/usage#section.3.4>
@@ -493,7 +489,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             if flag != 0 {
                 let xt = self.pop()?;
                 if state == 0 || flag == 1 {
-                    self.run(xt)?;
+                    self.execute(xt)?;
                 } else {
                     self.comma(xt)?;
                 }
@@ -532,7 +528,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
     }
 
     fn define(&mut self, name: &[u8], code: Op, flags: u8) -> Result<usize> {
-        let cfa = self.write_header(name, flags)?;
+        let cfa = self.create(name, flags)?;
         self.data.write_cell(cfa, code as usize)?;
         self.data
             .write_cell(self.layout_addr(Layout::HERE), cfa + SIZE)?;

@@ -51,9 +51,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
     pub fn load(&mut self) -> Result<()> {
         let (xt, _) = self
             .kernel
-            .lookup(b"load")?
+            .find(b"load")?
             .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        self.kernel.run(xt)
+        self.kernel.execute(xt)
     }
 
     /// Run `quit`, the Forth interpreter loop.
@@ -62,9 +62,9 @@ impl<M: Mem, I: Io> Fe<M, I> {
     pub fn quit(&mut self) -> Result<()> {
         let (xt, _) = self
             .kernel
-            .lookup(b"quit")?
+            .find(b"quit")?
             .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        self.kernel.run(xt)
+        self.kernel.execute(xt)
     }
 
     /// Push a value onto the data stack.

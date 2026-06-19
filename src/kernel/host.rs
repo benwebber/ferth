@@ -13,8 +13,8 @@ pub trait Host {
     fn emit(&mut self, c: u8) -> Result<()>;
     fn key(&mut self) -> Result<Option<u8>>;
     fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>>;
-    fn diagnostic(&mut self, addr: usize, u: usize) -> Result<()>;
-    fn lookup(&self, name: &[u8]) -> Result<Option<(usize, isize)>>;
-    fn write_header(&mut self, name: &[u8], flags: u8) -> Result<usize>;
+    fn set_diagnostic(&mut self, addr: usize, u: usize) -> Result<()>;
+    fn find(&self, name: &[u8]) -> Result<Option<(usize, isize)>>;
+    fn create(&mut self, name: &[u8], flags: u8) -> Result<usize>;
     fn layout_addr(&self, offset: usize) -> usize;
 }

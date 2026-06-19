@@ -84,7 +84,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         self.vm.stack(&self.data)
     }
 
-    pub(super) fn lookup(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
+    pub(super) fn find(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
         if name.len() > MAX_WORD_LEN {
             return Ok(None);
         }
@@ -106,7 +106,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         Ok(None)
     }
 
-    fn write_header(&mut self, name: &[u8], flags: u8) -> Result<usize> {
+    fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {
         let len: u8 = name
             .len()
             .try_into()
@@ -136,11 +136,11 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     }
 
     fn undefined(&mut self, addr: usize, len: usize) -> Result<()> {
-        self.diagnostic(addr, len)?;
+        self.set_diagnostic(addr, len)?;
         Err(Error::Throw(Ior::UNDEFINED_WORD))
     }
 
-    pub(super) fn run(&mut self, xt: usize) -> Result<()> {
+    pub(super) fn execute(&mut self, xt: usize) -> Result<()> {
         let mut stop = match self.vm.call(&mut self.data, xt) {
             Ok(s) => s,
             Err(e) => self.throw(e.into())?,
@@ -169,7 +169,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
             Severity::Throw(ior) => ior,
             Severity::Abort => return Err(self.abort(e)),
         };
-        match self.lookup(b"throw")? {
+        match self.find(b"throw")? {
             Some((throw_xt, _)) => {
                 // Throw in Forth.
                 self.push(ior as usize)?;
@@ -190,7 +190,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         e
     }
 
-    fn diagnostic(&mut self, addr: usize, len: usize) -> Result<()> {
+    fn set_diagnostic(&mut self, addr: usize, len: usize) -> Result<()> {
         self.data
             .write_cell(self.layout_addr(Layout::DIAGNOSTIC_ADDR), addr)?;
         self.data
@@ -249,14 +249,14 @@ impl<M: Mem, I: Io, S: State> Host for Kernel<M, I, S> {
     fn key(&mut self) -> Result<Option<u8>> {
         self.io.key()
     }
-    fn diagnostic(&mut self, addr: usize, u: usize) -> Result<()> {
-        self.diagnostic(addr, u)
+    fn set_diagnostic(&mut self, addr: usize, u: usize) -> Result<()> {
+        self.set_diagnostic(addr, u)
     }
-    fn lookup(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
-        self.lookup(name)
+    fn find(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
+        self.find(name)
     }
-    fn write_header(&mut self, name: &[u8], flags: u8) -> Result<usize> {
-        self.write_header(name, flags)
+    fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {
+        self.create(name, flags)
     }
     fn layout_addr(&self, offset: usize) -> usize {
         self.layout_addr(offset)
@@ -266,7 +266,7 @@ impl<M: Mem, I: Io, S: State> Host for Kernel<M, I, S> {
 impl<M: Mem, I: Io> Kernel<M, I, Ready> {
     pub(super) fn catch_interpret(&mut self) -> Result<()> {
         self.push(self.state.xt_interpret)?;
-        self.run(self.state.xt_catch)?;
+        self.execute(self.state.xt_catch)?;
         let code = self.pop()? as isize;
         if code != 0 {
             return Err(Error::Throw(code));
