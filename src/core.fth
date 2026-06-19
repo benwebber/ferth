@@ -410,6 +410,9 @@ variable (leave-list)
   repeat
 ;
 
+\ TODO: Move to block set later.
+: load begin refill while (interpret) repeat ;
+
 : abort ( -- ) (sp0) @ (sp!) quit ;
 
 : (abort") ( flag c-addr u -- )

@@ -1,9 +1,9 @@
 use crate::data::Mem;
 use crate::error::Ior;
 use crate::io::{Io, NoIo};
-use crate::kernel::{Config, Kernel, Ready, refill};
+use crate::kernel::{Config, Kernel, Ready};
 use crate::log::debug;
-use crate::{Error, FALSE, Result};
+use crate::{Error, Result};
 
 const WORDLISTS: &[(&str, &[u8])] = &[
     ("core", include_bytes!("core.fth")),
@@ -48,14 +48,11 @@ impl<M: Mem, I: Io> Fe<M, I> {
 
     /// Load and interpret code from the current input source.
     pub fn load(&mut self) -> Result<()> {
-        loop {
-            refill(&mut self.kernel)?;
-            if self.kernel.pop()? == FALSE {
-                break;
-            }
-            self.kernel.catch_interpret()?;
-        }
-        Ok(())
+        let (xt, _) = self
+            .kernel
+            .lookup(b"load")?
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
+        self.kernel.run(xt)
     }
 
     /// Run `quit`, the Forth interpreter loop.

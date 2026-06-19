@@ -15,7 +15,6 @@ mod layout;
 use env::Environment;
 use layout::{INPUT_BUFFER_SIZE, Layout};
 
-pub use builtins::refill;
 pub use env::Config;
 pub use host::Host;
 
