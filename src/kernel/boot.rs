@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 use crate::data::{Data, Mem};
 use crate::double::Double;
 use crate::error::{Ior, KernelError};
@@ -46,7 +44,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             op_xts: [0; 256],
             layout_base,
             env,
-            _state: PhantomData,
+            state: Bootstrapping {},
         }
     }
 
@@ -65,6 +63,16 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         debug!("KERNEL", "Compiled compiler");
         self.load_kernel()?;
         debug!("KERNEL", "Loaded kernel");
+        let xt = |name: &'static str| -> Result<usize> {
+            match self.lookup(name.as_bytes()) {
+                Ok(Some((xt, _))) => Ok(xt),
+                _ => Err(KernelError::MissingEntryPoint(name).into()),
+            }
+        };
+        let state = Ready {
+            xt_catch: xt("catch")?,
+            xt_interpret: xt("(interpret)")?,
+        };
         Ok(Kernel {
             vm: self.vm,
             data: self.data,
@@ -74,7 +82,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             builtins_len: self.builtins_len,
             layout_base: self.layout_base,
             env: self.env,
-            _state: PhantomData,
+            state,
         })
     }
 

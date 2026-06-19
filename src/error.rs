@@ -91,6 +91,8 @@ pub enum KernelError {
     InvalidBuiltin(u8),
     /// Irrecoverable. The builtins table is full.
     BuiltinTableFull,
+    /// Irrecoverable. A runtime entry point (e.g. `quit`) does not exist.
+    MissingEntryPoint(&'static str),
 }
 
 impl From<KernelError> for Error {
@@ -121,6 +123,7 @@ impl core::fmt::Display for KernelError {
         match self {
             Self::InvalidBuiltin(idx) => write!(f, "invalid builtin: 0x{idx:02x}"),
             Self::BuiltinTableFull => write!(f, "builtin table full"),
+            Self::MissingEntryPoint(name) => write!(f, "missing entry point: {name}"),
         }
     }
 }

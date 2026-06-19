@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 use crate::data::{Data, Mem};
 use crate::error::{Ior, KernelError, Severity};
 use crate::io::{Io, NoIo};
@@ -35,8 +33,11 @@ const BOOTSTRAP: u8 = 0b100;
 pub type Builtin = fn(&mut dyn Host) -> Result<()>;
 
 pub trait State {}
-pub enum Bootstrapping {}
-pub enum Ready {}
+pub struct Bootstrapping {}
+pub struct Ready {
+    xt_catch: usize,
+    xt_interpret: usize,
+}
 impl State for Bootstrapping {}
 impl State for Ready {}
 
@@ -51,7 +52,7 @@ pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Bootstrapping> 
     builtins_len: usize,
     layout_base: usize,
     env: Environment,
-    _state: PhantomData<S>,
+    state: S,
 }
 
 impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
@@ -81,22 +82,6 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
 
     pub fn stack(&self) -> impl Iterator<Item = usize> + '_ {
         self.vm.stack(&self.data)
-    }
-
-    pub(super) fn catch_interpret(&mut self) -> Result<()> {
-        let (interpret, _) = self
-            .lookup(b"(interpret)")?
-            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        let (catch, _) = self
-            .lookup(b"catch")?
-            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        self.push(interpret)?;
-        self.run(catch)?;
-        let code = self.pop()? as isize;
-        if code != 0 {
-            return Err(Error::Throw(code));
-        }
-        Ok(())
     }
 
     pub(super) fn lookup(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
@@ -275,6 +260,18 @@ impl<M: Mem, I: Io, S: State> Host for Kernel<M, I, S> {
     }
     fn layout_addr(&self, offset: usize) -> usize {
         self.layout_addr(offset)
+    }
+}
+
+impl<M: Mem, I: Io> Kernel<M, I, Ready> {
+    pub(super) fn catch_interpret(&mut self) -> Result<()> {
+        self.push(self.state.xt_interpret)?;
+        self.run(self.state.xt_catch)?;
+        let code = self.pop()? as isize;
+        if code != 0 {
+            return Err(Error::Throw(code));
+        }
+        Ok(())
     }
 }
 
