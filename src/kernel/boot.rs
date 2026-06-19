@@ -12,7 +12,7 @@ use super::builtins::{emit, find, header, key, numberq, parse, refill, to_number
 use super::env;
 use super::host;
 use super::layout;
-use super::{Bootstrapping, Kernel, Ready};
+use super::{BOOTSTRAP, Bootstrapping, HIDDEN, IMMEDIATE, Kernel, Ready};
 
 use env::Environment;
 use layout::Layout;
@@ -22,11 +22,6 @@ pub use host::Host;
 
 /// The maximum number of builtins in the builtins table.
 const MAX_BUILTINS: usize = 256;
-
-/// The immediate bitflag.
-const IMMEDIATE: u8 = 0b01;
-/// The hidden bitflag.
-const HIDDEN: u8 = 0b10;
 
 const KERNEL: &[u8] = include_bytes!("../kernel.fth");
 
@@ -241,7 +236,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         // this definition. Here we can compile it directly.
         compile!(
             b"[']",
-            IMMEDIATE,
+            IMMEDIATE | BOOTSTRAP,
             [L(0x20), N(b"parse"), N(b"(find)"), N(b"drop"), N(b"literal")]
         );
 
@@ -270,7 +265,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         // simple definition does not set the hidden flag. The Forth kernel replaces it.
         compile!(
             b":",
-            0,
+            BOOTSTRAP,
             [
                 L(0x20), N(b"parse"), N(b"(header)"),
                 L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),

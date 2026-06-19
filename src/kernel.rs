@@ -29,6 +29,8 @@ const INFO_FROM_CFA: usize = 2 * SIZE;
 const IMMEDIATE: u8 = 0b01;
 /// The hidden bitflag.
 const HIDDEN: u8 = 0b10;
+/// The bootstrap bitflag. Words defined during the bootstrap phase have this flag.
+const BOOTSTRAP: u8 = 0b100;
 
 pub type Builtin = fn(&mut dyn Host) -> Result<()>;
 

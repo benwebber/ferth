@@ -26,6 +26,8 @@ impl<M: Mem, I: Io> Fe<M, I> {
             fe.evaluate(src)?;
             debug!("SYSTEM", "Loaded {} wordlist", name);
         }
+        fe.evaluate(b"(check-bootstrap)")?;
+        debug!("SYSTEM", "Passed boot checks");
         debug!("SYSTEM", "Ready");
         Ok(fe)
     }

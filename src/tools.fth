@@ -132,7 +132,7 @@ variable (dump-end)
 ;
 
 : see ( "<spaces>name" )
-  bl parse (find)                         ( c-addr u -- 0 | xt -1 | xt 1 )
+  parse-name (find)                       ( c-addr u -- 0 | xt -1 | xt 1 )
   0<> if                                  ( xt )
     cr
     dup @ ['] (docol) @ = if              ( xt )

@@ -7,60 +7,36 @@
 \ KERNEL
 \ ======
 \
-\ Before executing this file, the outer interpreter defines the primitive words
-\ (opcodes and builtins) and hand-compiles basic versions of the Forth compiler
+\ Before executing this file, the bootloader has defined primitive words
+\ (opcodes and builtins) as well as hand-compiled versions of the Forth compiler
 \ words.
 \
-\ The kernel has four functions:
+\ The kernel has 8 stages:
 \
-\   1. Patch incomplete versions of compiler words. The basic version of :, for
-\      example, does not set the hidden flag. The kernel replaces it immediately
-\      with a version that does.
-\   2. Define defining words.
-\   3. Define exception handler words.
-\   4. Bootstrap the interpreter. The first part of the boot defines (interpret)
-\      and its dependencies.
+\   1. Define defining words.
+\   2. Define exception handler words.
+\   3. Define parse-name
+\   4. Define words that depend on parse-name
+\   5. Define postpone
+\   6. Define words that depend on postpone
+\   7. Define diagnostic checks
+\   8. Define (interpret)
+\
+\ Once (interpret) exists, Forth takes over execution.
 \
 \ In the future we will minimize it even further: inline definitions (e.g. for
 \ bitwise operations) and strip comments before execution.
 \
 \ At this stage, input is trusted, so we can use shortcuts like` parse` instead
-\ of the more correct `parse-name`. We will replace all the temporary
-\ definitions afterwards.
-\
-\ Dependencies
-\ ============
-\
-\ Opcodes
-\ -------
-\ 0< @ (jmpz) (jmp) swap ! drop dup + c@ execute >r r> (nand) c!
-\
-\ Builtins
-\ --------
-\ parse (find) (number?)
-\
-\ Variables
-\ ---------
-\ (latest) (flags-addr) (here) (source-addr) (source-len) >in state
-\
-\ Hand-compiled
-\ -------------
-\ : ; , (cells, !+, allot) literal (hidden-flag) (immediate-flag)
+\ of the more correct `parse-name`. We tag words that need to be replaced with
+\ correct definitions with `(bootstrap)`. A final diagnostic check ensures every
+\ word tagged so has been hidden and replaced.
 
-\ 1. PATCH
-\ ========
-: :
-  $20 parse (header)
-  (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
-  ['] (docol) @ ,
-  -1 state !
-;
+\ 1. DEFINING WORDS
+\ =================
 
-\ 2. DEFINING WORDS
-\ ================
-\
-\ Provided by the kernel so that every layer above (core, core-ext, tools, and
-\ anything Fe loads) has the defining words and the exception mechanism.
+: (hide) (flags-addr) dup c@ (hidden-flag) or swap c! ;
+: (bootstrap) (latest) @ (flags-addr) dup c@ %100 or swap c! ;
 
 : ( $29 parse drop drop ; immediate
 
@@ -71,7 +47,9 @@
 : here (here) @ ;
 : aligned ( addr -- a-addr ) 1 cells -1 + + 1 cells -1 + invert and ;
 : align ( -- ) here aligned here - allot ;
-: create bl parse (header) ['] (docreate) @ , 0 , ;
+: create
+  bl parse (header) ['] (docreate) @ , 0 ,
+; (bootstrap) \ Replace with parse-name.
 
 : if ['] (jmpz) , here 0 , ; immediate
 : then here swap ! ; immediate
@@ -79,7 +57,7 @@
 
 : ?dup dup if dup then ;
 
-\ 3. EXCEPTIONS
+\ 2. EXCEPTIONS
 \ =============
 \
 \ catch/throw use a linked list of handler frames threaded through the return
@@ -119,8 +97,11 @@ create handler 0 ,
 
 : (diagnostic!) (diagnostic-len) ! (diagnostic-addr) ! ;
 
+\ 3. PARSE-NAME
+\ =============
+
 \ < does not need to be overflow safe here
-: < - 0< ;
+: < - 0< ; (bootstrap)
 
 : begin here ; immediate
 : while ['] (jmpz) , here 0 , swap ; immediate
@@ -147,7 +128,31 @@ create handler 0 ,
   bl parse
 ;
 
+\ 4. PARSE-NAME DEFINITIONS
+\ =========================
+
 : ' parse-name (find) 0= if (diagnostic!) -13 throw then ;
+
+\ Hide and redefine bootstrap words. Notice that to redefine :, we must first
+\ save the XT of :, because otherwise the interpreter would throw undefined word
+\ (-13) on :.
+' : dup dup >r  ( xt xt ) ( R: xt )
+(hide)          ( xt )
+execute :
+  parse-name (header)
+  (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
+  ['] (docol) @ ,
+  -1 state !
+;
+r> (hide)       ( R: )
+
+' create (hide)
+: create
+  parse-name (header) ['] (docreate) @ , 0 ,
+;
+
+\ 5. POSTPONE
+\ ===========
 
 \ postpone's definition is difficult to grasp because it fuses two different
 \ times:
@@ -182,14 +187,44 @@ create handler 0 ,
   then
 ; immediate
 
+\ 6. POSTPONE DEFINITIONS
+\ =======================
+
+: constant >r : r> postpone literal postpone ; ;
+: variable align here 0 , constant ;
+
+' ['] (hide)
+: ['] parse-name (find) drop postpone literal ; immediate
+
+\ 7. DIAGNOSTIC CHECKS
+\ ====================
+
 : over >r dup r> swap ;
+
+\ Check that we have redefined all hand-compiled words.
+: (check-bootstrap)
+  (latest) @                          ( latest )
+  begin
+    dup 0= invert                     ( latest flag )
+  while                               ( latest )
+    dup (flags-addr) c@ %100 and      ( latest bootstrap )
+    over (flags-addr) c@ %010 and 0=  ( latest bootstrap !hidden )
+    and if
+      drop                            ( )
+      -256 throw
+    then
+    1 cells - @                       ( link )
+  repeat
+  drop
+;
+
+\ 8. (INTERPRET)
+\ ==============
+
 : rot >r swap r> swap ;
 : 2dup over over ;
 : 2drop drop drop ;
 : 2swap rot >r rot r> ;
-
-: constant >r : r> postpone literal postpone ; ;
-: variable align here 0 , constant ;
 
 : (interpret)
   begin

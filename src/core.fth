@@ -42,6 +42,7 @@
 
 \ Overflow-safe comparison operators.
 \ TODO: explain
+' < (hide)
 : <  ( n1 n2 -- flag ) 2dup xor 0< if      drop 0< else - 0< then ;
 : u< ( u1 u2 -- flag ) 2dup xor 0< if swap drop 0< else - 0< then ;
 : > swap < ;
