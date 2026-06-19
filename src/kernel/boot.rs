@@ -12,7 +12,7 @@ use super::builtins::{emit, find, header, key, numberq, parse, refill, to_number
 use super::env;
 use super::host;
 use super::layout;
-use super::{BOOTSTRAP, Bootstrapping, HIDDEN, IMMEDIATE, Kernel, Ready};
+use super::{BOOTSTRAP, Bootstrapping, Builtin, HIDDEN, IMMEDIATE, Kernel, MAX_BUILTINS, Ready};
 
 use env::Environment;
 use layout::Layout;
@@ -20,12 +20,7 @@ use layout::Layout;
 pub use env::Config;
 pub use host::Host;
 
-/// The maximum number of builtins in the builtins table.
-const MAX_BUILTINS: usize = 256;
-
 const KERNEL: &[u8] = include_bytes!("../kernel.fth");
-
-pub type Builtin = fn(&mut dyn Host) -> Result<()>;
 
 #[derive(Clone, Copy)]
 enum Token {
