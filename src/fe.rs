@@ -20,7 +20,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// Build an [`Fe`] with the default environment configuration.
     pub fn new(mem: M, io: I) -> Result<Self> {
         let mut fe = Self {
-            kernel: Kernel::new(mem, io)?,
+            kernel: Kernel::new(mem, io).boot()?,
         };
         for (name, src) in WORDLISTS {
             fe.evaluate(src)?;
@@ -33,7 +33,7 @@ impl<M: Mem, I: Io> Fe<M, I> {
     /// Build an [`Fe`] with a specific environment configuration.
     pub fn with_config(mem: M, io: I, config: Config) -> Result<Self> {
         Ok(Self {
-            kernel: Kernel::with_config(mem, io, config)?,
+            kernel: Kernel::with_config(mem, io, config).boot()?,
         })
     }
 
