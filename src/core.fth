@@ -128,7 +128,6 @@
 : depth (sp@) (sp0) @ - 1 cells / ;
 : 2@ dup cell+ @ swap @ ;
 : 2! swap over ! cell+ ! ;
-: 2@ dup cell+ @ swap @ ;
 
 \ Copy u consecutive bytes from addr1 to addr2.
 \
@@ -337,27 +336,6 @@ variable (leave-list)
   \ Print <depth>.
   [char] < emit dup 0 <# #s #> type [char] > emit space
   0 ?do i cells (sp0) @ + @ . loop
-;
-
-: parse-name ( "<spaces>name<space>" -- c-addr u )
-  \ Skip leading whitespace characters.
-  begin
-    >in @ source  ( >in source-addr source-len )
-    swap drop     ( >in source-len )
-    < if
-      source drop ( source-addr )
-      >in @       ( source-addr >in )
-      + c@        ( char )
-      \ Skip all ASCII control and whitespace characters (up to and including
-      \ BL/0x20/SPACE.)
-      bl 1+ <     ( flag )
-    else
-      false
-    then
-  while
-    1 >in +!
-  repeat
-  bl parse
 ;
 
 : evaluate ( i*x c-addr u -- j*x )
