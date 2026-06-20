@@ -10,7 +10,10 @@ use super::builtins::{compile_comma, emit, find, header, key, numberq, parse, re
 use super::env;
 use super::host;
 use super::layout;
-use super::{BOOTSTRAP, Bootstrapping, Builtin, HIDDEN, IMMEDIATE, Kernel, MAX_BUILTINS, Ready};
+use super::{
+    BOOTSTRAP, BUILTIN, Bootstrapping, Builtin, COLON, HIDDEN, IMMEDIATE, Kernel, MAX_BUILTINS,
+    PRIMITIVE, Ready,
+};
 
 use env::Environment;
 use layout::Layout;
@@ -512,17 +515,43 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         }
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
-        self.define(name, Op::Yield, flags)?;
+        self.define(name, Op::Yield, flags | BUILTIN)?;
         self.comma(idx)
     }
 
     fn define(&mut self, name: &[u8], code: Op, flags: u8) -> Result<usize> {
-        let cfa = self.create(name, flags)?;
+        let kind = match code {
+            Op::Yield => BUILTIN,
+            Op::DoCol => COLON,
+            _ => PRIMITIVE,
+        };
+        let cfa = self.create(name, flags | kind)?;
         self.data.write_cell(cfa, code as usize)?;
         self.data
             .write_cell(self.layout_addr(Layout::HERE), cfa + SIZE)?;
         self.data
             .write_cell(self.layout_addr(Layout::LATEST), cfa)?;
         Ok(cfa)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::io::NoIo;
+    use crate::kernel::{BUILTIN, COLON, PRIMITIVE};
+
+    #[test]
+    fn tag_boot_words_with_kind() {
+        let k = Kernel::new([0u8; 65536], NoIo, Config::default())
+            .boot()
+            .unwrap();
+        let kind = |name: &[u8]| {
+            let (xt, _) = k.find(name).unwrap().unwrap();
+            (k.data.read_cell(xt - super::super::INFO_FROM_CFA).unwrap() >> 8) as u8
+        };
+        assert!(kind(b"dup") & PRIMITIVE != 0);
+        assert!(kind(b"(find)") & BUILTIN != 0);
+        assert!(kind(b"cells") & COLON != 0);
     }
 }
