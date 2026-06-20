@@ -1,14 +1,14 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use ferth::{Fe, io::NoIo};
+use ferth::{Config, Fe, io::NoIo};
 use std::hint::black_box;
 
-macro_rules! bench {
-    ($fn_name:ident, $label:literal, $file:literal, $expr:expr) => {
-        fn $fn_name(c: &mut Criterion) {
+macro_rules! impl_bench {
+    ($fn:ident, $label:literal, $file:literal, $expr:expr, $fe:expr) => {
+        fn $fn(c: &mut Criterion) {
             c.bench_function($label, |b| {
                 b.iter_batched(
                     || {
-                        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
+                        let mut fe = $fe;
                         for line in include_bytes!($file).split(|&b| b == b'\n') {
                             if !line.is_empty() {
                                 fe.evaluate(line).unwrap();
@@ -21,6 +21,35 @@ macro_rules! bench {
                 )
             });
         }
+    };
+}
+
+macro_rules! bench {
+    ($fn:ident, $label:literal, $file:literal, $expr:expr) => {
+        impl_bench!(
+            $fn,
+            $label,
+            $file,
+            $expr,
+            Fe::new([0u8; 65536], NoIo).unwrap()
+        );
+    };
+    ($fn:ident, $label:literal, $file:literal, $expr:expr, rs = $rs:literal) => {
+        impl_bench!(
+            $fn,
+            $label,
+            $file,
+            $expr,
+            Fe::with_config(
+                [0u8; 65536],
+                NoIo,
+                Config {
+                    return_stack_cells: $rs,
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+        );
     };
 }
 
@@ -37,7 +66,8 @@ bench!(
     countdown,
     "forth/countdown(60)",
     "countdown.fth",
-    b"60 countdown"
+    b"60 countdown",
+    rs = 256
 );
 bench!(
     crc32,
