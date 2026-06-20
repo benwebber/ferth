@@ -3,7 +3,7 @@ use crate::error::Ior;
 use crate::parser;
 use crate::{Error, Result};
 
-use super::{FALSE, Host, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, TRUE};
+use super::{FALSE, Host, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, SIZE, TRUE};
 
 /// Receive a single character from the input device.
 ///
@@ -214,5 +214,21 @@ pub fn header(host: &mut dyn Host) -> Result<()> {
     let cfa = host.create(&buf[..len], 0)?;
     host.write_cell(host.layout_addr(Layout::LATEST), cfa)?;
     host.write_cell(host.layout_addr(Layout::HERE), cfa)?;
+    Ok(())
+}
+
+/// Compile a call to *xt* to the current definition.
+///
+/// ```text
+/// compile, ( xt -- )
+/// ```
+///
+/// In indirect-threaded systems, `,` can perform the function of `compile,`. This does not always
+/// hold for other threading models.
+pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
+    let here = host.read_cell(host.layout_addr(Layout::HERE))?;
+    let xt = host.pop()?;
+    host.write_cell(here, xt)?;
+    host.write_cell(host.layout_addr(Layout::HERE), here + SIZE)?;
     Ok(())
 }

@@ -166,27 +166,18 @@ r> (hide)       ( R: )
 \ Immediate words execute at T1. Non-immediate words execute at T2. ['] moves
 \ its operand from T1 to T2.
 \
-\ The end result is that `postpone foo` compiles `(lit) xt_foo ,` into W. (lit)
-\ pushes xt_foo and , compiles it.
+\ The end result is that `postpone foo` compiles ['(lit)][xt]['compile,] into W.
+\ `(lit)` pushes `xt` and `compile,` compiles it.
 : postpone ( "<spaces>name" -- )
-  parse-name (find)         ( c-addr u 0 | xt flag )
+  parse-name (find)                       ( c-addr u 0 | xt flag )
   dup 0= if (diagnostic!) -13 throw then  ( xt flag )
   0< if
     \ The word is not immediate.
-    ['] (lit) \ T1: Compile (lit) xt_lit into postpone
-              \ T2: ( xt -- xt xt_lit )
-    ,         \ T1: Compile a call to ,
-              \ T2: ( xt -- ) Store xt_lit in W
-    ,         \ T1: Compile a call to ,
-              \ T2: ( -- ) Store xt in W
-    ['] ,     \ T1: Compile (lit) xt_comma into postpone
-              \ T2: ( -- xt_comma )
-    ,         \ T1: Compile a call to ,
-              \ T2: ( -- ) Store xt_comma in W
+    ['] (lit) , ,         \ Compile `'(lit) xt`
+    ['] compile, compile, \ Compile `'compile,` a call to `compile,`
   else
     \ The word is immediate.
-    ,         \ T1: Compile a call to ,
-              \ T2: Store xt in W
+    compile,
   then
 ; immediate
 
@@ -235,7 +226,7 @@ r> (hide)       ( R: )
   dup while                     ( c-addr u )
     2dup (find) ?dup if         ( c-addr u xt flag )
       2swap 2drop               ( xt flag )
-      0< state @ and if , else execute then
+      0< state @ and if compile, else execute then
     else                        ( c-addr u )
       (number?) if              ( n )
         state @ if postpone literal then \ Left on stack if in interpretation mode.

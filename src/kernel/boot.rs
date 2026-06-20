@@ -6,7 +6,7 @@ use crate::log::debug;
 use crate::vm::{Op, Vm};
 use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
-use super::builtins::{emit, find, header, key, numberq, parse, refill, to_number};
+use super::builtins::{compile_comma, emit, find, header, key, numberq, parse, refill, to_number};
 use super::env;
 use super::host;
 use super::layout;
@@ -171,6 +171,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"(header)", header, 0),
             (b">number", to_number, 0),
             (b"(number?)", numberq, 0),
+            (b"compile,", compile_comma, 0),
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
@@ -475,11 +476,11 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             let flag = self.pop()? as isize;
             let state = self.data.read_cell(self.layout_addr(Layout::STATE))?;
             if flag != 0 {
-                let xt = self.pop()?;
                 if state == 0 || flag == 1 {
+                    let xt = self.pop()?;
                     self.execute(xt)?;
                 } else {
-                    self.comma(xt)?;
+                    compile_comma(self)?;
                 }
             } else {
                 self.push(addr)?;
