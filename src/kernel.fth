@@ -1,6 +1,9 @@
 : source (source-addr) @ (source-len) @ ;
 : invert dup (nand) ;
+: - invert 1 + + ;
+: (flags-addr) 2 cells - 1 + ;
 : or invert swap invert (nand) ;
+: (immediate-flag) %001 ;
 : immediate (latest) @ (flags-addr) dup c@ (immediate-flag) or swap c! ;
 : \ source >in ! drop ; immediate
 
@@ -35,13 +38,13 @@
 \ 1. DEFINING WORDS
 \ =================
 
-: (hide) (flags-addr) dup c@ (hidden-flag) or swap c! ;
-: (bootstrap) (latest) @ (flags-addr) dup c@ %100 or swap c! ;
-
 : ( $29 parse drop drop ; immediate
 
 : and (nand) invert ;
-: - invert 1 + + ;
+
+: (hidden-flag) %010 ;
+: (hide) (flags-addr) dup c@ (hidden-flag) or swap c! ;
+: (bootstrap) (latest) @ (flags-addr) dup c@ %100 or swap c! ;
 
 : bl $20 ;
 : here (here) @ ;

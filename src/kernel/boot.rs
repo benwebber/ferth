@@ -196,17 +196,20 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         use Token::{Lit as L, Name as N};
 
         // This sequence hand-compiles the words `:`, `;`, `literal`, and their direct
-        // dependencies. This code *is* Forth, just not written as text. Consider it Forth
-        // "assembly".
+        // dependencies. This code *is* Forth, just not written as text.
         //
         // `N(name)` compiles a call to a previously defined word. Any reference to an XT that
-        // should be a data value at runtime must be a literal (`L(xt)`), not a call.
+        // should be a data value at runtime (`['] word`) must be a literal (`L(xt)`).
+
         // cells
         compile!(b"cells", 0, [L(SIZE), N(b"um*"), N(b"drop")]);
+
         // : +! ( u addr -- ) dup >r @ + r> ! ;
         compile!(b"+!", 0, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
+
         // : allot ( n -- ) (here) +! ;
         compile!(b"allot", 0, [addr!(HERE), N(b"+!")]);
+
         // : , ( x -- ) here ! 1 cells allot ;
         //
         // `here` is always cell-aligned at this stage so it is safe call `,` without `align`.
@@ -237,21 +240,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             IMMEDIATE | BOOTSTRAP,
             [L(BL), N(b"parse"), N(b"(find)"), N(b"drop"), N(b"literal")]
         );
-
-        // (hidden-flag)
-        compile!(b"(hidden-flag)", 0, [L(HIDDEN.into())]);
-        // (immediate-flag)
-        compile!(b"(immediate-flag)", 0, [L(IMMEDIATE.into())]);
-        // (flags-addr)
-        //
-        // Return the address of the flags byte, calculated from the code address (XT).
-        compile!(
-            b"(flags-addr)",
-            0,
-            [L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+")]
-        );
-
-        // Finally, compile the bootstrap `:` and `;`.
 
         // : :
         //   bl parse (header)
@@ -310,10 +298,10 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
                 N(b"swap"), N(b"!"),
                 // Unset hidden flag.
                 addr!(LATEST), N(b"@"),
-                N(b"(flags-addr)"), N(b"dup"), N(b"c@"),
-                N(b"(hidden-flag)"), N(b"dup"), N(b"(nand)"), N(b"(nand)"), N(b"dup"), N(b"(nand)"), // inline invert, and
+                L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+"), N(b"dup"), N(b"c@"),
+                L(HIDDEN.into()), N(b"dup"), N(b"(nand)"), N(b"(nand)"), N(b"dup"), N(b"(nand)"), // inline invert, and
                 N(b"swap"), N(b"c!"),
-                L(0), N(b"state"), N(b"!"),
+                L(FALSE), N(b"state"), N(b"!"),
             ]
         );
         Ok(())
