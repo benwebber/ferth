@@ -485,7 +485,7 @@ impl Vm {
 
     /// Execute the code referenced by the W register.
     fn dispatch<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Option<Stop>> {
-        let op = data.read_cell(self.w)?.try_into()?;
+        let op = (data.read_cell(self.w)? & 0xff).try_into()?;
         match op {
             Op::Yield => {
                 let index = data.read_cell(self.w + SIZE)?;
