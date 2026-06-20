@@ -360,46 +360,6 @@ variable (leave-list)
   then
 ;
 
-: quit
-  (rp0) @ (rp!)
-  0 (source-id) !
-  postpone [
-  begin
-    refill
-  while
-    ['] (interpret) catch
-    ?dup if
-      dup -3 = if drop ." stack overflow " else
-      dup -4 = if drop ." stack underflow " else
-      dup -5 = if drop ." return stack overflow " else
-      dup -6 = if drop ." return stack underflow " else
-      dup -9 = if drop ." invalid memory address " else
-      dup -10 = if drop ." division by zero " else
-      dup -13 = if drop ." undefined word: " (diagnostic) else
-      dup -19 = if drop ." definition name too long: " (diagnostic) else
-      dup -20 = if drop ." parsed string overflow " else
-      dup -21 = if drop ." unsupported operation " else
-      ." error: " . then then then then then then then then then then cr
-      \ Reset compilation state and clear stack.
-      postpone [
-      (sp0) @ (sp!)
-    else
-      state @ 0= if ." ok" cr then
-    then
-  repeat
-;
-
-\ TODO: Move to block set later.
-: load begin refill while (interpret) repeat ;
-
-: abort ( -- ) (sp0) @ (sp!) quit ;
-
-: (abort") ( flag c-addr u -- )
-  rot if type abort else 2drop then
-;
-
-: abort" postpone s" postpone (abort") ; immediate
-
 : compare ( c-addr1 u1 c-addr2 u2 -- n )
   \ Save the length comparision value.
   rot                     ( addr1 addr2 len2 len1 )
@@ -443,3 +403,43 @@ variable (leave-list)
   2dup s" STACK-CELLS"        compare 0= if 2drop (stack-cells)        true exit then
   2drop false
 ;
+
+: quit
+  (rp0) @ (rp!)
+  0 (source-id) !
+  postpone [
+  begin
+    refill
+  while
+    ['] (interpret) catch
+    ?dup if
+      dup -3 = if drop ." stack overflow " else
+      dup -4 = if drop ." stack underflow " else
+      dup -5 = if drop ." return stack overflow " else
+      dup -6 = if drop ." return stack underflow " else
+      dup -9 = if drop ." invalid memory address " else
+      dup -10 = if drop ." division by zero " else
+      dup -13 = if drop ." undefined word: " (diagnostic) else
+      dup -19 = if drop ." definition name too long: " (diagnostic) else
+      dup -20 = if drop ." parsed string overflow " else
+      dup -21 = if drop ." unsupported operation " else
+      ." error: " . then then then then then then then then then then cr
+      \ Reset compilation state and clear stack.
+      postpone [
+      (sp0) @ (sp!)
+    else
+      state @ 0= if ." ok" cr then
+    then
+  repeat
+;
+
+: abort ( -- ) (sp0) @ (sp!) quit ;
+
+: (abort") ( flag c-addr u -- )
+  rot if type abort else 2drop then
+;
+
+: abort" postpone s" postpone (abort") ; immediate
+
+\ TODO: Move to block set later.
+: load begin refill while (interpret) repeat ;

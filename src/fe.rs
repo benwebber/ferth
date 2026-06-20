@@ -1,9 +1,9 @@
+use crate::Result;
 use crate::data::Mem;
-use crate::error::Ior;
+use crate::error::KernelError;
 use crate::io::{Io, NoIo};
-use crate::kernel::{Config, Kernel, Ready};
+use crate::kernel::{Config, Kernel};
 use crate::log::debug;
-use crate::{Error, Result};
 
 const WORDLISTS: &[(&str, &[u8])] = &[
     ("core", include_bytes!("core.fth")),
@@ -11,33 +11,22 @@ const WORDLISTS: &[(&str, &[u8])] = &[
     ("tools", include_bytes!("tools.fth")),
 ];
 
+pub trait State {}
+pub struct Loading {}
+pub struct Ready {
+    xt_quit: usize,
+    xt_load: usize,
+}
+impl State for Loading {}
+impl State for Ready {}
+
 /// The Forth system.
-pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo> {
-    kernel: Kernel<M, I, Ready>,
+pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Ready> {
+    kernel: Kernel<M, I, crate::kernel::Ready>,
+    state: S,
 }
 
-impl<M: Mem, I: Io> Fe<M, I> {
-    /// Build an [`Fe`] with the default environment configuration.
-    pub fn new(mem: M, io: I) -> Result<Self> {
-        Self::with_config(mem, io, Config::default())
-    }
-
-    /// Build an [`Fe`] with a specific environment configuration.
-    pub fn with_config(mem: M, io: I, config: Config) -> Result<Self> {
-        let mut fe = Self {
-            kernel: Kernel::new(mem, io, config).boot()?,
-        };
-        #[allow(unused_variables)] // name in debug!
-        for (name, src) in WORDLISTS {
-            fe.evaluate(src)?;
-            debug!("SYSTEM", "Loaded {} wordlist", name);
-        }
-        fe.evaluate(b"(check-bootstrap)")?;
-        debug!("SYSTEM", "Passed boot checks");
-        debug!("SYSTEM", "Ready");
-        Ok(fe)
-    }
-
+impl<M: Mem, I: Io, S: State> Fe<M, I, S> {
     /// Evaluate Forth code.
     pub fn evaluate(&mut self, code: impl AsRef<[u8]>) -> Result<()> {
         for line in code.as_ref().split(|&u| u == b'\n') {
@@ -45,26 +34,6 @@ impl<M: Mem, I: Io> Fe<M, I> {
             self.kernel.catch_interpret()?;
         }
         Ok(())
-    }
-
-    /// Load and interpret code from the current input source.
-    pub fn load(&mut self) -> Result<()> {
-        let (xt, _) = self
-            .kernel
-            .find(b"load")?
-            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        self.kernel.execute(xt)
-    }
-
-    /// Run `quit`, the Forth interpreter loop.
-    ///
-    /// See [`QUIT`](https://forth-standard.org/standard/core/QUIT).
-    pub fn quit(&mut self) -> Result<()> {
-        let (xt, _) = self
-            .kernel
-            .find(b"quit")?
-            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        self.kernel.execute(xt)
     }
 
     /// Push a value onto the data stack.
@@ -88,16 +57,66 @@ impl<M: Mem, I: Io> Fe<M, I> {
     }
 }
 
+impl<M: Mem, I: Io> Fe<M, I, Loading> {
+    /// Build an [`Fe`] with the default environment configuration.
+    pub fn new(mem: M, io: I) -> Result<Fe<M, I, Ready>> {
+        Self::with_config(mem, io, Config::default())
+    }
+
+    /// Build an [`Fe`] with a specific environment configuration.
+    pub fn with_config(mem: M, io: I, config: Config) -> Result<Fe<M, I, Ready>> {
+        let mut fe = Fe {
+            kernel: Kernel::new(mem, io, config).boot()?,
+            state: Loading {},
+        };
+        #[allow(unused_variables)] // name in debug!
+        for (name, src) in WORDLISTS {
+            fe.evaluate(src)?;
+            debug!("SYSTEM", "Loaded {} wordlist", name);
+        }
+        let xt = |name: &'static str| -> Result<usize> {
+            fe.kernel
+                .find(name.as_bytes())?
+                .map(|(xt, _)| xt)
+                .ok_or(KernelError::MissingEntryPoint(name).into())
+        };
+        let state = Ready {
+            xt_load: xt("load")?,
+            xt_quit: xt("quit")?,
+        };
+        fe.evaluate(b"(check-bootstrap)")?;
+        debug!("SYSTEM", "Passed boot checks");
+        debug!("SYSTEM", "Ready");
+        Ok(Fe {
+            kernel: fe.kernel,
+            state,
+        })
+    }
+}
+
+impl<M: Mem, I: Io> Fe<M, I, Ready> {
+    /// Load and interpret code from the current input source.
+    pub fn load(&mut self) -> Result<()> {
+        self.kernel.execute(self.state.xt_load)
+    }
+
+    /// Run `quit`, the Forth interpreter loop.
+    ///
+    /// See [`QUIT`](https://forth-standard.org/standard/core/QUIT).
+    pub fn quit(&mut self) -> Result<()> {
+        self.kernel.execute(self.state.xt_quit)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::{Error, Ior};
     use crate::{FALSE, TRUE};
-
-    type TestFe = Fe;
 
     #[test]
     fn test_undefined_word() {
-        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
         assert!(matches!(
             fe.evaluate(b"nope"),
             Err(Error::Throw(Ior::UNDEFINED_WORD))
@@ -106,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_long_word_name_errors() {
-        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
         // A name at the limit (30 bytes) is accepted.
         let ok = [b": ".as_slice(), &[b'a'; 30], b" 1 ;"].concat();
         assert!(fe.evaluate(&ok).is_ok());
@@ -120,14 +139,14 @@ mod tests {
 
     #[test]
     fn test_environment() {
-        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
 
-        let single = |fe: &mut TestFe, q: &[u8], expected: usize| {
+        let single = |fe: &mut Fe, q: &[u8], expected: usize| {
             fe.evaluate(q).unwrap();
             assert_eq!(fe.pop().unwrap(), TRUE);
             assert_eq!(fe.pop().unwrap(), expected);
         };
-        let double = |fe: &mut TestFe, q: &[u8], lo: usize, hi: usize| {
+        let double = |fe: &mut Fe, q: &[u8], lo: usize, hi: usize| {
             fe.evaluate(q).unwrap();
             assert_eq!(fe.pop().unwrap(), TRUE);
             assert_eq!(fe.pop().unwrap(), hi);
@@ -171,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_catch_throw() {
-        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
 
         // Success. `catch` returns 0 and the protected word is next on stack.
         fe.evaluate(b": ok 42 ;").unwrap();
@@ -200,7 +219,7 @@ mod tests {
     #[test]
     fn test_abort_irrecoverable_error() {
         use crate::error::VmError;
-        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
 
         // Force a a data stack overflow, an irrecoverable error.
         fe.evaluate(b": overflow begin 1 again ;").unwrap();
@@ -216,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_catch_recoverable_error() {
-        let mut fe = TestFe::new([0u8; 65536], NoIo).unwrap();
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
 
         // Re-raise recoverable errors (division by zero) as a Forth ception. `catch` returns its
         // ior.
