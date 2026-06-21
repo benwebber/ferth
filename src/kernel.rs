@@ -155,13 +155,13 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
                 let target = self.pop()?;
                 return self.execute(target);
             }
-            match self.vm.execute(&mut self.data, op) {
+            match self.vm.step(&mut self.data, op) {
                 Ok(Some(s)) => s,
                 Ok(None) => return Ok(()),
                 Err(e) => self.throw(e.into())?,
             }
         } else {
-            match self.vm.call_token(&mut self.data, xt) {
+            match self.vm.call(&mut self.data, xt) {
                 Ok(s) => s,
                 Err(e) => self.throw(e.into())?,
             }
@@ -173,7 +173,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
                     let f = self.builtins[token.index]
                         .ok_or(KernelError::InvalidBuiltin(token.index as u8))?;
                     stop = match f(self) {
-                        Ok(()) => match self.vm.resume_token(&mut self.data, token) {
+                        Ok(()) => match self.vm.resume(&mut self.data, token) {
                             Ok(s) => s,
                             Err(e) => self.throw(e.into())?,
                         },
@@ -194,7 +194,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
             Some((throw_xt, _)) => {
                 // Throw in Forth.
                 self.push(ior as usize)?;
-                match self.vm.call_token(&mut self.data, throw_xt) {
+                match self.vm.call(&mut self.data, throw_xt) {
                     Ok(stop) => Ok(stop),
                     Err(e) => Err(self.abort(e.into())),
                 }
