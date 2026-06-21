@@ -239,10 +239,11 @@ pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
     };
     if kind & PRIMITIVE != 0 {
         let op = host.read_cell(xt)? & 0xff;
-        comma(host, op)
+        comma(host, op | (xt << 8))
     } else if kind & BUILTIN != 0 {
         let index = host.read_cell(xt + SIZE)?;
-        comma(host, Op::Yield as usize)?;
+        let x = (Op::Yield as usize) | (index << 8) | (xt << 16);
+        comma(host, x)?;
         comma(host, index)
     } else {
         comma(host, Op::Call as usize)?;
