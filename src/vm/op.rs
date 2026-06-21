@@ -288,6 +288,8 @@ ops! {
     DoCreate = 0x23,
 
     Execute = 0x24,
+
+    Call = 0x25,
 }
 
 #[cfg(test)]

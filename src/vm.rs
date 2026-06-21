@@ -9,6 +9,8 @@ mod op;
 pub use error::{VmError, VmResult};
 pub use op::Op;
 
+pub const HALT: usize = 0x00;
+
 /// Read a cell. Forgo bounds and alignment checks when the `unsafe` feature is enabled.
 macro_rules! maybe_read_cell_unchecked {
     ($data:expr, $addr:expr) => {{
@@ -252,6 +254,74 @@ impl Vm {
         maybe_read_cell_unchecked!(data, self.rp)
     }
 
+    #[allow(dead_code)]
+    pub fn call_token<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<Stop> {
+        self.rpush(data, 0)?;
+        self.ip = addr;
+        self.run_token(data)
+    }
+
+    #[allow(dead_code)]
+    pub fn resume_token<M: Mem>(
+        &mut self,
+        data: &mut Data<M>,
+        token: YieldToken,
+    ) -> VmResult<Stop> {
+        self.ip = token.ip;
+        self.run_token(data)
+    }
+
+    #[allow(dead_code)]
+    pub fn run_token<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Stop> {
+        loop {
+            if self.ip == HALT {
+                return Ok(Stop::Halt);
+            }
+            // Masked to prepare for packed instruction.
+            let op = (maybe_read_cell_unchecked!(data, self.ip)? & 0xff).try_into()?;
+            self.ip += SIZE;
+            if let Some(stop) = self.step_token(data, op)? {
+                return Ok(stop);
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    fn step_token<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
+        match op {
+            Op::Call => {
+                let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                self.ip += SIZE;
+                self.rpush(data, self.ip)?;
+                self.ip = target;
+                Ok(None)
+            }
+            Op::Execute => {
+                let target = self.pop(data)?;
+                self.rpush(data, self.ip)?;
+                self.ip = target;
+                Ok(None)
+            }
+            Op::Yield => {
+                let index = maybe_read_cell_unchecked!(data, self.ip)?;
+                self.ip += SIZE;
+                Ok(Some(Stop::Yield(YieldToken { ip: self.ip, index })))
+            }
+            Op::DoCreate => {
+                let does_addr = maybe_read_cell_unchecked!(data, self.ip)?;
+                self.ip += SIZE;
+                self.push(data, self.ip)?;
+                self.ip = if does_addr != 0 {
+                    does_addr
+                } else {
+                    self.rpop(data)?
+                };
+                Ok(None)
+            }
+            _ => self.execute(data, op),
+        }
+    }
+
     /// Execute a single [`Op`] code.
     fn execute<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
         match op {
@@ -479,6 +549,7 @@ impl Vm {
                 }
                 self.rp = addr;
             }
+            Op::Call => unreachable!("step_token"),
         }
         Ok(None)
     }
@@ -740,6 +811,97 @@ mod tests {
         d.write_cell(base, Op::Halt as usize).unwrap();
         v.w = base;
         assert_eq!(v.dispatch(&mut d).unwrap(), Some(Stop::Halt));
+    }
+
+    // token execution path
+
+    #[test]
+    fn call_token_threads_primitive_until_exit() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write_cell(base, Op::Dup as usize).unwrap();
+        d.write_cell(base + SIZE, Op::Exit as usize).unwrap();
+        v.push(&mut d, 7).unwrap();
+        assert_eq!(v.call_token(&mut d, base).unwrap(), Stop::Halt);
+        assert_eq!(ds(&v, &d), vec![7, 7]);
+        assert_eq!(rlen(&v), 0);
+    }
+
+    #[test]
+    fn call_token_pushes_inline_literal() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write_cell(base, Op::Lit as usize).unwrap();
+        d.write_cell(base + SIZE, 42).unwrap();
+        d.write_cell(base + 2 * SIZE, Op::Exit as usize).unwrap();
+        assert_eq!(v.call_token(&mut d, base).unwrap(), Stop::Halt);
+        assert_eq!(ds(&v, &d), vec![42]);
+    }
+
+    #[test]
+    fn call_token_calls_nested_word() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        // inner: [Lit][9][Exit]
+        let inner = base;
+        d.write_cell(inner, Op::Lit as usize).unwrap();
+        d.write_cell(inner + SIZE, 9).unwrap();
+        d.write_cell(inner + 2 * SIZE, Op::Exit as usize).unwrap();
+        // outer: [Call][inner][Exit]
+        let outer = base + 3 * SIZE;
+        d.write_cell(outer, Op::Call as usize).unwrap();
+        d.write_cell(outer + SIZE, inner).unwrap();
+        d.write_cell(outer + 2 * SIZE, Op::Exit as usize).unwrap();
+        assert_eq!(v.call_token(&mut d, outer).unwrap(), Stop::Halt);
+        assert_eq!(ds(&v, &d), vec![9]);
+        assert_eq!(rlen(&v), 0);
+    }
+
+    #[test]
+    fn call_token_yields_then_resumes() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write_cell(base, Op::Yield as usize).unwrap();
+        d.write_cell(base + SIZE, 5).unwrap();
+        d.write_cell(base + 2 * SIZE, Op::Exit as usize).unwrap();
+        let token = match v.call_token(&mut d, base).unwrap() {
+            Stop::Yield(t) => t,
+            other => panic!("expected Yield, got {:?}", other),
+        };
+        assert_eq!(token.index, 5);
+        assert_eq!(v.resume_token(&mut d, token).unwrap(), Stop::Halt);
+    }
+
+    #[test]
+    fn call_token_execute_transfers_control() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        // inner: [Lit][7][Exit]
+        let inner = base;
+        d.write_cell(inner, Op::Lit as usize).unwrap();
+        d.write_cell(inner + SIZE, 7).unwrap();
+        d.write_cell(inner + 2 * SIZE, Op::Exit as usize).unwrap();
+        // outer: [Execute][Exit]
+        let outer = base + 3 * SIZE;
+        d.write_cell(outer, Op::Execute as usize).unwrap();
+        d.write_cell(outer + SIZE, Op::Exit as usize).unwrap();
+        v.push(&mut d, inner).unwrap();
+        assert_eq!(v.call_token(&mut d, outer).unwrap(), Stop::Halt);
+        assert_eq!(ds(&v, &d), vec![7]);
+        assert_eq!(rlen(&v), 0);
+    }
+
+    #[test]
+    fn call_token_docreate_pushes_body_and_self_terminates() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        // [DoCreate][does=0][param]
+        d.write_cell(base, Op::DoCreate as usize).unwrap();
+        d.write_cell(base + SIZE, 0).unwrap();
+        d.write_cell(base + 2 * SIZE, 0).unwrap();
+        assert_eq!(v.call_token(&mut d, base).unwrap(), Stop::Halt);
+        assert_eq!(ds(&v, &d), vec![base + 2 * SIZE]);
+        assert_eq!(rlen(&v), 0);
     }
 
     // Halt
