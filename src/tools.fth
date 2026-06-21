@@ -135,8 +135,8 @@ variable (dump-end)
   parse-name (find)                       ( c-addr u -- 0 | xt -1 | xt 1 )
   0<> if                                  ( xt )
     cr
-    dup @ ['] (docol) @ = if              ( xt )
-      \ This is a colon definition.
+    dup (flags-addr) c@ %1011000 and 0= if ( xt )
+      \ This is a colon definition (not PRIMITIVE|BUILTIN|CREATE).
       dup (>name)                         ( xt name-addr len )
       [char] : emit space type cr         ( xt )
       2 spaces

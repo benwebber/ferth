@@ -304,10 +304,6 @@ impl Vm {
                 self.w = self.pop(data)?;
                 return self.dispatch(data);
             }
-            Op::DoCol => {
-                self.rpush(data, self.ip)?;
-                self.ip = self.w + SIZE;
-            }
             Op::Lit => {
                 let val = maybe_read_cell_unchecked!(data, self.ip)?;
                 self.push(data, val)?;
@@ -826,33 +822,6 @@ mod tests {
         assert_eq!(
             v.execute(&mut d, Op::Exit),
             Err(VmError::ReturnStackUnderflow)
-        );
-    }
-
-    // DoCol
-
-    #[test]
-    fn op_docol_ok() {
-        let (mut v, mut d) = vm();
-        let base = v.reserved();
-        v.w = base;
-        v.ip = base + 2 * SIZE;
-        v.execute(&mut d, Op::DoCol).unwrap();
-        assert_eq!(v.ip, base + SIZE);
-        assert_eq!(v.rpop(&mut d).unwrap(), base + 2 * SIZE);
-    }
-
-    #[test]
-    fn op_docol_overflow() {
-        let (mut v, mut d) = vm();
-        for i in 0..RS_LEN {
-            v.rpush(&mut d, i).unwrap();
-        }
-        let base = v.reserved();
-        v.w = base;
-        assert_eq!(
-            v.execute(&mut d, Op::DoCol),
-            Err(VmError::ReturnStackOverflow)
         );
     }
 

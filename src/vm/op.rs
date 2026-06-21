@@ -37,9 +37,6 @@ ops! {
     /// ```
     Exit = 0x02,
 
-    /// Execute a colon definition.
-    DoCol = 0x03,
-
     // Literals
     /// Place a literal value on the data stack.
     ///

@@ -117,7 +117,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
     fn compile_opcodes(&mut self) -> Result<()> {
         let opcodes: &[(&[u8], Op)] = &[
             (b"!", Op::Store),
-            (b"(docol)", Op::DoCol),
             (b"(docreate)", Op::DoCreate),
             (b"(exit)", Op::Exit),
             (b"(jmp)", Op::Jmp),
@@ -494,7 +493,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
     fn define(&mut self, name: &[u8], code: Op, flags: u8) -> Result<usize> {
         let kind = match code {
             Op::Yield => BUILTIN,
-            Op::DoCol => COLON,
             _ => PRIMITIVE,
         };
         let cfa = self.create(name, flags | kind)?;
