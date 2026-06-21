@@ -155,37 +155,6 @@ impl Vm {
         }
     }
 
-    /// Execute instructions until a stop condition.
-    pub fn run<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Stop> {
-        loop {
-            if self.ip == 0 {
-                // Sentinel address, always outside range of data space.
-                return Ok(Stop::Halt);
-            }
-            self.w = maybe_read_cell_unchecked!(data, self.ip)?;
-            self.ip += SIZE;
-            if let Some(stop) = self.dispatch(data)? {
-                return Ok(stop);
-            };
-        }
-    }
-
-    /// Resume execution after yielding.
-    pub fn resume<M: Mem>(&mut self, data: &mut Data<M>, token: YieldToken) -> VmResult<Stop> {
-        self.ip = token.ip;
-        self.run(data)
-    }
-
-    /// Execute the instruction at `addr`.
-    pub fn call<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<Stop> {
-        self.ip = 0;
-        self.w = addr;
-        match self.dispatch(data)? {
-            Some(stop) => Ok(stop),
-            None => self.run(data),
-        }
-    }
-
     /// Reset stacks.
     pub fn reset(&mut self) {
         self.sp = Self::DS_ADDR;
@@ -323,7 +292,7 @@ impl Vm {
     }
 
     /// Execute a single [`Op`] code.
-    fn execute<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
+    pub fn execute<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
         match op {
             Op::Halt => {
                 return Ok(Some(Stop::Halt));
@@ -696,89 +665,6 @@ mod tests {
     fn rpop_underflow() {
         let (mut v, mut d) = vm();
         assert_eq!(v.rpop(&mut d), Err(VmError::ReturnStackUnderflow));
-    }
-
-    // run
-
-    #[test]
-    fn run_ip_zero_halts() {
-        let (mut v, mut d) = vm();
-        v.ip = 0;
-        assert_eq!(v.run(&mut d).unwrap(), Stop::Halt);
-    }
-
-    #[test]
-    fn run_executes_thread() {
-        let (mut v, mut d) = vm();
-        let base = v.reserved();
-        let s = SIZE;
-        d.write_cell(base, Op::Halt as usize).unwrap();
-        let thread = base + s;
-        d.write_cell(thread, base).unwrap();
-        v.ip = thread;
-        assert_eq!(v.run(&mut d).unwrap(), Stop::Halt);
-    }
-
-    #[test]
-    fn run_returns_stop() {
-        let (mut v, mut d) = vm();
-        let base = v.reserved();
-        let s = SIZE;
-        d.write_cell(base, Op::Lit as usize).unwrap();
-        d.write_cell(base + s, Op::Halt as usize).unwrap();
-        let thread = base + 2 * s;
-        d.write_cell(thread, base).unwrap();
-        d.write_cell(thread + s, 42usize).unwrap();
-        d.write_cell(thread + 2 * s, base + s).unwrap();
-        v.ip = thread;
-        assert_eq!(v.run(&mut d).unwrap(), Stop::Halt);
-        assert_eq!(ds(&v, &d), vec![42]);
-    }
-
-    // call
-
-    #[test]
-    fn call_halt_word() {
-        let (mut v, mut d) = vm();
-        let base = v.reserved();
-        d.write_cell(base, Op::Halt as usize).unwrap();
-        assert_eq!(v.call(&mut d, base).unwrap(), Stop::Halt);
-    }
-
-    #[test]
-    fn call_docol_word() {
-        let (mut v, mut d) = vm();
-        let base = v.reserved();
-        let s = SIZE;
-        d.write_cell(base, Op::DoCol as usize).unwrap();
-        d.write_cell(base + s, base + 2 * s).unwrap();
-        d.write_cell(base + 2 * s, Op::Halt as usize).unwrap();
-        assert_eq!(v.call(&mut d, base).unwrap(), Stop::Halt);
-    }
-
-    // resume
-
-    #[test]
-    fn resume_continues_after_yield() {
-        let (mut v, mut d) = vm();
-        let base = v.reserved();
-        let s = SIZE;
-        d.write_cell(base, Op::Yield as usize).unwrap();
-        d.write_cell(base + s, 7usize).unwrap();
-        d.write_cell(base + 2 * s, Op::Halt as usize).unwrap();
-        let thread = base + 3 * s;
-        d.write_cell(thread, base).unwrap();
-        d.write_cell(thread + s, base + 2 * s).unwrap();
-        v.ip = thread;
-
-        let stop = v.run(&mut d).unwrap();
-
-        let token = match stop {
-            Stop::Yield(t) => t,
-            _ => panic!("expected Yield"),
-        };
-        assert_eq!(token.index, 7);
-        assert_eq!(v.resume(&mut d, token).unwrap(), Stop::Halt);
     }
 
     // dispatch

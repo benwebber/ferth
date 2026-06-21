@@ -56,9 +56,9 @@
   bl parse (header) (set-create) ['] (docreate) @ , 0 ,
 ; (bootstrap) \ Replace with parse-name.
 
-: if ['] (jmpz) , here 0 , ; immediate
+: if ['] (jmpz) compile, here 0 , ; immediate
 : then here swap ! ; immediate
-: else ['] (jmp) , here 0 , swap here swap ! ; immediate
+: else ['] (jmp) compile, here 0 , swap here swap ! ; immediate
 
 : ?dup dup if dup then ;
 
@@ -109,8 +109,8 @@ create handler 0 ,
 : < - 0< ; (bootstrap)
 
 : begin here ; immediate
-: while ['] (jmpz) , here 0 , swap ; immediate
-: repeat ['] (jmp) , , here swap ! ; immediate
+: while ['] (jmpz) compile, here 0 , swap ; immediate
+: repeat ['] (jmp) compile, , here swap ! ; immediate
 
 : parse-name ( "<spaces>name<space>" -- c-addr u )
   \ Skip leading whitespace characters.
@@ -146,7 +146,6 @@ create handler 0 ,
 execute :
   parse-name (header)
   (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
-  ['] (docol) @ ,
   -1 state !
 ;
 r> (hide)       ( R: )
@@ -175,7 +174,7 @@ r> (hide)       ( R: )
   dup 0= if (diagnostic!) -13 throw then  ( xt flag )
   0< if
     \ The word is not immediate.
-    ['] (lit) , ,         \ Compile `'(lit) xt`
+    ['] (lit) compile, ,  \ Compile `'(lit) xt`
     ['] compile, compile, \ Compile `'compile,` a call to `compile,`
   else
     \ The word is immediate.

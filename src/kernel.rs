@@ -1,7 +1,7 @@
 use crate::data::{Data, Mem};
 use crate::error::{Ior, KernelError, Severity};
 use crate::io::{Io, NoIo};
-use crate::vm::{Stop, Vm};
+use crate::vm::{Op, Stop, Vm};
 use crate::{Error, FALSE, Result, SIZE, TRUE};
 
 mod boot;
@@ -146,9 +146,25 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     }
 
     pub(super) fn execute(&mut self, xt: usize) -> Result<()> {
-        let mut stop = match self.vm.call(&mut self.data, xt) {
-            Ok(s) => s,
-            Err(e) => self.throw(e.into())?,
+        let kind = (self.data.read_cell(xt - INFO_FROM_CFA)? >> 8) as u8;
+        let mut stop = if kind & PRIMITIVE != 0 {
+            let op: Op = (self.data.read_cell(xt)? & 0xff)
+                .try_into()
+                .map_err(Error::from)?;
+            if op == Op::Execute {
+                let target = self.pop()?;
+                return self.execute(target);
+            }
+            match self.vm.execute(&mut self.data, op) {
+                Ok(Some(s)) => s,
+                Ok(None) => return Ok(()),
+                Err(e) => self.throw(e.into())?,
+            }
+        } else {
+            match self.vm.call_token(&mut self.data, xt) {
+                Ok(s) => s,
+                Err(e) => self.throw(e.into())?,
+            }
         };
         loop {
             match stop {
@@ -157,7 +173,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
                     let f = self.builtins[token.index]
                         .ok_or(KernelError::InvalidBuiltin(token.index as u8))?;
                     stop = match f(self) {
-                        Ok(()) => match self.vm.resume(&mut self.data, token) {
+                        Ok(()) => match self.vm.resume_token(&mut self.data, token) {
                             Ok(s) => s,
                             Err(e) => self.throw(e.into())?,
                         },
@@ -178,7 +194,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
             Some((throw_xt, _)) => {
                 // Throw in Forth.
                 self.push(ior as usize)?;
-                match self.vm.call(&mut self.data, throw_xt) {
+                match self.vm.call_token(&mut self.data, throw_xt) {
                     Ok(stop) => Ok(stop),
                     Err(e) => Err(self.abort(e.into())),
                 }

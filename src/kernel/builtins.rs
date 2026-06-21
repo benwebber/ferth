@@ -1,9 +1,13 @@
 use crate::double::Double;
 use crate::error::Ior;
 use crate::parser;
+use crate::vm::Op;
 use crate::{Error, Result};
 
-use super::{FALSE, Host, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, SIZE, TRUE};
+use super::{
+    BUILTIN, FALSE, Host, INFO_FROM_CFA, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, PRIMITIVE, SIZE,
+    TRUE,
+};
 
 /// Receive a single character from the input device.
 ///
@@ -226,9 +230,22 @@ pub fn header(host: &mut dyn Host) -> Result<()> {
 /// In indirect-threaded systems, `,` can perform the function of `compile,`. This does not always
 /// hold for other threading models.
 pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
-    let here = host.read_cell(host.layout_addr(Layout::HERE))?;
     let xt = host.pop()?;
-    host.write_cell(here, xt)?;
-    host.write_cell(host.layout_addr(Layout::HERE), here + SIZE)?;
-    Ok(())
+    let kind = (host.read_cell(xt - INFO_FROM_CFA)? >> 8) as u8;
+    let comma = |host: &mut dyn Host, x: usize| -> Result<()> {
+        let here = host.read_cell(host.layout_addr(Layout::HERE))?;
+        host.write_cell(here, x)?;
+        host.write_cell(host.layout_addr(Layout::HERE), here + SIZE)
+    };
+    if kind & PRIMITIVE != 0 {
+        let op = host.read_cell(xt)? & 0xff;
+        comma(host, op)
+    } else if kind & BUILTIN != 0 {
+        let index = host.read_cell(xt + SIZE)?;
+        comma(host, Op::Yield as usize)?;
+        comma(host, index)
+    } else {
+        comma(host, Op::Call as usize)?;
+        comma(host, xt)
+    }
 }

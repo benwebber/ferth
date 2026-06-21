@@ -32,10 +32,10 @@
 : does> r> (latest) @ cell+ ! ;
 : chars ( -- ) ;
 
-: exit ['] (exit) , ; immediate
+: exit ['] (exit) compile, ; immediate
 
-: until ['] (jmpz) , , ; immediate
-: again ['] (jmp) , , ; immediate
+: until ['] (jmpz) compile, , ; immediate
+: again ['] (jmp) compile, , ; immediate
 
 : [ false state ! ; immediate
 : ] true state ! ;
@@ -85,10 +85,10 @@
 ;
 
 : 2>r ( x1 x2 -- ) ( R: -- x1 x2 )
-  ['] swap , ['] >r , ['] >r ,
+  ['] swap compile, ['] >r compile, ['] >r compile,
 ; immediate
 : 2r> ( -- x1 x2 ) ( R: x1 x2 -- )
-  ['] r> , ['] r> , ['] swap ,
+  ['] r> compile, ['] r> compile, ['] swap compile,
 ; immediate
 : 2over ( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )
   2>r 2dup 2r> 2swap
@@ -253,7 +253,7 @@ variable hld
 
 : s"
   state @ if
-    ['] (s") ,
+    ['] (s") compile,
     [char] " parse  ( src len )
     dup ,           \ compile len
     dup allot       \ reserve space for string bytes
@@ -271,7 +271,7 @@ variable hld
 : . ( n -- ) dup abs 0 <# #s rot sign #> type space ;
 : ." ( C: "ccc<quote>" -- ) ( -- ) postpone s" postpone type ; immediate
 
-: recurse (latest) @ , ; immediate
+: recurse (latest) @ compile, ; immediate
 
 \ ==============================================================================
 \ LOOPS
@@ -281,7 +281,7 @@ variable hld
 variable (leave-list)
 
 : do ( n1 n2 -- ) ( R: -- loop-sys )
-  ['] (do) ,
+  ['] (do) compile,
   (leave-list) @
   0 (leave-list) !
   here
@@ -308,7 +308,7 @@ variable (leave-list)
 ; immediate
 
 : ?do ( n1|u1 n2|u2 -- ) ( R: -- loop-sys )
-  ['] (?do) ,
+  ['] (?do) compile,
   (leave-list) @
   0 (leave-list) !
   (leave-list) @ ,

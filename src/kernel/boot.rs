@@ -153,7 +153,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"execute", Op::Execute),
         ];
         for (name, op) in opcodes {
-            let xt = self.compile(name, 0, *op, &[])?;
+            let xt = self.define(name, *op, PRIMITIVE)?;
+            self.comma(Op::Exit as usize)?;
             self.op_xts[*op as usize] = xt;
         }
         Ok(())
@@ -187,7 +188,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
     fn compile_compiler(&mut self) -> Result<()> {
         macro_rules! compile {
             ($s:expr, $flags:expr, [$($body:expr),* $(,)?]) => {
-                self.compile($s, $flags, Op::DoCol, &[$($body),*])?;
+                self.compile($s, $flags, &[$($body),*])?;
             };
         }
 
@@ -231,7 +232,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         compile!(
             b"literal",
             IMMEDIATE,
-            [L(self.op_xt(Op::Lit)), N(b","), N(b",")]
+            [L(Op::Lit as usize), N(b","), N(b",")]
         );
 
         // : ['] bl parse (find) drop literal ; immediate
@@ -247,28 +248,26 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
 
         // : :
         //   bl parse (header)
-        //   ' (docol) @ ,
         //   -1 state !
         // ;
         //
-        // Parse a word, create a definition for it and compile `DoCol` to the code address. This
-        // simple definition does not set the hidden flag. The Forth kernel replaces it.
+        // Parse a word and create a definition for it. This simple definition does not set the
+        // hidden flag. The Forth kernel replaces it.
         compile!(
             b":",
             BOOTSTRAP,
             [
                 L(BL), N(b"parse"), N(b"(header)"),
-                L(self.op_xt(Op::DoCol)), N(b"@"), N(b","),
                 L(TRUE), N(b"state"), N(b"!"),
             ]
         );
 
         // : ;
-        //   ['] (exit) ,
+        //   ['] (exit) compile,
         //   \ Calculate and set bodylen.
-        //   (latest) @                 ( latest )
-        //   dup 3 cells -              ( latest bodylen-addr )
-        //   swap 1 cells +             ( bodylen-addr body-addr )
+        //   (latest) @                 ( xt )
+        //   dup 3 cells -              ( xt bodylen-addr )
+        //   swap                       ( bodylen-addr xt )
         //   here swap -                ( bodylen-addr bodylen )
         //   swap !                     ( )
         //   \ Unset hidden flag.
@@ -292,13 +291,13 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             b";",
             IMMEDIATE,
             [
-                L(self.op_xt(Op::Exit)), N(b","),
+                L(Op::Exit as usize), N(b","),
                 // Calculate and set bodylen.
                 addr!(LATEST), N(b"@"),
                 N(b"dup"), L((3 * SIZE).wrapping_neg()), N(b"+"),
-                N(b"swap"), L(SIZE), N(b"+"),
+                N(b"swap"),
                 addr!(HERE), N(b"@"), N(b"swap"),
-                N(b"dup"), N(b"(nand)"), L(SIZE), N(b"+"), N(b"+"), // inline -
+                N(b"dup"), N(b"(nand)"), L(1), N(b"+"), N(b"+"), // inline -
                 N(b"swap"), N(b"!"),
                 // Unset hidden flag.
                 addr!(LATEST), N(b"@"),
@@ -309,10 +308,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             ]
         );
         Ok(())
-    }
-
-    fn op_xt(&self, op: Op) -> usize {
-        self.op_xts[op as usize]
     }
 
     fn load_kernel(&mut self) -> Result<()> {
@@ -330,55 +325,31 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         self.compile(
             b"(/counted-string)",
             0,
-            Op::DoCol,
             &[Token::Lit(self.env.counted_string)],
         )?;
-        self.compile(
-            b"(/hold)",
-            0,
-            Op::DoCol,
-            &[Token::Lit(self.env.config.hold)],
-        )?;
-        self.compile(b"(/pad)", 0, Op::DoCol, &[Token::Lit(self.env.config.pad)])?;
+        self.compile(b"(/hold)", 0, &[Token::Lit(self.env.config.hold)])?;
+        self.compile(b"(/pad)", 0, &[Token::Lit(self.env.config.pad)])?;
         self.compile(
             b"(address-unit-bits)",
             0,
-            Op::DoCol,
             &[Token::Lit(self.env.address_unit_bits)],
         )?;
-        self.compile(
-            b"(floored)",
-            0,
-            Op::DoCol,
-            &[Token::Lit(flag(self.env.floored))],
-        )?;
-        self.compile(
-            b"(max-char)",
-            0,
-            Op::DoCol,
-            &[Token::Lit(self.env.max_char)],
-        )?;
+        self.compile(b"(floored)", 0, &[Token::Lit(flag(self.env.floored))])?;
+        self.compile(b"(max-char)", 0, &[Token::Lit(self.env.max_char)])?;
         let (lo, hi): (usize, usize) = Double(self.env.max_d.0 as _).into();
-        self.compile(b"(max-d)", 0, Op::DoCol, &[Token::Lit(lo), Token::Lit(hi)])?;
-        self.compile(
-            b"(max-n)",
-            0,
-            Op::DoCol,
-            &[Token::Lit(self.env.max_n as usize)],
-        )?;
-        self.compile(b"(max-u)", 0, Op::DoCol, &[Token::Lit(self.env.max_u)])?;
+        self.compile(b"(max-d)", 0, &[Token::Lit(lo), Token::Lit(hi)])?;
+        self.compile(b"(max-n)", 0, &[Token::Lit(self.env.max_n as usize)])?;
+        self.compile(b"(max-u)", 0, &[Token::Lit(self.env.max_u)])?;
         let (lo, hi): (usize, usize) = self.env.max_ud.into();
-        self.compile(b"(max-ud)", 0, Op::DoCol, &[Token::Lit(lo), Token::Lit(hi)])?;
+        self.compile(b"(max-ud)", 0, &[Token::Lit(lo), Token::Lit(hi)])?;
         self.compile(
             b"(return-stack-cells)",
             0,
-            Op::DoCol,
             &[Token::Lit(self.env.config.return_stack_cells)],
         )?;
         self.compile(
             b"(stack-cells)",
             0,
-            Op::DoCol,
             &[Token::Lit(self.env.config.stack_cells)],
         )?;
         Ok(())
@@ -401,34 +372,34 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"(diagnostic-len)", Layout::DIAGNOSTIC_LEN),
         ];
         for (name, offset) in variables {
-            self.compile(name, 0, Op::DoCol, &[Token::Lit(self.layout_base + offset)])?;
+            self.compile(name, 0, &[Token::Lit(self.layout_base + offset)])?;
         }
         Ok(())
     }
 
-    fn compile(&mut self, name: &[u8], flags: u8, code: Op, body: &[Token]) -> Result<usize> {
-        let xt = self.define(name, code, flags)?;
-        let lit_xt = self.op_xts[Op::Lit as usize];
+    fn compile(&mut self, name: &[u8], flags: u8, body: &[Token]) -> Result<usize> {
+        let xt = self.create(name, flags | COLON)?;
+        self.data.write_cell(self.layout_addr(Layout::LATEST), xt)?;
+        self.data.write_cell(self.layout_addr(Layout::HERE), xt)?;
         for &token in body {
             match token {
-                Token::Lit(v) => {
-                    self.comma(lit_xt)?;
-                    self.comma(v)?;
+                Token::Lit(x) => {
+                    self.comma(Op::Lit as usize)?;
+                    self.comma(x)?;
                 }
                 Token::Name(name) => {
                     let xt = self
                         .find(name)?
                         .map(|(xt, _)| xt)
                         .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-                    self.comma(xt)?;
+                    self.push(xt)?;
+                    compile_comma(self)?;
                 }
             }
         }
-        if code == Op::DoCol {
-            self.comma(self.op_xts[Op::Exit as usize])?;
-            let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
-            self.data.write_cell(xt - 3 * SIZE, here - (xt + SIZE))?;
-        }
+        self.comma(Op::Exit as usize)?;
+        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
+        self.data.write_cell(xt - 3 * SIZE, here - xt)?;
         Ok(xt)
     }
 
@@ -493,7 +464,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
                 if ok == 1 {
                     let v = self.pop()?;
                     if state != 0 {
-                        self.comma(self.op_xts[Op::Lit as usize])?;
+                        self.comma(Op::Lit as usize)?;
                         self.comma(v)?;
                     } else {
                         self.push(v)?;
@@ -516,7 +487,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
         self.define(name, Op::Yield, flags | BUILTIN)?;
-        self.comma(idx)
+        self.comma(idx)?;
+        self.comma(Op::Exit as usize)
     }
 
     fn define(&mut self, name: &[u8], code: Op, flags: u8) -> Result<usize> {
