@@ -14,16 +14,17 @@
 \ (opcodes and builtins) as well as hand-compiled versions of the Forth compiler
 \ words.
 \
-\ The kernel has 8 stages:
+\ The kernel has multiple stages:
 \
-\   1. Define defining words.
-\   2. Define exception handler words.
-\   3. Define parse-name
-\   4. Define words that depend on parse-name
-\   5. Define postpone
-\   6. Define words that depend on postpone
-\   7. Define diagnostic checks
-\   8. Define (interpret)
+\   1. Define defining words
+\   2. Define exception handler words
+\   3. Implement tail-call optimization
+\   4. Define parse-name
+\   5. Define words that depend on parse-name
+\   6. Define postpone
+\   7. Define words that depend on postpone
+\   8. Define diagnostic checks
+\   9. Define (interpret)
 \
 \ Once (interpret) exists, Forth takes over execution.
 \
@@ -56,9 +57,13 @@
   bl parse (header) (set-create) ['] (docreate) @ , 0 ,
 ; (bootstrap) \ Replace with parse-name.
 
+\ (rp@) points to the next cell, and (docol) pushes a call frame onto the stack.
+: r@ (rp@) 2 cells - @ ;
+
 : if ['] (jmpz) compile, here 0 , ; immediate
 : then here swap ! ; immediate
 : else ['] (jmp) compile, here 0 , swap here swap ! ; immediate
+: exit ['] (exit) compile, ; immediate
 
 : ?dup dup if dup then ;
 
@@ -102,15 +107,118 @@ create handler 0 ,
 
 : (diagnostic!) (diagnostic-len) ! (diagnostic-addr) ! ;
 
-\ 3. PARSE-NAME
-\ =============
+\ 3. TAIL-CALL OPTIMIZATION
+\ =========================
+\
+\ In this token-threaded system, all words share the same structure in memory.
+\ Specifically, the word's XT points to its `code` field, which is always a
+\ literal opcode. Some opcodes, such as `Lit` and `Call` take operands, stored
+\ consecutively in memory.
+\
+\ There is no DOCOL instruction to enter the word. Instead, `Call` immediately
+\ jumps to the target word's `code` field and executes it until it hits `Exit`.
+\
+\ A primitive looks like:
+\
+\         name      bodylen        code
+\         v         v              v
+\     ...[3]["dup"][2][info][link][Dup][Exit]
+\
+\ A colon definition composed of primitives looks like:
+\
+\     : over >r dup r> swap ;
+\
+\         name       bodylen        code
+\         v          v              v
+\     ...[4]["over"][4][info][link][ToR][Dup][RFrom][Swap][Exit]
+\
+\ A word that calls other colon definitions looks like:
+\
+\     : ?dup dup if dup then ;
+\
+\         name       bodylen        code
+\         v          v              v
+\     ...[4]["?dup"][4][info][link][Dup][Call]['if][Dup][Call]['then][Exit]
+\
+\ Where `'if` and `'then` are those words' XTs.
+\
+\ This permits simple tail-call optimization. If the last instruction in a
+\ definition is a `Call`, we would normally push a stack frame to enter that
+\ word. Not only does this incur extra work, but deep recursion will overflow
+\ the return stack.  Instead, we can easily patch the final `Call` to a `Jmp`.
+\
+\         name       bodylen        code                 patch
+\         v          v              v                    v
+\     ...[4]["?dup"][4][info][link][Dup][Call]['if][Dup][Jmp]['then][Exit]
+\
+\ This is safe for all words, and particularly useful for recursive words. Note
+\ that this does leave a spurious, yet harmless, `Exit` at the end of the
+\ definition.
+\
+\ Because this is safe for all words, we can redefine `;` to apply it to all new
+\ definitions. See below.
 
-\ < does not need to be overflow safe here
-: < - 0< ; (bootstrap)
+: over >r dup r> swap ;
+: 2dup over over ;
+
+: xor over over and invert >r or r> and ;
+
+\ Overflow-safe comparison operators.
+: <  ( n1 n2 -- flag ) 2dup xor 0< if      drop 0< else - 0< then ;
+: u< ( u1 u2 -- flag ) 2dup xor 0< if swap drop 0< else - 0< then ;
 
 : begin here ; immediate
 : while ['] (jmpz) compile, here 0 , swap ; immediate
 : repeat ['] (jmp) compile, , here swap ! ; immediate
+
+\ Returns the length of the body in cells.
+: (body-len) ( xt -- u ) 3 cells - @ ;
+
+\ Calculate the size of the instruction at addr.
+: (instr-size) ( addr -- n )
+  \ All of these instructions take one operand, for two cells.
+  \ TODO: Expose (call)?
+  dup @ $25           - 0= if drop 2 cells exit then
+  dup @ ['] (lit)   @ - 0= if drop 2 cells exit then
+  dup @ ['] (jmp)   @ - 0= if drop 2 cells exit then
+  dup @ ['] (jmpz)  @ - 0= if drop 2 cells exit then
+  dup @ ['] (+loop) @ - 0= if drop 2 cells exit then
+  dup @ ['] (?do)   @ - 0= if drop 2 cells exit then
+  \ `Str` takes a variable length operand: `[Str][len][data...]`, for a total of
+  \ `2 * SIZE + len(data)` bytes, aligned up.
+  dup @ ['] (s")    @ - 0= if 1 cells + @ aligned 2 cells + exit then
+  drop 1 cells
+;
+
+\ Return the address of a word's last instruction.
+: (tail) ( xt -- addr )
+  dup dup (body-len) + 1 cells - >r   ( xt ) ( R: exit-addr )
+  dup                                 ( prev addr )
+  \ Walk up the word's instructions until hitting `exit-addr`.
+  \ The final address on the stack will be the address of the last instruction
+  \ before `Exit`.
+  begin
+    dup r@ u<                         ( prev addr flag )
+  while
+    swap drop dup                     ( addr addr )
+    dup (instr-size) +                ( prev addr )
+  repeat
+  drop r> drop                        ( prev ) ( R: )
+;
+
+: (tail-optimize) ( -- )
+  \ Skip if body is less than three cells (probably a primitive).
+  (latest) @ dup (body-len) 3 cells u< if drop exit then
+  (tail) dup @ $25 - 0= if
+    \ Replace `Call` with `Jmp`. Dead `Exit` remains.
+    ['] (jmp) @ swap !
+  else
+    drop
+  then
+;
+
+\ 4. PARSE-NAME
+\ =============
 
 : parse-name ( "<spaces>name<space>" -- c-addr u )
   \ Skip leading whitespace characters.
@@ -133,7 +241,7 @@ create handler 0 ,
   bl parse
 ;
 
-\ 4. PARSE-NAME DEFINITIONS
+\ 5. PARSE-NAME DEFINITIONS
 \ =========================
 
 : ' parse-name (find) 0= if (diagnostic!) -13 throw then ;
@@ -155,7 +263,13 @@ r> (hide)       ( R: )
   parse-name (header) (set-create) ['] (docreate) @ , 0 ,
 ;
 
-\ 5. POSTPONE
+\ Redefine `;` to call `(tail-optimize)` after executing. Compile the current XT
+\ of `;` into the definition.
+' ; ( xt )
+: ; literal execute (tail-optimize) ; immediate ( )
+
+
+\ 6. POSTPONE
 \ ===========
 
 \ postpone's definition is difficult to grasp because it fuses two different
@@ -182,7 +296,7 @@ r> (hide)       ( R: )
   then
 ; immediate
 
-\ 6. POSTPONE DEFINITIONS
+\ 7. POSTPONE DEFINITIONS
 \ =======================
 
 : constant >r : r> postpone literal postpone ; ;
@@ -193,8 +307,6 @@ r> (hide)       ( R: )
 
 \ 7. DIAGNOSTIC CHECKS
 \ ====================
-
-: over >r dup r> swap ;
 
 \ Check that we have redefined all hand-compiled words.
 : (check-bootstrap)
@@ -213,11 +325,10 @@ r> (hide)       ( R: )
   drop
 ;
 
-\ 8. (INTERPRET)
+\ 9. (INTERPRET)
 \ ==============
 
 : rot >r swap r> swap ;
-: 2dup over over ;
 : 2drop drop drop ;
 : 2swap rot >r rot r> ;
 

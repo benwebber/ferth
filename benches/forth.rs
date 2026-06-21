@@ -1,5 +1,5 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use ferth::{Config, Fe, io::NoIo};
+use ferth::{Fe, io::NoIo};
 use std::hint::black_box;
 
 macro_rules! impl_bench {
@@ -34,23 +34,6 @@ macro_rules! bench {
             Fe::new([0u8; 65536], NoIo).unwrap()
         );
     };
-    ($fn:ident, $label:literal, $file:literal, $expr:expr, rs = $rs:literal) => {
-        impl_bench!(
-            $fn,
-            $label,
-            $file,
-            $expr,
-            Fe::with_config(
-                [0u8; 65536],
-                NoIo,
-                Config {
-                    return_stack_cells: $rs,
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-        );
-    };
 }
 
 bench!(fib, "forth/fib(20)", "fib.fth", b"20 fib drop");
@@ -66,8 +49,7 @@ bench!(
     countdown,
     "forth/countdown(60)",
     "countdown.fth",
-    b"60 countdown",
-    rs = 256
+    b"60 countdown"
 );
 bench!(
     crc32,

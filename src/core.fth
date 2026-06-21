@@ -10,7 +10,6 @@
 : decimal #10 base ! ;
 : hex $10 base ! ;
 
-: xor over over and invert >r or r> and ;
 : negate invert 1 + ;
 
 : * ( n1 n2 -- n3 ) um* drop ;
@@ -23,16 +22,11 @@
 : <> = 0= ;
 : 0<> 0= invert ;
 
-\ (rp@) points to the next cell, and (docol) pushes a call frame onto the stack.
-: r@ (rp@) 2 cells - @ ;
-
 : cell+ 1 cells + ;
 : c,  here c! 1 allot ;
 : >body 2 cells + ;
 : does> r> (latest) @ cell+ ! ;
 : chars ( -- ) ;
-
-: exit ['] (exit) compile, ; immediate
 
 : until ['] (jmpz) compile, , ; immediate
 : again ['] (jmp) compile, , ; immediate
@@ -40,11 +34,6 @@
 : [ false state ! ; immediate
 : ] true state ! ;
 
-\ Overflow-safe comparison operators.
-\ TODO: explain
-' < (hide)
-: <  ( n1 n2 -- flag ) 2dup xor 0< if      drop 0< else - 0< then ;
-: u< ( u1 u2 -- flag ) 2dup xor 0< if swap drop 0< else - 0< then ;
 : > swap < ;
 : 0> 0 > ;
 
