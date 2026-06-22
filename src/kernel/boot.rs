@@ -537,14 +537,14 @@ mod tests {
         let k = Kernel::new([0u8; 65536], NoIo, Config::default())
             .boot()
             .unwrap();
-        let kind = |name: &[u8]| {
+        let flags = |name: &[u8]| {
             let (xt, _) = k.find(name).unwrap().unwrap();
             let header = Header::new(xt);
             let info: Info = k.data.read_cell(header.info_addr()).unwrap().into();
             info.flags()
         };
-        assert!(kind(b"dup") & Flags::PRIMITIVE != 0);
-        assert!(kind(b"(find)") & Flags::BUILTIN != 0);
-        assert!(kind(b"cells") & Flags::COLON != 0);
+        assert!(flags(b"dup").contains(Flags::PRIMITIVE));
+        assert!(flags(b"(find)").contains(Flags::BUILTIN));
+        assert!(flags(b"cells").contains(Flags::COLON));
     }
 }

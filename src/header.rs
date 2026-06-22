@@ -138,7 +138,7 @@ impl BitAnd<Flags> for Flags {
     type Output = Self;
 
     fn bitand(self, rhs: Flags) -> Self::Output {
-        self & rhs.0
+        Self(self.0 & rhs.0)
     }
 }
 
@@ -146,44 +146,6 @@ impl BitOr<Flags> for Flags {
     type Output = Self;
 
     fn bitor(self, rhs: Flags) -> Self::Output {
-        self | rhs.0
-    }
-}
-
-impl BitAnd<u8> for Flags {
-    type Output = Self;
-
-    fn bitand(self, rhs: u8) -> Self::Output {
-        Self(self.0 & rhs)
-    }
-}
-
-impl BitOr<u8> for Flags {
-    type Output = Self;
-
-    fn bitor(self, rhs: u8) -> Self::Output {
-        Self(self.0 | rhs)
-    }
-}
-
-impl BitAnd<Flags> for u8 {
-    type Output = Self;
-
-    fn bitand(self, rhs: Flags) -> Self::Output {
-        self & rhs.0
-    }
-}
-
-impl BitOr<Flags> for u8 {
-    type Output = Self;
-
-    fn bitor(self, rhs: Flags) -> Self::Output {
-        self | rhs.0
-    }
-}
-
-impl PartialEq<u8> for Flags {
-    fn eq(&self, other: &u8) -> bool {
-        self.0 == *other
+        Self(self.0 | rhs.0)
     }
 }
