@@ -250,3 +250,23 @@ pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
         comma(host, xt)
     }
 }
+
+pub fn decode(host: &mut dyn Host) -> Result<()> {
+    use Op::*;
+    let ip = host.pop()?;
+    let x = host.read_cell(ip)?;
+    let op = (x & 0xff).try_into()?;
+    let (operand, next) = match op {
+        Lit | Jmp | JmpZ | Call | Yield | DoCreate | PlusLoop | QDo => {
+            (host.read_cell(ip + SIZE)?, ip + 2 * SIZE)
+        }
+        Op::Str => {
+            let len = host.read_cell(ip + SIZE)?;
+            (len, ip + 2 * SIZE + len.next_multiple_of(SIZE))
+        }
+        _ => (0, ip + SIZE),
+    };
+    host.push(x & 0xff)?;
+    host.push(operand)?;
+    host.push(next)
+}

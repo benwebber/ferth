@@ -120,50 +120,64 @@ variable (dump-end)
 
 : ? ( a-addr -- ) @ 0 <# #s #> type ;
 
-: (has-inline-cells?) ( xt -- n )
-  dup ['] (lit)   = if drop 1 exit then
-  dup ['] (jmp)   = if drop 1 exit then
-  dup ['] (jmpz)  = if drop 1 exit then
-  dup ['] (+loop) = if drop 1 exit then
-  dup ['] (?do)   = if drop 1 exit then
-  drop 0
+: (opcode) ( xt -- op ) @ $ff and ;
+
+: (.xt) ( xt -- ) (>name) type space ;
+
+: (see-instr) ( ip -- next)
+  dup @ swap (decode)   ( x op operand next )
+  >r                    ( x op operand ) ( R: next )
+  \ Literal. Display value.
+  over ['] (lit)   (opcode) = if nip nip . r> exit then
+  \ Call. Display name of target.
+  over ['] (call)  (opcode) = if nip nip (.xt) r> exit then
+  \ Yield. Extract packed XT and display name of source definition.
+  over ['] (yield) (opcode) = if 2drop 16 rshift (.xt) r> exit then
+  \ Str. Display literal string as it would be typed by the user.
+  over ['] (s")    (opcode) = if
+    nip nip             ( len ) ( R: next )
+    r@ over aligned -   ( len addr )
+    [char] s emit [char] " emit space
+    swap type [char] " emit space
+    r> exit
+  then
+  \ All other instructions fall though. Primitive and builtin instructions
+  \ encode their opcode in the lowest byte and then pack their defining XT into
+  \ the same cell.
+  \ The `Jmp` patched into `;` for tail-call optimization *does not* pack a
+  \ source XT into the cell.
+  rot 8 rshift          ( op operand xt )
+  ?dup if               ( op operand xt )
+    \ This is a normal packed instruction.
+    (.xt) 2drop
+  else                  ( op operand )
+    \ A TCO `Jmp`. The packed `xt == 0`. The operand is an XT.
+    (.xt) drop
+  then
+  r>                    ( next )
+;
+
+: (see-colon) ( xt -- )
+  dup (>name) [char] : emit space type cr 2 spaces  ( xt )
+  \ Get address of last cell (Exit).
+  dup (body-len) 1 cells - over +                   ( xt last )
+  swap                                              ( last ip )
+  begin 2dup swap u< while                          ( last ip )
+    \ ip < last
+    (see-instr)                                     ( last next )
+  repeat
+  2drop cr [char] ; emit space
 ;
 
 : see ( "<spaces>name" )
-  parse-name (find)                       ( c-addr u -- 0 | xt -1 | xt 1 )
-  0<> if                                  ( xt )
-    cr
-    dup (flags-addr) c@ %1011000 and 0= if ( xt )
-      \ This is a colon definition (not PRIMITIVE|BUILTIN|CREATE).
-      dup (>name)                         ( xt name-addr len )
-      [char] : emit space type cr         ( xt )
-      2 spaces
-      \ Iterate from the start of the body to the cell before the last (exit).
-      dup cell+ dup rot (body-len) 1 cells - + swap ( body' body )
-      do
-        i @                               ( xt )
-        dup ['] (s") = if
-          \ Skip variable length string.
-          drop
-          s" (s" type [char] " emit [char] ) emit space \ (s")
-          i cell+ @ aligned 2 cells +
-        else
-          dup (has-inline-cells?) if
-            \ This word has a body parameter.
-            drop i cell+ @ .
-            2 cells
-          else
-            (>name) type space 1 cells
-          then
-        then
-      +loop
-      cr
-      [char] ; emit
+  parse-name (find)                         ( c-addr u -- 0 | xt -1 | xt 1 )
+  0<> if                                    ( xt )
+    dup (flags-addr) c@ %1011000 and 0= if  ( xt )
+      (see-colon)
     else
       s" builtin " type (>name) type cr
     then
-  else                              ( )
-    s" undefined word" type cr
-    abort
+  else
+    s" undefined word" type cr abort
   then
 ;

@@ -6,7 +6,9 @@ use crate::log::debug;
 use crate::vm::{Op, Vm};
 use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
-use super::builtins::{compile_comma, emit, find, header, key, numberq, parse, refill, to_number};
+use super::builtins::{
+    compile_comma, decode, emit, find, header, key, numberq, parse, refill, to_number,
+};
 use super::env;
 use super::host;
 use super::layout;
@@ -150,6 +152,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"rshift", Op::RShift),
             (b"um/mod", Op::UmDivMod),
             (b"execute", Op::Execute),
+            (b"(call)", Op::Call),
+            (b"(yield)", Op::Yield),
         ];
         for (name, op) in opcodes {
             let xt = self.define(name, *op, PRIMITIVE)?;
@@ -175,6 +179,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b">number", to_number, 0),
             (b"(number?)", numberq, 0),
             (b"compile,", compile_comma, 0),
+            (b"(decode)", decode, 0),
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
