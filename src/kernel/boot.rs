@@ -502,6 +502,14 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             _ => PRIMITIVE,
         };
         let cfa = self.create(name, flags | kind)?;
+        let xt_bytes = if kind & BUILTIN != 0 {
+            SIZE - 2
+        } else {
+            SIZE - 1
+        };
+        if cfa >> (8 * xt_bytes) != 0 {
+            return Err(KernelError::XtTooLarge(cfa).into());
+        }
         self.data.write_cell(cfa, code as usize)?;
         self.data
             .write_cell(self.layout_addr(Layout::HERE), cfa + SIZE)?;

@@ -93,6 +93,8 @@ pub enum KernelError {
     BuiltinTableFull,
     /// Irrecoverable. A runtime entry point (e.g. `quit`) does not exist.
     MissingEntryPoint(&'static str),
+    /// Irrecoverable. An *xt* does not fit in the bytes reserved for it in a packed instruction cell.
+    XtTooLarge(usize),
 }
 
 impl From<KernelError> for Error {
@@ -124,6 +126,7 @@ impl core::fmt::Display for KernelError {
             Self::InvalidBuiltin(idx) => write!(f, "invalid builtin: 0x{idx:02x}"),
             Self::BuiltinTableFull => write!(f, "builtin table full"),
             Self::MissingEntryPoint(name) => write!(f, "missing entry point: {name}"),
+            Self::XtTooLarge(xt) => write!(f, "xt too large to pack: {xt:#x}"),
         }
     }
 }
