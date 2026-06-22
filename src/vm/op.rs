@@ -287,6 +287,41 @@ ops! {
     Execute = 0x24,
 
     Call = 0x25,
+
+    /// Parse a token from the input buffer, delimited by `char`.
+    ///
+    /// ```text
+    /// (parse) ( char source-addr source-len pos -- c-addr u pos' )
+    /// ```
+    Parse = 0x26,
+
+    /// Attempt to convert a string to a number.
+    ///
+    /// ```text
+    /// (number) ( c-addr u base -- n 1 | c-addr u 0 )
+    /// ```
+    Number = 0x27,
+
+    /// Accumulate digits from a string into a double-cell number.
+    ///
+    /// ```text
+    /// (>number) ( lo hi c-addr u base -- lo' hi' c-addr' u' )
+    /// ```
+    ToNumber = 0x28,
+
+    /// Compile a call to *xt* to the current definition.
+    ///
+    /// ```text
+    /// (compile,) ( xt here -- here' )
+    /// ```
+    CompileComma = 0x29,
+
+    /// Decode the packed instruction at *ip*.
+    ///
+    /// ```text
+    /// (decode) ( ip -- op operand next )
+    /// ```
+    Decode = 0x2A,
 }
 
 #[cfg(test)]

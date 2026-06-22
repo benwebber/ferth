@@ -1,7 +1,9 @@
 //! The inner interpreter.
 use crate::data::{Data, Mem};
 use crate::double::Double;
+use crate::header::{Flags, Header, Info};
 use crate::packed::PackedInstr;
+use crate::parser;
 use crate::{FALSE, SIZE, TRUE};
 
 mod error;
@@ -479,6 +481,101 @@ impl Vm {
                     return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.rp = addr;
+            }
+            Op::Parse => {
+                let toin = self.pop(data)?;
+                let srclen = self.pop(data)?;
+                let src = self.pop(data)?;
+                let delim = self.pop(data)? as u8;
+                let start = toin;
+                let mut to_in = toin;
+                let is_delim = |c: u8| {
+                    if delim == b' ' {
+                        c.is_ascii_whitespace()
+                    } else {
+                        c == delim
+                    }
+                };
+                while to_in < srclen && !is_delim(data.read_char(src + to_in)?) {
+                    to_in += 1;
+                }
+                let len = to_in - start;
+                if to_in < srclen {
+                    to_in += 1;
+                }
+                self.push(data, src + start)?;
+                self.push(data, len)?;
+                self.push(data, to_in)?;
+            }
+            Op::Number => {
+                let base = self.pop(data)?;
+                let len = self.pop(data)?;
+                let caddr = self.pop(data)?;
+                if let Some(n) = parser::parse_num(data.read(caddr, len)?, base as u32) {
+                    self.push(data, n)?;
+                    self.push(data, 1)?;
+                } else {
+                    self.push(data, caddr)?;
+                    self.push(data, len)?;
+                    self.push(data, 0)?;
+                }
+            }
+            Op::ToNumber => {
+                let base = self.pop(data)? as u32;
+                let u = self.pop(data)?;
+                let caddr = self.pop(data)?;
+                let hi = self.pop(data)?;
+                let lo = self.pop(data)?;
+                let acc = Double::from((lo, hi));
+                let bytes = data.read(caddr, u)?;
+                let (acc, rest) = parser::to_number(acc, bytes, base);
+                let consumed = bytes.len() - rest.len();
+                let remaining = rest.len();
+                let (lo, hi): (usize, usize) = acc.into();
+                self.push(data, lo)?;
+                self.push(data, hi)?;
+                self.push(data, caddr + consumed)?;
+                self.push(data, remaining)?;
+            }
+            Op::CompileComma => {
+                let here = self.pop(data)?;
+                let xt = self.pop(data)?;
+                let info: Info = data.read_cell(Header::new(xt).info_addr())?.into();
+                let flags = info.flags();
+                let mut h = here;
+                if flags.contains(Flags::PRIMITIVE) || flags.contains(Flags::BUILTIN) {
+                    let x = data.read_cell(xt)?;
+                    data.write_cell(h, x)?;
+                    h += SIZE;
+                } else {
+                    data.write_cell(h, Op::Call as usize)?;
+                    h += SIZE;
+                    data.write_cell(h, xt)?;
+                    h += SIZE;
+                }
+                self.push(data, h)?;
+            }
+            Op::Decode => {
+                let ip = self.pop(data)?;
+                let x = data.read_cell(ip)?;
+                let decoded = PackedInstr::try_from(x)?;
+                let (operand, next) = match decoded.op() {
+                    Op::Lit
+                    | Op::Jmp
+                    | Op::JmpZ
+                    | Op::Call
+                    | Op::DoCreate
+                    | Op::PlusLoop
+                    | Op::QDo => (data.read_cell(ip + SIZE)?, ip + 2 * SIZE),
+                    Op::Str => {
+                        let len = data.read_cell(ip + SIZE)?;
+                        (len, ip + 2 * SIZE + len.next_multiple_of(SIZE))
+                    }
+                    _ => (0, ip + SIZE),
+                };
+                self.push(data, decoded.op() as usize)?;
+                self.push(data, operand)?;
+                self.push(data, next)?;
             }
         }
         Ok(None)
@@ -1604,5 +1701,148 @@ mod tests {
         d.write_cell(base, Op::DoCreate as usize).unwrap();
         d.write_cell(base + SIZE, 0usize).unwrap();
         assert_eq!(v.step(&mut d, Op::DoCreate), Err(VmError::StackOverflow));
+    }
+
+    // Parse
+
+    #[test]
+    fn op_parse_space_delim() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write(base, b"foo bar").unwrap();
+        v.push(&mut d, b' ' as usize).unwrap();
+        v.push(&mut d, base).unwrap();
+        v.push(&mut d, 7).unwrap();
+        v.push(&mut d, 0).unwrap();
+        v.step(&mut d, Op::Parse).unwrap();
+        let stack = ds(&v, &d);
+        assert_eq!(stack[0], base);
+        assert_eq!(stack[1], 3);
+        assert_eq!(stack[2], 4);
+    }
+
+    #[test]
+    fn op_parse_custom_delim() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write(base, b"foo,bar").unwrap();
+        v.push(&mut d, b',' as usize).unwrap();
+        v.push(&mut d, base).unwrap();
+        v.push(&mut d, 7).unwrap();
+        v.push(&mut d, 0).unwrap();
+        v.step(&mut d, Op::Parse).unwrap();
+        let stack = ds(&v, &d);
+        assert_eq!(stack[0], base);
+        assert_eq!(stack[1], 3);
+        assert_eq!(stack[2], 4);
+    }
+
+    #[test]
+    fn op_parse_no_trailing_delim() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write(base, b"foo").unwrap();
+        v.push(&mut d, b' ' as usize).unwrap();
+        v.push(&mut d, base).unwrap();
+        v.push(&mut d, 3).unwrap();
+        v.push(&mut d, 0).unwrap();
+        v.step(&mut d, Op::Parse).unwrap();
+        let stack = ds(&v, &d);
+        assert_eq!(stack[0], base);
+        assert_eq!(stack[1], 3);
+        assert_eq!(stack[2], 3);
+    }
+
+    // Number
+
+    #[test]
+    fn op_number_valid() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write(base, b"123").unwrap();
+        v.push(&mut d, base).unwrap();
+        v.push(&mut d, 3).unwrap();
+        v.push(&mut d, 10).unwrap();
+        v.step(&mut d, Op::Number).unwrap();
+        assert_eq!(ds(&v, &d), vec![123, 1]);
+    }
+
+    #[test]
+    fn op_number_invalid() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write(base, b"foo").unwrap();
+        v.push(&mut d, base).unwrap();
+        v.push(&mut d, 3).unwrap();
+        v.push(&mut d, 10).unwrap();
+        v.step(&mut d, Op::Number).unwrap();
+        assert_eq!(ds(&v, &d), vec![base, 3, 0]);
+    }
+
+    // ToNumber
+
+    #[test]
+    fn op_tonumber_accumulates() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write(base, b"123z").unwrap();
+        v.push(&mut d, 0).unwrap();
+        v.push(&mut d, 0).unwrap();
+        v.push(&mut d, base).unwrap();
+        v.push(&mut d, 4).unwrap();
+        v.push(&mut d, 10).unwrap();
+        v.step(&mut d, Op::ToNumber).unwrap();
+        let stack = ds(&v, &d);
+        assert_eq!(stack[0], 123);
+        assert_eq!(stack[1], 0);
+        assert_eq!(stack[2], base + 3);
+        assert_eq!(stack[3], 1);
+    }
+
+    // Decode
+
+    #[test]
+    fn op_decode_lit_has_operand() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write_cell(base, Op::Lit as usize).unwrap();
+        d.write_cell(base + SIZE, 42).unwrap();
+        v.push(&mut d, base).unwrap();
+        v.step(&mut d, Op::Decode).unwrap();
+        let stack = ds(&v, &d);
+        assert_eq!(stack[0], Op::Lit as usize);
+        assert_eq!(stack[1], 42);
+        assert_eq!(stack[2], base + 2 * SIZE);
+    }
+
+    #[test]
+    fn op_decode_zero_operand_op() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        d.write_cell(base, Op::Dup as usize).unwrap();
+        v.push(&mut d, base).unwrap();
+        v.step(&mut d, Op::Decode).unwrap();
+        let stack = ds(&v, &d);
+        assert_eq!(stack[0], Op::Dup as usize);
+        assert_eq!(stack[1], 0);
+        assert_eq!(stack[2], base + SIZE);
+    }
+
+    // CompileComma
+
+    #[test]
+    fn op_compilecomma_primitive() {
+        let (mut v, mut d) = vm();
+        let base = v.reserved();
+        let xt = base + 2 * SIZE;
+        d.write_cell(base, Info::new(Flags::PRIMITIVE, 0).into())
+            .unwrap();
+        d.write_cell(xt, Op::Dup as usize).unwrap();
+        let here = xt + SIZE;
+        v.push(&mut d, xt).unwrap();
+        v.push(&mut d, here).unwrap();
+        v.step(&mut d, Op::CompileComma).unwrap();
+        assert_eq!(d.read_cell(here).unwrap(), Op::Dup as usize);
+        assert_eq!(ds(&v, &d), vec![here + SIZE]);
     }
 }
