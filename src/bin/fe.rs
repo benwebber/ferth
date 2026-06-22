@@ -1,12 +1,17 @@
 use std::env;
-use std::io::IsTerminal;
+use std::io::{IsTerminal, Read};
 use std::process::exit;
 
 use ferth::io::Io;
 use ferth::{Config, Fe};
 
 fn main() {
-    let (config, mem, command) = parse_args();
+    let Args {
+        config,
+        mem,
+        command,
+        file,
+    } = parse_args();
     let io = make_io();
     let mut fe =
         Fe::with_config(vec![0u8; mem], io, config).expect("failed to initialize interpreter");
@@ -17,6 +22,24 @@ fn main() {
             exit(1);
         }
         return;
+    }
+
+    if let Some(path) = file {
+        if path == "-" {
+            if !std::io::stdin().is_terminal() {
+                if let Err(e) = fe.evaluate(read_stdin()) {
+                    eprintln!("{e}");
+                    exit(1);
+                }
+                return;
+            }
+        } else {
+            if let Err(e) = fe.evaluate(read_file(&path)) {
+                eprintln!("{e}");
+                exit(1);
+            }
+            return;
+        }
     }
 
     let is_terminal = std::io::stdin().is_terminal();
@@ -33,10 +56,18 @@ fn main() {
     }
 }
 
-fn parse_args() -> (Config, usize, Option<String>) {
+struct Args {
+    config: Config,
+    mem: usize,
+    command: Option<String>,
+    file: Option<String>,
+}
+
+fn parse_args() -> Args {
     let mut mem = 65536usize;
     let mut config = Config::default();
     let mut command = None;
+    let mut file = None;
     let mut args = env::args();
     let basename = args.next().unwrap_or_else(|| "fe".into());
     while let Some(arg) = args.next() {
@@ -54,17 +85,29 @@ fn parse_args() -> (Config, usize, Option<String>) {
             "-s" => config.stack_cells = int(&basename, "-s", args.next()),
             "-r" => config.return_stack_cells = int(&basename, "-s", args.next()),
             other => {
-                eprintln!("{basename}: unexpected argument: {other}");
-                exit(1);
+                if file.is_some() {
+                    eprintln!("{basename}: unexpected argument: {other}");
+                    exit(1);
+                }
+                file = Some(other.to_string());
             }
         }
     }
-    (config, mem, command)
+    if command.is_some() && file.is_some() {
+        eprintln!("{basename}: -c and FILE are mutually exclusive");
+        exit(1);
+    }
+    Args {
+        config,
+        mem,
+        command,
+        file,
+    }
 }
 
 fn usage(basename: &str) {
     println!(
-        "usage: {basename} [-c CODE] [-m MEMORY] [-s STACK_CELLS] [-r RETURN_STACK_CELLS] [-h] [-v]"
+        "usage: {basename} [-c CODE] [-m MEMORY] [-s STACK_CELLS] [-r RETURN_STACK_CELLS] [-h] [-v] [FILE]"
     )
 }
 
@@ -88,6 +131,22 @@ fn int(basename: &str, flag: &str, value: Option<String>) -> usize {
         eprintln!("{basename}: {flag}: expected integer, got {raw}");
         exit(1);
     })
+}
+
+fn read_file(path: &str) -> String {
+    std::fs::read_to_string(path).unwrap_or_else(|e| {
+        eprintln!("{path}: {e}");
+        exit(1);
+    })
+}
+
+fn read_stdin() -> String {
+    let mut buf = String::new();
+    if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
+        eprintln!("stdin: {e}");
+        exit(1);
+    }
+    buf
 }
 
 #[cfg(not(feature = "repl"))]
