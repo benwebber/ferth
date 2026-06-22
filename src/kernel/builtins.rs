@@ -1,13 +1,11 @@
 use crate::double::Double;
 use crate::error::Ior;
+use crate::header::{Flags, Header, Info};
 use crate::parser;
 use crate::vm::Op;
 use crate::{Error, Result};
 
-use super::{
-    BUILTIN, FALSE, Host, INFO_FROM_CFA, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, PRIMITIVE, SIZE,
-    TRUE,
-};
+use super::{FALSE, Host, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, SIZE, TRUE};
 
 /// Receive a single character from the input device.
 ///
@@ -231,16 +229,18 @@ pub fn header(host: &mut dyn Host) -> Result<()> {
 /// hold for other threading models.
 pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
     let xt = host.pop()?;
-    let kind = (host.read_cell(xt - INFO_FROM_CFA)? >> 8) as u8;
     let comma = |host: &mut dyn Host, x: usize| -> Result<()> {
         let here = host.read_cell(host.layout_addr(Layout::HERE))?;
         host.write_cell(here, x)?;
         host.write_cell(host.layout_addr(Layout::HERE), here + SIZE)
     };
-    if kind & PRIMITIVE != 0 {
+    let header = Header::new(xt);
+    let info: Info = host.read_cell(header.info_addr())?.into();
+    let flags = info.flags();
+    if flags.contains(Flags::PRIMITIVE) {
         let op = host.read_cell(xt)? & 0xff;
         comma(host, op | (xt << 8))
-    } else if kind & BUILTIN != 0 {
+    } else if flags.contains(Flags::BUILTIN) {
         let x = host.read_cell(xt)?;
         comma(host, x)
     } else {

@@ -1,5 +1,6 @@
 use crate::data::{Data, Mem};
 use crate::error::{Ior, KernelError, Severity};
+use crate::header::{Flags, Header, Info};
 use crate::io::{Io, NoIo};
 use crate::vm::{Op, Stop, Vm};
 use crate::{Error, FALSE, Result, SIZE, TRUE};
@@ -20,20 +21,6 @@ pub use host::Host;
 const MAX_WORD_LEN: usize = 31;
 /// The maximum number of builtins in the builtins table.
 const MAX_BUILTINS: usize = 256;
-
-/// The offset of the `info` field from the `code` field.
-const INFO_FROM_CFA: usize = 2 * SIZE;
-/// The immediate bitflag.
-const IMMEDIATE: u8 = 0b01;
-/// The hidden bitflag.
-const HIDDEN: u8 = 0b10;
-/// The bootstrap bitflag. Words defined during the bootstrap phase have this flag.
-const BOOTSTRAP: u8 = 0b100;
-const PRIMITIVE: u8 = 0b0001000;
-const BUILTIN: u8 = 0b0010000;
-const COLON: u8 = 0b0100000;
-#[allow(dead_code)]
-const CREATE: u8 = 0b1000000;
 
 pub type Builtin = fn(&mut dyn Host) -> Result<()>;
 
@@ -95,14 +82,19 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         }
         let mut xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
         while xt != 0 {
-            let info = self.data.read_cell(xt - INFO_FROM_CFA)?;
-            let flags = (info >> 8) as u8;
-            let wlen = info & 0xFF;
-            if flags & HIDDEN == 0 && wlen == name.len() {
-                let name_at = xt - INFO_FROM_CFA - SIZE - wlen;
+            let header = Header::new(xt);
+            let info: Info = self.data.read_cell(header.info_addr())?.into();
+            let flags = info.flags();
+            let wlen = info.name_len();
+            if !flags.contains(Flags::HIDDEN) && wlen == name.len() {
+                let name_at = header.bodylen_addr() - wlen;
                 let b = self.data.read(name_at, wlen)?;
                 if name.eq_ignore_ascii_case(b) {
-                    let flag = if flags & IMMEDIATE != 0 { 1 } else { -1 };
+                    let flag = if flags.contains(Flags::IMMEDIATE) {
+                        1
+                    } else {
+                        -1
+                    };
                     return Ok(Some((xt, flag)));
                 }
             }
@@ -146,8 +138,9 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     }
 
     pub(super) fn execute(&mut self, xt: usize) -> Result<()> {
-        let kind = (self.data.read_cell(xt - INFO_FROM_CFA)? >> 8) as u8;
-        let mut stop = if kind & PRIMITIVE != 0 {
+        let info: Info = self.data.read_cell(Header::new(xt).info_addr())?.into();
+        let flags = info.flags();
+        let mut stop = if flags.contains(Flags::PRIMITIVE) {
             let op: Op = (self.data.read_cell(xt)? & 0xff)
                 .try_into()
                 .map_err(Error::from)?;

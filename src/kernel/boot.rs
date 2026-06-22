@@ -1,6 +1,7 @@
 use crate::data::{Data, Mem};
 use crate::double::Double;
 use crate::error::{Ior, KernelError};
+use crate::header::Flags;
 use crate::io::Io;
 use crate::log::debug;
 use crate::vm::{Op, Vm};
@@ -12,10 +13,7 @@ use super::builtins::{
 use super::env;
 use super::host;
 use super::layout;
-use super::{
-    BOOTSTRAP, BUILTIN, Bootstrapping, Builtin, COLON, HIDDEN, IMMEDIATE, Kernel, MAX_BUILTINS,
-    PRIMITIVE, Ready,
-};
+use super::{Bootstrapping, Builtin, Kernel, MAX_BUILTINS, Ready};
 
 use env::Environment;
 use layout::Layout;
@@ -156,7 +154,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"(yield)", Op::Yield),
         ];
         for (name, op) in opcodes {
-            let xt = self.define(name, *op, PRIMITIVE)?;
+            let xt = self.define(name, *op, Flags::PRIMITIVE.into())?;
             self.comma(Op::Exit as usize)?;
             self.op_xts[*op as usize] = xt;
         }
@@ -192,7 +190,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
     fn compile_compiler(&mut self) -> Result<()> {
         macro_rules! compile {
             ($s:expr, $flags:expr, [$($body:expr),* $(,)?]) => {
-                self.compile($s, $flags, &[$($body),*])?;
+                self.compile($s, $flags.into(), &[$($body),*])?;
             };
         }
 
@@ -235,7 +233,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         // original top of stack.
         compile!(
             b"literal",
-            IMMEDIATE,
+            Flags::IMMEDIATE,
             [L(Op::Lit as usize), N(b","), N(b",")]
         );
 
@@ -246,7 +244,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         // this definition. Here we can compile it directly.
         compile!(
             b"[']",
-            IMMEDIATE | BOOTSTRAP,
+            Flags::IMMEDIATE | Flags::BOOTSTRAP,
             [L(BL), N(b"parse"), N(b"(find)"), N(b"drop"), N(b"literal")]
         );
 
@@ -259,7 +257,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         // hidden flag. The Forth kernel replaces it.
         compile!(
             b":",
-            BOOTSTRAP,
+            Flags::BOOTSTRAP,
             [
                 L(BL), N(b"parse"), N(b"(header)"),
                 L(TRUE), N(b"state"), N(b"!"),
@@ -293,7 +291,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         // jumps for tail calls.
         compile!(
             b";",
-            IMMEDIATE,
+            Flags::IMMEDIATE,
             [
                 L(Op::Exit as usize), N(b","),
                 // Calculate and set bodylen.
@@ -306,7 +304,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
                 // Unset hidden flag.
                 addr!(LATEST), N(b"@"),
                 L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+"), N(b"dup"), N(b"c@"),
-                L(HIDDEN.into()), N(b"dup"), N(b"(nand)"), N(b"(nand)"), N(b"dup"), N(b"(nand)"), // inline invert, and
+                L(Flags::HIDDEN.into()), N(b"dup"), N(b"(nand)"), N(b"(nand)"), N(b"dup"), N(b"(nand)"), // inline invert, and
                 N(b"swap"), N(b"c!"),
                 L(FALSE), N(b"state"), N(b"!"),
             ]
@@ -382,7 +380,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
     }
 
     fn compile(&mut self, name: &[u8], flags: u8, body: &[Token]) -> Result<usize> {
-        let xt = self.create(name, flags | COLON)?;
+        let xt = self.create(name, flags | Flags::COLON)?;
         self.data.write_cell(self.layout_addr(Layout::LATEST), xt)?;
         self.data.write_cell(self.layout_addr(Layout::HERE), xt)?;
         for &token in body {
@@ -490,19 +488,20 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         }
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
-        let cfa = self.define(name, Op::Yield, flags | BUILTIN)?;
+        let cfa = self.define(name, Op::Yield, flags | Flags::BUILTIN)?;
         self.data
             .write_cell(cfa, (Op::Yield as usize) | (idx << 8) | (cfa << 16))?;
         self.comma(Op::Exit as usize)
     }
 
     fn define(&mut self, name: &[u8], code: Op, flags: u8) -> Result<usize> {
+        let flags = Flags(flags);
         let kind = match code {
-            Op::Yield => BUILTIN,
-            _ => PRIMITIVE,
+            Op::Yield => Flags::BUILTIN,
+            _ => Flags::PRIMITIVE,
         };
-        let cfa = self.create(name, flags | kind)?;
-        let xt_bytes = if kind & BUILTIN != 0 {
+        let cfa = self.create(name, (flags | kind).into())?;
+        let xt_bytes = if kind.contains(Flags::BUILTIN) {
             SIZE - 2
         } else {
             SIZE - 1
@@ -522,8 +521,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::header::{Flags, Header, Info};
     use crate::io::NoIo;
-    use crate::kernel::{BUILTIN, COLON, PRIMITIVE};
 
     #[test]
     fn tag_boot_words_with_kind() {
@@ -532,10 +531,12 @@ mod tests {
             .unwrap();
         let kind = |name: &[u8]| {
             let (xt, _) = k.find(name).unwrap().unwrap();
-            (k.data.read_cell(xt - super::super::INFO_FROM_CFA).unwrap() >> 8) as u8
+            let header = Header::new(xt);
+            let info: Info = k.data.read_cell(header.info_addr()).unwrap().into();
+            info.flags()
         };
-        assert!(kind(b"dup") & PRIMITIVE != 0);
-        assert!(kind(b"(find)") & BUILTIN != 0);
-        assert!(kind(b"cells") & COLON != 0);
+        assert!(kind(b"dup") & Flags::PRIMITIVE != 0);
+        assert!(kind(b"(find)") & Flags::BUILTIN != 0);
+        assert!(kind(b"cells") & Flags::COLON != 0);
     }
 }

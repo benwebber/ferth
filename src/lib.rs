@@ -22,6 +22,7 @@ mod data;
 mod double;
 pub mod error;
 mod fe;
+mod header;
 pub mod io;
 mod kernel;
 mod log;
