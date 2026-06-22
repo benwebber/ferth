@@ -206,9 +206,9 @@ create handler 0 ,
   drop r> drop                        ( prev ) ( R: )
 ;
 
-: (tail-optimize) ( -- )
+: (tail-optimize) ( xt -- )
   \ Skip if body is less than three cells (probably a primitive).
-  (latest) @ dup (body-len) 3 cells u< if drop exit then
+  dup (body-len) 3 cells u< if drop exit then
   (tail) dup @ $25 - 0= if
     \ Replace `Call` with `Jmp`. Dead `Exit` remains.
     ['] (jmp) @ swap !
@@ -266,8 +266,15 @@ r> (hide)       ( R: )
 \ Redefine `;` to call `(tail-optimize)` after executing. Compile the current XT
 \ of `;` into the definition.
 ' ; ( xt )
-: ; literal execute (tail-optimize) ; immediate ( )
+: ; literal execute (latest) @ (tail-optimize) ; immediate ( )
 
+\ Micro-optimization. The following defined words *can* use TCO.
+' and (tail-optimize)
+' aligned (tail-optimize)
+' 2dup (tail-optimize)
+' xor (tail-optimize)
+' begin (tail-optimize)
+' ' (tail-optimize)
 
 \ 6. POSTPONE
 \ ===========
