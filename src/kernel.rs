@@ -3,6 +3,7 @@ use crate::error::{Ior, KernelError, Severity};
 use crate::header::{Flags, Header, Info};
 use crate::io::{Io, NoIo};
 use crate::packed::PackedInstr;
+use crate::state::{Booted, Booting, State};
 use crate::vm::{Op, Stop, Vm};
 use crate::{Error, FALSE, Result, SIZE, TRUE};
 
@@ -25,17 +26,8 @@ const MAX_BUILTINS: usize = 256;
 
 pub type Builtin = fn(&mut dyn Host) -> Result<()>;
 
-pub trait State {}
-pub struct Bootstrapping {}
-pub struct Ready {
-    xt_catch: usize,
-    xt_interpret: usize,
-}
-impl State for Bootstrapping {}
-impl State for Ready {}
-
 /// The outer interpreter.
-pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Bootstrapping> {
+pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Booting> {
     vm: Vm,
     data: Data<M>,
     io: I,
@@ -229,7 +221,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     }
 }
 
-impl<M: Mem, I: Io> Kernel<M, I, Ready> {
+impl<M: Mem, I: Io> Kernel<M, I, Booted> {
     pub(super) fn catch_interpret(&mut self) -> Result<()> {
         self.push(self.state.xt_interpret)?;
         self.execute(self.state.xt_catch)?;

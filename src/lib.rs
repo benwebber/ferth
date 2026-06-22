@@ -28,6 +28,7 @@ mod kernel;
 mod log;
 mod packed;
 mod parser;
+mod state;
 mod vm;
 
 pub use error::{Error, Result};

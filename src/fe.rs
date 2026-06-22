@@ -4,6 +4,7 @@ use crate::error::KernelError;
 use crate::io::{Io, NoIo};
 use crate::kernel::{Config, Kernel};
 use crate::log::debug;
+use crate::state::{Booted, Loading, Ready, State};
 
 const WORDLISTS: &[(&str, &[u8])] = &[
     ("core", include_bytes!("core.fth")),
@@ -11,18 +12,9 @@ const WORDLISTS: &[(&str, &[u8])] = &[
     ("tools", include_bytes!("tools.fth")),
 ];
 
-pub trait State {}
-pub struct Loading {}
-pub struct Ready {
-    xt_quit: usize,
-    xt_load: usize,
-}
-impl State for Loading {}
-impl State for Ready {}
-
 /// The Forth system.
 pub struct Fe<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Ready> {
-    kernel: Kernel<M, I, crate::kernel::Ready>,
+    kernel: Kernel<M, I, Booted>,
     state: S,
 }
 

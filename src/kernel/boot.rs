@@ -4,6 +4,7 @@ use crate::error::{Ior, KernelError};
 use crate::header::{Flags, Header};
 use crate::io::Io;
 use crate::log::debug;
+use crate::state::{Booted, Booting};
 use crate::vm::{Op, Vm};
 use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
@@ -13,7 +14,7 @@ use super::builtins::{
 use super::env;
 use super::host;
 use super::layout;
-use super::{Bootstrapping, Builtin, Kernel, MAX_BUILTINS, Ready};
+use super::{Builtin, Kernel, MAX_BUILTINS};
 use crate::packed::PackedInstr;
 
 use env::Environment;
@@ -30,7 +31,7 @@ enum Token {
     Name(&'static [u8]),
 }
 
-impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
+impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     pub fn new(mem: M, io: I, config: Config) -> Self {
         let env = Environment {
             config,
@@ -47,11 +48,11 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             builtins_len: 0,
             layout_base,
             env,
-            state: Bootstrapping {},
+            state: Booting {},
         }
     }
 
-    pub fn boot(mut self) -> Result<Kernel<M, I, Ready>> {
+    pub fn boot(mut self) -> Result<Kernel<M, I, Booted>> {
         self.reserve_variables()?;
         debug!("KERNEL", "Reserved variables");
         self.compile_opcodes()?;
@@ -71,7 +72,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
                 .map(|(xt, _)| xt)
                 .ok_or(KernelError::MissingEntryPoint(name).into())
         };
-        let state = Ready {
+        let state = Booted {
             xt_catch: xt("catch")?,
             xt_interpret: xt("(interpret)")?,
         };
