@@ -1,12 +1,7 @@
-use crate::double::Double;
 use crate::error::Ior;
-use crate::header::{Flags, Header, Info};
-use crate::packed::PackedInstr;
-use crate::parser;
-use crate::vm::Op;
 use crate::{Error, Result};
 
-use super::{FALSE, Host, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, SIZE, TRUE};
+use super::{FALSE, Host, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, TRUE};
 
 /// Receive a single character from the input device.
 ///
@@ -63,78 +58,6 @@ pub fn find(host: &mut dyn Host) -> Result<()> {
     }
 }
 
-pub fn numberq(host: &mut dyn Host) -> Result<()> {
-    let len = host.pop()?;
-    let caddr = host.pop()?;
-    let base = host.read_cell(host.layout_addr(Layout::BASE))?;
-    if let Some(n) = parser::parse_num(host.read(caddr, len)?, base as u32) {
-        host.push(n)?;
-        host.push(1)
-    } else {
-        host.push(caddr)?;
-        host.push(len)?;
-        host.push(0)
-    }
-}
-
-/// Parse digits and add them to an accumulator.
-///
-/// ```text
-/// >number ( ud1 c-addr1 u1 -- ud2 c-addr2 u2 )
-/// ```
-#[allow(clippy::wrong_self_convention)]
-pub fn to_number(host: &mut dyn Host) -> Result<()> {
-    let u = host.pop()?;
-    let caddr = host.pop()?;
-    let hi = host.pop()?;
-    let lo = host.pop()?;
-    let acc = Double::from((lo, hi));
-    let bytes = host.read(caddr, u)?;
-    // TODO: Check base size.
-    let base = host.read_cell(host.layout_addr(Layout::BASE))? as u32;
-    let (acc, rest) = parser::to_number(acc, bytes, base);
-    let len = bytes.len() - rest.len();
-    let (lo, hi): (usize, usize) = acc.into();
-    let caddr2 = caddr + len;
-    let u2 = rest.len();
-    host.push(lo)?;
-    host.push(hi)?;
-    host.push(caddr2)?;
-    host.push(u2)
-}
-
-/// Parse the next token in the parse area.
-///
-/// ```text
-/// parse ( char "ccc<char>" -- c-addr u )
-/// ```
-///
-/// See [`PARSE`](https://forth-standard.org/standard/core/PARSE).
-pub fn parse(host: &mut dyn Host) -> Result<()> {
-    let delim = host.pop()? as u8;
-    let src = host.read_cell(host.layout_addr(Layout::SOURCE_ADDR))?;
-    let src_len = host.read_cell(host.layout_addr(Layout::SOURCE_LEN))?;
-    let mut to_in = host.read_cell(host.layout_addr(Layout::TO_IN))?;
-    let start = to_in;
-    let is_delim = |c: u8| {
-        if delim == b' ' {
-            c.is_ascii_whitespace()
-        } else {
-            c == delim
-        }
-    };
-    while to_in < src_len && !is_delim(host.read_char(src + to_in)?) {
-        to_in += 1;
-    }
-    let len = to_in - start;
-    if to_in < src_len {
-        to_in += 1;
-    }
-    host.write_cell(host.layout_addr(Layout::TO_IN), to_in)?;
-    host.push(src + start)?;
-    host.push(len)
-}
-
 /// Attempt to fill the input buffer from the input source.
 ///
 /// ```text
@@ -182,51 +105,4 @@ pub fn header(host: &mut dyn Host) -> Result<()> {
     host.write_cell(host.layout_addr(Layout::LATEST), cfa)?;
     host.write_cell(host.layout_addr(Layout::HERE), cfa)?;
     Ok(())
-}
-
-/// Compile a call to *xt* to the current definition.
-///
-/// ```text
-/// compile, ( xt -- )
-/// ```
-///
-/// In indirect-threaded systems, `,` can perform the function of `compile,`. This does not always
-/// hold for other threading models.
-pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
-    let xt = host.pop()?;
-    let comma = |host: &mut dyn Host, x: usize| -> Result<()> {
-        let here = host.read_cell(host.layout_addr(Layout::HERE))?;
-        host.write_cell(here, x)?;
-        host.write_cell(host.layout_addr(Layout::HERE), here + SIZE)
-    };
-    let header = Header::new(xt);
-    let info: Info = host.read_cell(header.info_addr())?.into();
-    let flags = info.flags();
-    if flags.contains(Flags::PRIMITIVE) || flags.contains(Flags::BUILTIN) {
-        let x = host.read_cell(xt)?;
-        comma(host, x)
-    } else {
-        comma(host, Op::Call as usize)?;
-        comma(host, xt)
-    }
-}
-
-pub fn decode(host: &mut dyn Host) -> Result<()> {
-    use Op::*;
-    let ip = host.pop()?;
-    let x = host.read_cell(ip)?;
-    let instr = PackedInstr::try_from(x)?;
-    let (operand, next) = match instr.op() {
-        Lit | Jmp | JmpZ | Call | DoCreate | PlusLoop | QDo => {
-            (host.read_cell(ip + SIZE)?, ip + 2 * SIZE)
-        }
-        Op::Str => {
-            let len = host.read_cell(ip + SIZE)?;
-            (len, ip + 2 * SIZE + len.next_multiple_of(SIZE))
-        }
-        _ => (0, ip + SIZE),
-    };
-    host.push(instr.op() as usize)?;
-    host.push(operand)?;
-    host.push(next)
 }

@@ -8,9 +8,7 @@ use crate::state::{Booted, Booting};
 use crate::vm::{Op, Vm};
 use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
-use super::builtins::{
-    compile_comma, decode, emit, find, header, key, numberq, parse, refill, to_number,
-};
+use super::builtins::{emit, find, header, key, refill};
 use super::env;
 use super::host;
 use super::layout;
@@ -63,6 +61,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         debug!("KERNEL", "Compiled environment");
         self.define_variables()?;
         debug!("KERNEL", "Defined variables");
+        self.compile_wrappers()?;
+        debug!("KERNEL", "Compiled wrappers");
         self.compile_compiler()?;
         debug!("KERNEL", "Compiled compiler");
         self.load_kernel()?;
@@ -152,6 +152,11 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             (b"execute", Op::Execute),
             (b"(call)", Op::Call),
             (b"(yield)", Op::Yield),
+            (b"(parse)", Op::Parse),
+            (b"(number)", Op::Number),
+            (b"(>number)", Op::ToNumber),
+            (b"(compile,)", Op::CompileComma),
+            (b"(decode)", Op::Decode),
         ];
         for (name, op) in opcodes {
             let xt = self.define(name, *op, Flags::PRIMITIVE)?;
@@ -172,13 +177,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             (b"emit", emit, Flags::EMPTY),
             (b"(find)", find, Flags::EMPTY),
             (b"key", key, Flags::EMPTY),
-            (b"parse", parse, Flags::EMPTY),
             (b"refill", refill, Flags::EMPTY),
             (b"(header)", header, Flags::EMPTY),
-            (b">number", to_number, Flags::EMPTY),
-            (b"(number?)", numberq, Flags::EMPTY),
-            (b"compile,", compile_comma, Flags::EMPTY),
-            (b"(decode)", decode, Flags::EMPTY),
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
@@ -396,6 +396,47 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(())
     }
 
+    fn compile_wrappers(&mut self) -> Result<()> {
+        use Token::Name as N;
+        self.compile(
+            b"parse",
+            Flags::EMPTY,
+            &[
+                N(b"(source-addr)"),
+                N(b"@"),
+                N(b"(source-len)"),
+                N(b"@"),
+                N(b">in"),
+                N(b"@"),
+                N(b"(parse)"),
+                N(b">in"),
+                N(b"!"),
+            ],
+        )?;
+        self.compile(
+            b"compile,",
+            Flags::EMPTY,
+            &[
+                N(b"(here)"),
+                N(b"@"),
+                N(b"(compile,)"),
+                N(b"(here)"),
+                N(b"!"),
+            ],
+        )?;
+        self.compile(
+            b">number",
+            Flags::EMPTY,
+            &[N(b"base"), N(b"@"), N(b"(>number)")],
+        )?;
+        self.compile(
+            b"(number?)",
+            Flags::EMPTY,
+            &[N(b"base"), N(b"@"), N(b"(number)")],
+        )?;
+        Ok(())
+    }
+
     fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
         let xt = self.create(name, (flags | Flags::COLON).into())?;
         self.data.write_cell(self.layout_addr(Layout::LATEST), xt)?;
@@ -412,7 +453,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                         .map(|(xt, _)| xt)
                         .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
                     self.push(xt)?;
-                    compile_comma(self)?;
+                    self.compile_comma()?;
                 }
             }
         }
@@ -428,6 +469,36 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         self.data.write_cell(here, val)?;
         self.data
             .write_cell(self.layout_addr(Layout::HERE), here + SIZE)?;
+        Ok(())
+    }
+
+    fn parse(&mut self) -> Result<()> {
+        let src = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
+        let srclen = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
+        let toin = self.data.read_cell(self.layout_addr(Layout::TO_IN))?;
+        self.push(src)?;
+        self.push(srclen)?;
+        self.push(toin)?;
+        self.vm.step(&mut self.data, Op::Parse)?;
+        let toin = self.pop()?;
+        self.data
+            .write_cell(self.layout_addr(Layout::TO_IN), toin)?;
+        Ok(())
+    }
+
+    fn compile_comma(&mut self) -> Result<()> {
+        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
+        self.push(here)?;
+        self.vm.step(&mut self.data, Op::CompileComma)?;
+        let here = self.pop()?;
+        self.data.write_cell(self.layout_addr(Layout::HERE), here)?;
+        Ok(())
+    }
+
+    fn numberq(&mut self) -> Result<()> {
+        let base = self.data.read_cell(self.layout_addr(Layout::BASE))?;
+        self.push(base)?;
+        self.vm.step(&mut self.data, Op::Number)?;
         Ok(())
     }
 
@@ -449,7 +520,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         self.data
             .write_cell(self.layout_addr(Layout::TO_IN), to_in)?;
         self.push(BL)?;
-        parse(self)?;
+        self.parse()?;
         let len = self.pop()?;
         let addr = self.pop()?;
         Ok((addr, len))
@@ -474,12 +545,12 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     let xt = self.pop()?;
                     self.execute(xt)?;
                 } else {
-                    compile_comma(self)?;
+                    self.compile_comma()?;
                 }
             } else {
                 self.push(addr)?;
                 self.push(len)?;
-                numberq(self)?;
+                self.numberq()?;
                 let ok = self.pop()? as isize;
                 if ok == 1 {
                     let v = self.pop()?;

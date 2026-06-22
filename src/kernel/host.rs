@@ -21,7 +21,7 @@ pub trait Host: private::Sealed {
     fn push(&mut self, x: usize) -> Result<()>;
     fn pop(&mut self) -> Result<usize>;
     fn read(&self, addr: usize, u: usize) -> Result<&[u8]>;
-    fn read_char(&self, addr: usize) -> Result<u8>;
+    #[allow(dead_code)]
     fn read_cell(&self, addr: usize) -> Result<usize>;
     fn write_cell(&mut self, addr: usize, x: usize) -> Result<()>;
     #[allow(dead_code)]
@@ -48,9 +48,6 @@ impl<M: Mem, I: Io, S: State> Host for Kernel<M, I, S> {
     }
     fn read_cell(&self, addr: usize) -> Result<usize> {
         Ok(self.data.read_cell(addr)?)
-    }
-    fn read_char(&self, addr: usize) -> Result<u8> {
-        Ok(self.data.read_char(addr)?)
     }
     fn write(&mut self, addr: usize, bytes: &[u8]) -> Result<()> {
         Ok(self.data.write(addr, bytes)?)
