@@ -167,42 +167,6 @@ pub fn refill(host: &mut dyn Host) -> Result<()> {
 /// (header) ( c-addr u -- )
 /// ```
 ///
-/// The header starts with a variable-length `pad` field that ensures the `info` field always
-/// aligns to a cell address.
-///
-/// The length of the name follows as a single byte, then the bytes of the name.
-///
-/// The `bodylen` field encodes the length of the body in cells.
-///
-/// The `info` field packs the flags into the least significant byte and the length into the
-/// next byte. It currently reserves two additional bytes of space.
-///
-/// The `link` field links to the `code` field of the next word in the dictionary.
-///
-/// The `code` field contains an [`Op`] code. The compiled `body` of the word, if it exists,
-/// follows the `code` field.
-///
-/// Assuming a 32-bit cell size, the header looks like this in memory:
-///
-/// ```text
-///  0 1 2 3 4 5 6 7 8 9 a b c d e f 0 1 2 3 4 5 6 7 8 9 a b c d e f
-/// +---------------+---------------+-------------------------------+
-/// |      pad...   |      len      |             name...           |
-/// +---------------+---------------+-------------------------------+
-/// |                              name...                          |
-/// +---------------------------------------------------------------+
-/// |                            bodylen                            |
-/// +---------------+---------------+-------------------------------+
-/// |  info (len)   | info (flags)  |        info (reserved)        |
-/// +---------------+---------------+-------------------------------+
-/// |                              link                             |
-/// +---------------------------------------------------------------+
-/// |                              code                             |
-/// +---------------------------------------------------------------+
-/// |                              body...                          |
-/// +---------------------------------------------------------------+
-/// ```
-///
 /// After `(header)` executes, `here` points to the `code` field address.
 pub fn header(host: &mut dyn Host) -> Result<()> {
     let len = host.pop()?;

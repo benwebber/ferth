@@ -98,7 +98,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
                     return Ok(Some((xt, flag)));
                 }
             }
-            xt = self.data.read_cell(xt - SIZE)?;
+            xt = self.data.read_cell(header.link_addr())?;
         }
         Ok(None)
     }
@@ -121,10 +121,13 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         self.data.write_cell(body_len, 0)?;
         // info
         let info = body_len + SIZE;
-        self.data.write_cell(info, pack_info(flags, len))?;
-        self.data.write_cell(info + SIZE, latest)?;
+        self.data
+            .write_cell(info, Info::new(flags.into(), len).into())?;
+        // link
+        let link = info + SIZE;
+        self.data.write_cell(link, latest)?;
         // code
-        let cfa = info + 2 * SIZE;
+        let cfa = link + SIZE;
         Ok(cfa)
     }
 
@@ -239,12 +242,4 @@ impl<M: Mem, I: Io> Kernel<M, I, Ready> {
         }
         Ok(())
     }
-}
-
-/// Pack word flags and length into one cell.
-///
-/// The flags occupy the least significant byte. The cell occupies the next most significant
-/// byte.
-fn pack_info(flags: u8, len: u8) -> usize {
-    (len as usize) | ((flags as usize) << 8)
 }

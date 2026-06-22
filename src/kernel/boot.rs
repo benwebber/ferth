@@ -1,7 +1,7 @@
 use crate::data::{Data, Mem};
 use crate::double::Double;
 use crate::error::{Ior, KernelError};
-use crate::header::Flags;
+use crate::header::{Flags, Header};
 use crate::io::Io;
 use crate::log::debug;
 use crate::vm::{Op, Vm};
@@ -154,7 +154,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"(yield)", Op::Yield),
         ];
         for (name, op) in opcodes {
-            let xt = self.define(name, *op, Flags::PRIMITIVE.into())?;
+            let xt = self.define(name, *op, Flags::PRIMITIVE)?;
             self.comma(Op::Exit as usize)?;
             self.op_xts[*op as usize] = xt;
         }
@@ -167,17 +167,17 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
     /// parsing words are difficult, or inefficient, to express in Forth. The inner interpreter
     /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
     fn register_builtins(&mut self) -> Result<()> {
-        let builtins: &[(&[u8], Builtin, u8)] = &[
-            (b"emit", emit, 0),
-            (b"(find)", find, 0),
-            (b"key", key, 0),
-            (b"parse", parse, 0),
-            (b"refill", refill, 0),
-            (b"(header)", header, 0),
-            (b">number", to_number, 0),
-            (b"(number?)", numberq, 0),
-            (b"compile,", compile_comma, 0),
-            (b"(decode)", decode, 0),
+        let builtins: &[(&[u8], Builtin, Flags)] = &[
+            (b"emit", emit, Flags::EMPTY),
+            (b"(find)", find, Flags::EMPTY),
+            (b"key", key, Flags::EMPTY),
+            (b"parse", parse, Flags::EMPTY),
+            (b"refill", refill, Flags::EMPTY),
+            (b"(header)", header, Flags::EMPTY),
+            (b">number", to_number, Flags::EMPTY),
+            (b"(number?)", numberq, Flags::EMPTY),
+            (b"compile,", compile_comma, Flags::EMPTY),
+            (b"(decode)", decode, Flags::EMPTY),
         ];
         for (name, f, flags) in builtins {
             self.register_builtin(name, *f, *flags)?;
@@ -326,32 +326,48 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         let flag = |b: bool| -> usize { if b { TRUE } else { FALSE } };
         self.compile(
             b"(/counted-string)",
-            0,
+            Flags::EMPTY,
             &[Token::Lit(self.env.counted_string)],
         )?;
-        self.compile(b"(/hold)", 0, &[Token::Lit(self.env.config.hold)])?;
-        self.compile(b"(/pad)", 0, &[Token::Lit(self.env.config.pad)])?;
+        self.compile(
+            b"(/hold)",
+            Flags::EMPTY,
+            &[Token::Lit(self.env.config.hold)],
+        )?;
+        self.compile(b"(/pad)", Flags::EMPTY, &[Token::Lit(self.env.config.pad)])?;
         self.compile(
             b"(address-unit-bits)",
-            0,
+            Flags::EMPTY,
             &[Token::Lit(self.env.address_unit_bits)],
         )?;
-        self.compile(b"(floored)", 0, &[Token::Lit(flag(self.env.floored))])?;
-        self.compile(b"(max-char)", 0, &[Token::Lit(self.env.max_char)])?;
+        self.compile(
+            b"(floored)",
+            Flags::EMPTY,
+            &[Token::Lit(flag(self.env.floored))],
+        )?;
+        self.compile(
+            b"(max-char)",
+            Flags::EMPTY,
+            &[Token::Lit(self.env.max_char)],
+        )?;
         let (lo, hi): (usize, usize) = Double(self.env.max_d.0 as _).into();
-        self.compile(b"(max-d)", 0, &[Token::Lit(lo), Token::Lit(hi)])?;
-        self.compile(b"(max-n)", 0, &[Token::Lit(self.env.max_n as usize)])?;
-        self.compile(b"(max-u)", 0, &[Token::Lit(self.env.max_u)])?;
+        self.compile(b"(max-d)", Flags::EMPTY, &[Token::Lit(lo), Token::Lit(hi)])?;
+        self.compile(
+            b"(max-n)",
+            Flags::EMPTY,
+            &[Token::Lit(self.env.max_n as usize)],
+        )?;
+        self.compile(b"(max-u)", Flags::EMPTY, &[Token::Lit(self.env.max_u)])?;
         let (lo, hi): (usize, usize) = self.env.max_ud.into();
-        self.compile(b"(max-ud)", 0, &[Token::Lit(lo), Token::Lit(hi)])?;
+        self.compile(b"(max-ud)", Flags::EMPTY, &[Token::Lit(lo), Token::Lit(hi)])?;
         self.compile(
             b"(return-stack-cells)",
-            0,
+            Flags::EMPTY,
             &[Token::Lit(self.env.config.return_stack_cells)],
         )?;
         self.compile(
             b"(stack-cells)",
-            0,
+            Flags::EMPTY,
             &[Token::Lit(self.env.config.stack_cells)],
         )?;
         Ok(())
@@ -374,13 +390,13 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"(diagnostic-len)", Layout::DIAGNOSTIC_LEN),
         ];
         for (name, offset) in variables {
-            self.compile(name, 0, &[Token::Lit(self.layout_base + offset)])?;
+            self.compile(name, Flags::EMPTY, &[Token::Lit(self.layout_base + offset)])?;
         }
         Ok(())
     }
 
-    fn compile(&mut self, name: &[u8], flags: u8, body: &[Token]) -> Result<usize> {
-        let xt = self.create(name, flags | Flags::COLON)?;
+    fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
+        let xt = self.create(name, (flags | Flags::COLON).into())?;
         self.data.write_cell(self.layout_addr(Layout::LATEST), xt)?;
         self.data.write_cell(self.layout_addr(Layout::HERE), xt)?;
         for &token in body {
@@ -401,7 +417,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         }
         self.comma(Op::Exit as usize)?;
         let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
-        self.data.write_cell(xt - 3 * SIZE, here - xt)?;
+        self.data
+            .write_cell(Header::new(xt).bodylen_addr(), here - xt)?;
         Ok(xt)
     }
 
@@ -481,7 +498,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         }
     }
 
-    fn register_builtin(&mut self, name: &[u8], f: Builtin, flags: u8) -> Result<()> {
+    fn register_builtin(&mut self, name: &[u8], f: Builtin, flags: Flags) -> Result<()> {
         let idx = self.builtins_len;
         if idx >= MAX_BUILTINS {
             return Err(KernelError::BuiltinTableFull.into());
@@ -494,8 +511,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         self.comma(Op::Exit as usize)
     }
 
-    fn define(&mut self, name: &[u8], code: Op, flags: u8) -> Result<usize> {
-        let flags = Flags(flags);
+    fn define(&mut self, name: &[u8], code: Op, flags: Flags) -> Result<usize> {
         let kind = match code {
             Op::Yield => Flags::BUILTIN,
             _ => Flags::PRIMITIVE,

@@ -12,11 +12,45 @@ struct Layout {
 impl Layout {
     const BODYLEN: usize = offset_of!(Self, bodylen);
     const INFO: usize = offset_of!(Self, info);
-    #[allow(dead_code)]
     const LINK: usize = offset_of!(Self, link);
     const CODE: usize = offset_of!(Self, code);
 }
 
+/// The header starts with a variable-length `pad` field that ensures the `info` field always
+/// aligns to a cell address.
+///
+/// The length of the name follows as a single byte, then the bytes of the name.
+///
+/// The `bodylen` field encodes the length of the body in cells.
+///
+/// The `info` field packs the flags into the least significant byte and the length into the
+/// next byte. It currently reserves two additional bytes of space.
+///
+/// The `link` field links to the `code` field of the next word in the dictionary.
+///
+/// The `code` field contains an [`Op`] code. The compiled `body` of the word follows the op code.
+///
+/// Assuming a 32-bit cell size, the header looks like this in memory:
+///
+/// ```text
+///  0 1 2 3 4 5 6 7 8 9 a b c d e f 0 1 2 3 4 5 6 7 8 9 a b c d e f
+/// +---------------+---------------+-------------------------------+
+/// |      pad...   |      len      |             name...           |
+/// +---------------+---------------+-------------------------------+
+/// |                              name...                          |
+/// +---------------------------------------------------------------+
+/// |                            bodylen                            |
+/// +---------------+---------------+-------------------------------+
+/// |  info (len)   | info (flags)  |        info (reserved)        |
+/// +---------------+---------------+-------------------------------+
+/// |                              link                             |
+/// +---------------------------------------------------------------+
+/// |                              code                             |
+/// +---------------------------------------------------------------+
+/// |                              body...                          |
+/// +---------------------------------------------------------------+
+/// ```
+///
 pub struct Header(usize);
 
 impl Header {
@@ -24,12 +58,6 @@ impl Header {
         Self(addr)
     }
 
-    #[allow(dead_code)]
-    pub fn code_addr(&self) -> usize {
-        self.0
-    }
-
-    #[allow(dead_code)]
     pub fn link_addr(&self) -> usize {
         self.0 - (Layout::CODE - Layout::LINK)
     }
@@ -47,7 +75,6 @@ impl Header {
 pub(super) struct Info(usize);
 
 impl Info {
-    #[allow(dead_code)]
     pub const fn new(flags: Flags, len: u8) -> Self {
         Self((len as usize) | ((flags.0 as usize) << 8))
     }
@@ -75,6 +102,7 @@ impl From<Info> for usize {
 pub struct Flags(pub u8);
 
 impl Flags {
+    pub const EMPTY: Self = Self(0);
     pub const IMMEDIATE: Self = Self(0b0000001);
     pub const HIDDEN: Self = Self(0b0000010);
     pub const BOOTSTRAP: Self = Self(0b0000100);
