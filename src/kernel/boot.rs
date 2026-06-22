@@ -44,7 +44,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             io,
             builtins: [None; MAX_BUILTINS],
             builtins_len: 0,
-            op_xts: [0; 256],
             layout_base,
             env,
             state: Bootstrapping {},
@@ -79,7 +78,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             vm: self.vm,
             data: self.data,
             io: self.io,
-            op_xts: self.op_xts,
             builtins: self.builtins,
             builtins_len: self.builtins_len,
             layout_base: self.layout_base,
@@ -154,9 +152,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"(yield)", Op::Yield),
         ];
         for (name, op) in opcodes {
-            let xt = self.define(name, *op, Flags::PRIMITIVE)?;
+            self.define(name, *op, Flags::PRIMITIVE)?;
             self.comma(Op::Exit as usize)?;
-            self.op_xts[*op as usize] = xt;
         }
         Ok(())
     }

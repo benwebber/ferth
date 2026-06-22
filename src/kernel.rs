@@ -38,8 +38,6 @@ pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Bootstrapping> 
     vm: Vm,
     data: Data<M>,
     io: I,
-    // lookup table for Op CFAs
-    op_xts: [usize; 256],
     builtins: [Option<Builtin>; MAX_BUILTINS],
     builtins_len: usize,
     layout_base: usize,
