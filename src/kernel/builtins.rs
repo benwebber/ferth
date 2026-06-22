@@ -241,10 +241,8 @@ pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
         let op = host.read_cell(xt)? & 0xff;
         comma(host, op | (xt << 8))
     } else if kind & BUILTIN != 0 {
-        let index = host.read_cell(xt + SIZE)?;
-        let x = (Op::Yield as usize) | (index << 8) | (xt << 16);
-        comma(host, x)?;
-        comma(host, index)
+        let x = host.read_cell(xt)?;
+        comma(host, x)
     } else {
         comma(host, Op::Call as usize)?;
         comma(host, xt)
@@ -257,7 +255,7 @@ pub fn decode(host: &mut dyn Host) -> Result<()> {
     let x = host.read_cell(ip)?;
     let op = (x & 0xff).try_into()?;
     let (operand, next) = match op {
-        Lit | Jmp | JmpZ | Call | Yield | DoCreate | PlusLoop | QDo => {
+        Lit | Jmp | JmpZ | Call | DoCreate | PlusLoop | QDo => {
             (host.read_cell(ip + SIZE)?, ip + 2 * SIZE)
         }
         Op::Str => {

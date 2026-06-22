@@ -263,8 +263,8 @@ impl Vm {
                 self.ip = target;
             }
             Op::Yield => {
-                let index = maybe_read_cell_unchecked!(data, self.ip)?;
-                self.ip += SIZE;
+                let x = maybe_read_cell_unchecked!(data, self.ip - SIZE)?;
+                let index = (x >> 8) & 0xff;
                 return Ok(Some(Stop::Yield(YieldToken { ip: self.ip, index })));
             }
             Op::DoCreate => {
@@ -656,9 +656,8 @@ mod tests {
     fn call_token_yields_then_resumes() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        d.write_cell(base, Op::Yield as usize).unwrap();
-        d.write_cell(base + SIZE, 5).unwrap();
-        d.write_cell(base + 2 * SIZE, Op::Exit as usize).unwrap();
+        d.write_cell(base, (Op::Yield as usize) | (5 << 8)).unwrap();
+        d.write_cell(base + SIZE, Op::Exit as usize).unwrap();
         let token = match v.call(&mut d, base).unwrap() {
             Stop::Yield(t) => t,
             other => panic!("expected Yield, got {:?}", other),
@@ -713,8 +712,8 @@ mod tests {
     fn op_yield_reads_index_and_stops() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        d.write_cell(base, 7).unwrap();
-        v.ip = base;
+        d.write_cell(base, (Op::Yield as usize) | (7 << 8)).unwrap();
+        v.ip = base + SIZE;
         let stop = v.step(&mut d, Op::Yield).unwrap();
         assert!(matches!(stop, Some(Stop::Yield(ref t)) if t.index == 7));
         assert_eq!(v.ip, base + SIZE);

@@ -490,8 +490,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         }
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
-        self.define(name, Op::Yield, flags | BUILTIN)?;
-        self.comma(idx)?;
+        let cfa = self.define(name, Op::Yield, flags | BUILTIN)?;
+        self.data
+            .write_cell(cfa, (Op::Yield as usize) | (idx << 8) | (cfa << 16))?;
         self.comma(Op::Exit as usize)
     }
 
