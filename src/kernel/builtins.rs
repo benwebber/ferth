@@ -1,6 +1,7 @@
 use crate::double::Double;
 use crate::error::Ior;
 use crate::header::{Flags, Header, Info};
+use crate::packed::PackedInstr;
 use crate::parser;
 use crate::vm::Op;
 use crate::{Error, Result};
@@ -201,10 +202,7 @@ pub fn compile_comma(host: &mut dyn Host) -> Result<()> {
     let header = Header::new(xt);
     let info: Info = host.read_cell(header.info_addr())?.into();
     let flags = info.flags();
-    if flags.contains(Flags::PRIMITIVE) {
-        let op = host.read_cell(xt)? & 0xff;
-        comma(host, op | (xt << 8))
-    } else if flags.contains(Flags::BUILTIN) {
+    if flags.contains(Flags::PRIMITIVE) || flags.contains(Flags::BUILTIN) {
         let x = host.read_cell(xt)?;
         comma(host, x)
     } else {
@@ -217,8 +215,8 @@ pub fn decode(host: &mut dyn Host) -> Result<()> {
     use Op::*;
     let ip = host.pop()?;
     let x = host.read_cell(ip)?;
-    let op = (x & 0xff).try_into()?;
-    let (operand, next) = match op {
+    let instr = PackedInstr::try_from(x)?;
+    let (operand, next) = match instr.op() {
         Lit | Jmp | JmpZ | Call | DoCreate | PlusLoop | QDo => {
             (host.read_cell(ip + SIZE)?, ip + 2 * SIZE)
         }
@@ -228,7 +226,7 @@ pub fn decode(host: &mut dyn Host) -> Result<()> {
         }
         _ => (0, ip + SIZE),
     };
-    host.push(x & 0xff)?;
+    host.push(instr.op() as usize)?;
     host.push(operand)?;
     host.push(next)
 }

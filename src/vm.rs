@@ -1,6 +1,7 @@
 //! The inner interpreter.
 use crate::data::{Data, Mem};
 use crate::double::Double;
+use crate::packed::PackedInstr;
 use crate::{FALSE, SIZE, TRUE};
 
 mod error;
@@ -234,17 +235,22 @@ impl Vm {
             if self.ip == HALT {
                 return Ok(Stop::Halt);
             }
-            // Masked to prepare for packed instruction.
-            let op = (maybe_read_cell_unchecked!(data, self.ip)? & 0xff).try_into()?;
+            let x = maybe_read_cell_unchecked!(data, self.ip)?;
+            let instr = PackedInstr::try_from(x)?;
             self.ip += SIZE;
-            if let Some(stop) = self.step(data, op)? {
+            if let Some(stop) = self.step(data, instr)? {
                 return Ok(stop);
             }
         }
     }
 
-    pub fn step<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
-        match op {
+    pub fn step<M: Mem>(
+        &mut self,
+        data: &mut Data<M>,
+        instr: impl Into<PackedInstr>,
+    ) -> VmResult<Option<Stop>> {
+        let instr = instr.into();
+        match instr.op() {
             Op::Halt => {
                 return Ok(Some(Stop::Halt));
             }
@@ -263,8 +269,7 @@ impl Vm {
                 self.ip = target;
             }
             Op::Yield => {
-                let x = maybe_read_cell_unchecked!(data, self.ip - SIZE)?;
-                let index = (x >> 8) & 0xff;
+                let index = instr.operand().expect("Yield always carries an operand");
                 return Ok(Some(Stop::Yield(YieldToken { ip: self.ip, index })));
             }
             Op::DoCreate => {
@@ -712,9 +717,9 @@ mod tests {
     fn op_yield_reads_index_and_stops() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
-        d.write_cell(base, (Op::Yield as usize) | (7 << 8)).unwrap();
         v.ip = base + SIZE;
-        let stop = v.step(&mut d, Op::Yield).unwrap();
+        let instr = PackedInstr::try_from((Op::Yield as usize) | (7 << 8)).unwrap();
+        let stop = v.step(&mut d, instr).unwrap();
         assert!(matches!(stop, Some(Stop::Yield(ref t)) if t.index == 7));
         assert_eq!(v.ip, base + SIZE);
     }

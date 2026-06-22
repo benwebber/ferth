@@ -26,6 +26,7 @@ mod header;
 pub mod io;
 mod kernel;
 mod log;
+mod packed;
 mod parser;
 mod vm;
 

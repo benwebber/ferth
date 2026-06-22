@@ -95,6 +95,7 @@ pub enum KernelError {
     MissingEntryPoint(&'static str),
     /// Irrecoverable. An *xt* does not fit in the bytes reserved for it in a packed instruction cell.
     XtTooLarge(usize),
+    InvalidInstruction(usize),
 }
 
 impl From<KernelError> for Error {
@@ -127,6 +128,7 @@ impl core::fmt::Display for KernelError {
             Self::BuiltinTableFull => write!(f, "builtin table full"),
             Self::MissingEntryPoint(name) => write!(f, "missing entry point: {name}"),
             Self::XtTooLarge(xt) => write!(f, "xt too large to pack: {xt:#x}"),
+            Self::InvalidInstruction(u) => write!(f, "invalid instruction: {u:#x}"),
         }
     }
 }

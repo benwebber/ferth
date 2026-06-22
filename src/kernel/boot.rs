@@ -14,6 +14,7 @@ use super::env;
 use super::host;
 use super::layout;
 use super::{Bootstrapping, Builtin, Kernel, MAX_BUILTINS, Ready};
+use crate::packed::PackedInstr;
 
 use env::Environment;
 use layout::Layout;
@@ -152,7 +153,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             (b"(yield)", Op::Yield),
         ];
         for (name, op) in opcodes {
-            self.define(name, *op, Flags::PRIMITIVE)?;
+            let xt = self.define(name, *op, Flags::PRIMITIVE)?;
+            let instr = PackedInstr::new(*op, xt, 0)?;
+            self.data.write_cell(xt, instr.into())?;
             self.comma(Op::Exit as usize)?;
         }
         Ok(())
@@ -503,8 +506,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
         let cfa = self.define(name, Op::Yield, flags | Flags::BUILTIN)?;
-        self.data
-            .write_cell(cfa, (Op::Yield as usize) | (idx << 8) | (cfa << 16))?;
+        let instr = PackedInstr::new(Op::Yield, cfa, idx)?;
+        self.data.write_cell(cfa, instr.into())?;
         self.comma(Op::Exit as usize)
     }
 
@@ -514,15 +517,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Bootstrapping> {
             _ => Flags::PRIMITIVE,
         };
         let cfa = self.create(name, (flags | kind).into())?;
-        let xt_bytes = if kind.contains(Flags::BUILTIN) {
-            SIZE - 2
-        } else {
-            SIZE - 1
-        };
-        if cfa >> (8 * xt_bytes) != 0 {
-            return Err(KernelError::XtTooLarge(cfa).into());
-        }
-        self.data.write_cell(cfa, code as usize)?;
         self.data
             .write_cell(self.layout_addr(Layout::HERE), cfa + SIZE)?;
         self.data
