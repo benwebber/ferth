@@ -67,8 +67,7 @@ impl<M: Mem, I: Io> Fe<M, I, Loading> {
             debug!("SYSTEM", "Loaded {} wordlist", name);
         }
         let xt = |name: &'static str| -> Result<usize> {
-            fe.kernel
-                .find(name.as_bytes())?
+            crate::kernel::dict::find(&fe.kernel, name.as_bytes())?
                 .map(|(xt, _)| xt)
                 .ok_or(KernelError::MissingEntryPoint(name).into())
         };

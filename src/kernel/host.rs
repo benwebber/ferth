@@ -21,18 +21,13 @@ pub trait Host: private::Sealed {
     fn push(&mut self, x: usize) -> Result<()>;
     fn pop(&mut self) -> Result<usize>;
     fn read(&self, addr: usize, u: usize) -> Result<&[u8]>;
-    #[allow(dead_code)]
     fn read_cell(&self, addr: usize) -> Result<usize>;
     fn write_cell(&mut self, addr: usize, x: usize) -> Result<()>;
-    #[allow(dead_code)]
     fn write_char(&mut self, addr: usize, c: u8) -> Result<()>;
     fn write(&mut self, addr: usize, bytes: &[u8]) -> Result<()>;
     fn emit(&mut self, c: u8) -> Result<()>;
     fn key(&mut self) -> Result<Option<u8>>;
     fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>>;
-    fn set_diagnostic(&mut self, addr: usize, u: usize) -> Result<()>;
-    fn find(&self, name: &[u8]) -> Result<Option<(usize, isize)>>;
-    fn create(&mut self, name: &[u8], flags: u8) -> Result<usize>;
     fn layout_addr(&self, offset: usize) -> usize;
 }
 
@@ -66,15 +61,6 @@ impl<M: Mem, I: Io, S: State> Host for Kernel<M, I, S> {
     }
     fn key(&mut self) -> Result<Option<u8>> {
         self.io.key()
-    }
-    fn set_diagnostic(&mut self, addr: usize, u: usize) -> Result<()> {
-        self.set_diagnostic(addr, u)
-    }
-    fn find(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
-        self.find(name)
-    }
-    fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {
-        self.create(name, flags)
     }
     fn layout_addr(&self, offset: usize) -> usize {
         self.layout_addr(offset)

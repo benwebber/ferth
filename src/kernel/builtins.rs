@@ -1,6 +1,7 @@
 use crate::error::Ior;
 use crate::{Error, Result};
 
+use super::dict;
 use super::{FALSE, Host, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, TRUE};
 
 /// Receive a single character from the input device.
@@ -44,12 +45,12 @@ pub fn find(host: &mut dyn Host) -> Result<()> {
     let len = host.pop()?;
     let addr = host.pop()?;
     if len > MAX_WORD_LEN {
-        host.set_diagnostic(addr, len)?;
+        dict::set_diagnostic(host, addr, len)?;
         return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
     }
     let mut buf = [0u8; MAX_WORD_LEN];
     buf[..len].copy_from_slice(host.read(addr, len)?);
-    match host.find(&buf[..len])? {
+    match dict::find(host, &buf[..len])? {
         Some((xt, flag)) => {
             host.push(xt)?;
             host.push(flag as usize)
@@ -96,12 +97,12 @@ pub fn header(host: &mut dyn Host) -> Result<()> {
     let len = host.pop()?;
     let addr = host.pop()?;
     if len > MAX_WORD_LEN {
-        host.set_diagnostic(addr, len)?;
+        dict::set_diagnostic(host, addr, len)?;
         return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
     }
     let mut buf = [0u8; MAX_WORD_LEN];
     buf[..len].copy_from_slice(host.read(addr, len)?);
-    let cfa = host.create(&buf[..len], 0)?;
+    let cfa = dict::create(host, &buf[..len], 0)?;
     host.write_cell(host.layout_addr(Layout::LATEST), cfa)?;
     host.write_cell(host.layout_addr(Layout::HERE), cfa)?;
     Ok(())

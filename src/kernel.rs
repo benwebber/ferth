@@ -5,10 +5,11 @@ use crate::io::{Io, NoIo};
 use crate::packed::PackedInstr;
 use crate::state::{Booted, Booting, State};
 use crate::vm::{Op, Stop, Vm};
-use crate::{Error, FALSE, Result, SIZE, TRUE};
+use crate::{Error, FALSE, Result, TRUE};
 
 mod boot;
 mod builtins;
+pub(crate) mod dict;
 mod env;
 mod host;
 mod layout;
@@ -67,67 +68,12 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         self.vm.stack(&self.data)
     }
 
-    pub(super) fn find(&self, name: &[u8]) -> Result<Option<(usize, isize)>> {
-        if name.len() > MAX_WORD_LEN {
-            return Ok(None);
-        }
-        let mut xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
-        while xt != 0 {
-            let header = Header::new(xt);
-            let info: Info = self.data.read_cell(header.info_addr())?.into();
-            let flags = info.flags();
-            let wlen = info.name_len();
-            if !flags.contains(Flags::HIDDEN) && wlen == name.len() {
-                let name_at = header.bodylen_addr() - wlen;
-                let b = self.data.read(name_at, wlen)?;
-                if name.eq_ignore_ascii_case(b) {
-                    let flag = if flags.contains(Flags::IMMEDIATE) {
-                        1
-                    } else {
-                        -1
-                    };
-                    return Ok(Some((xt, flag)));
-                }
-            }
-            xt = self.data.read_cell(header.link_addr())?;
-        }
-        Ok(None)
-    }
-
-    fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {
-        let len: u8 = name
-            .len()
-            .try_into()
-            .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
-        let latest = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
-        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
-        // pad the name so as to always align info
-        let pad = (SIZE - ((here + 1 + len as usize) % SIZE)) % SIZE;
-        // name
-        let nfa = here + pad;
-        self.data.write_char(nfa, len)?;
-        self.data.write(nfa + 1, name)?;
-        // bodylen (0 until ;)
-        let body_len = nfa + 1 + len as usize;
-        self.data.write_cell(body_len, 0)?;
-        // info
-        let info = body_len + SIZE;
-        self.data
-            .write_cell(info, Info::new(flags.into(), len).into())?;
-        // link
-        let link = info + SIZE;
-        self.data.write_cell(link, latest)?;
-        // code
-        let cfa = link + SIZE;
-        Ok(cfa)
-    }
-
     fn layout_addr(&self, offset: usize) -> usize {
         self.layout_base + offset
     }
 
     fn undefined(&mut self, addr: usize, len: usize) -> Result<()> {
-        self.set_diagnostic(addr, len)?;
+        dict::set_diagnostic(self, addr, len)?;
         Err(Error::Throw(Ior::UNDEFINED_WORD))
     }
 
@@ -175,7 +121,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
             Severity::Throw(ior) => ior,
             Severity::Abort => return Err(self.abort(e)),
         };
-        match self.find(b"throw")? {
+        match dict::find(self, b"throw")? {
             Some((throw_xt, _)) => {
                 // Throw in Forth.
                 self.push(ior as usize)?;
@@ -194,14 +140,6 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         let _ = self.data.write_cell(self.layout_addr(Layout::STATE), FALSE);
         self.vm.reset();
         e
-    }
-
-    fn set_diagnostic(&mut self, addr: usize, len: usize) -> Result<()> {
-        self.data
-            .write_cell(self.layout_addr(Layout::DIAGNOSTIC_ADDR), addr)?;
-        self.data
-            .write_cell(self.layout_addr(Layout::DIAGNOSTIC_LEN), len)?;
-        Ok(())
     }
 
     pub(super) fn set_source(&mut self, code: &[u8]) -> Result<()> {
