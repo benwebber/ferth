@@ -19,6 +19,11 @@ impl<M: Mem> Data<M> {
         Self { mem }
     }
 
+    /// Return the size of the data space in bytes.
+    pub fn size(&self) -> usize {
+        self.mem.as_ref().len()
+    }
+
     /// Read a slice of bytes.
     pub fn read(&self, addr: usize, len: usize) -> VmResult<&[u8]> {
         let end = addr

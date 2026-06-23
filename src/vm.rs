@@ -221,6 +221,14 @@ impl Vm {
         maybe_read_cell_unchecked!(data, self.rp)
     }
 
+    fn check_addr<M: Mem>(&self, data: &mut Data<M>, addr: usize) -> VmResult<()> {
+        if addr < self.reserved() || addr >= data.size() {
+            Err(VmError::AddressOutOfRange(addr))
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn call<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<Stop> {
         self.rpush(data, 0)?;
         self.ip = addr;
@@ -261,12 +269,14 @@ impl Vm {
             }
             Op::Call => {
                 let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                self.check_addr(data, target)?;
                 self.ip += SIZE;
                 self.rpush(data, self.ip)?;
                 self.ip = target;
             }
             Op::Execute => {
                 let target = self.pop(data)?;
+                self.check_addr(data, target)?;
                 self.rpush(data, self.ip)?;
                 self.ip = target;
             }
@@ -279,6 +289,7 @@ impl Vm {
                 self.ip += SIZE;
                 self.push(data, self.ip)?;
                 self.ip = if does_addr != 0 {
+                    self.check_addr(data, does_addr)?;
                     does_addr
                 } else {
                     self.rpop(data)?
@@ -291,12 +302,14 @@ impl Vm {
             }
             Op::Jmp => {
                 let target = maybe_read_cell_unchecked!(data, self.ip)?;
-                self.ip = target; // TODO: validate target
+                self.check_addr(data, target)?;
+                self.ip = target;
             }
             Op::JmpZ => {
                 let target = maybe_read_cell_unchecked!(data, self.ip)?;
                 if self.pop(data)? == 0 {
-                    self.ip = target; // TODO: validate target
+                    self.check_addr(data, target)?;
+                    self.ip = target;
                 } else {
                     self.ip += SIZE;
                 }
@@ -398,7 +411,9 @@ impl Vm {
                     self.ip += SIZE;
                 } else {
                     maybe_write_cell_unchecked!(data, self.rp - SIZE, next as usize)?;
-                    self.ip = maybe_read_cell_unchecked!(data, self.ip)?;
+                    let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                    self.check_addr(data, target)?;
+                    self.ip = target;
                 }
             }
             Op::I => {
@@ -426,7 +441,9 @@ impl Vm {
                 let limit = self.pop(data)?;
                 if index == limit {
                     // Jump.
-                    self.ip = maybe_read_cell_unchecked!(data, self.ip)?;
+                    let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                    self.check_addr(data, target)?;
+                    self.ip = target;
                 } else {
                     // Step over target.
                     self.ip += SIZE;
