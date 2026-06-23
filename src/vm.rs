@@ -14,35 +14,6 @@ pub use op::Op;
 
 pub const HALT: usize = 0x00;
 
-/// Read a cell. Forgo bounds and alignment checks when the `unsafe` feature is enabled.
-macro_rules! maybe_read_cell_unchecked {
-    ($data:expr, $addr:expr) => {{
-        #[cfg(feature = "unsafe")]
-        {
-            Ok(unsafe { $data.read_cell_unchecked($addr) })
-        }
-        #[cfg(not(feature = "unsafe"))]
-        {
-            $data.read_cell($addr)
-        }
-    }};
-}
-
-/// Write a cell. Forgo bounds and alignment checks when the `unsafe` feature is enabled.
-macro_rules! maybe_write_cell_unchecked {
-    ($data:expr, $addr:expr, $val:expr) => {{
-        #[cfg(feature = "unsafe")]
-        {
-            unsafe { $data.write_cell_unchecked($addr, $val) };
-            Ok(())
-        }
-        #[cfg(not(feature = "unsafe"))]
-        {
-            $data.write_cell($addr, $val)
-        }
-    }};
-}
-
 macro_rules! unary {
     ($self:expr, |$x:ident| $body:expr) => {{
         if $self.sp == Self::DS_ADDR {
@@ -59,7 +30,8 @@ macro_rules! binary {
             return Err(VmError::StackUnderflow);
         }
         let $b = $self.tos;
-        let $a = maybe_read_cell_unchecked!($data, $self.sp - 2 * SIZE)?;
+        // SAFETY: Validated against underflow above.
+        let $a = unsafe { $data.read_cell_unchecked($self.sp - 2 * SIZE) };
         $self.tos = $body;
         $self.sp -= SIZE;
     }};
@@ -98,9 +70,8 @@ pub enum Stop {
 /// bottom of the address space for its data stack and return stack. It maintains execution state
 /// with a set of internal registers, inaccessible to the host.
 ///
-/// The `unsafe` crate feature enables pointer access IP and stack pointer optimizations. They are
-/// safe in practice because the interpreter controls access to and validates the pointer
-/// addresses.
+/// The `unsafe` crate feature enables unsafe stack pointer access optimizations. They are safe in
+/// practice because the interpreter controls access to and validates the pointer addresses.
 pub struct Vm {
     /// The instruction pointer (IP).
     ///
@@ -185,7 +156,10 @@ impl Vm {
         if self.sp >= self.sp_max {
             return Err(VmError::StackOverflow);
         }
-        maybe_write_cell_unchecked!(data, self.sp - SIZE, self.tos)?;
+        // SAFETY: Validated against overflow above.
+        unsafe {
+            data.write_cell_unchecked(self.sp - SIZE, self.tos);
+        }
         self.tos = x;
         self.sp += SIZE;
         Ok(())
@@ -198,7 +172,8 @@ impl Vm {
         }
         let x = self.tos;
         self.sp -= SIZE;
-        self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
+        // SAFETY: Validated against underflow above.
+        self.tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
         Ok(x)
     }
 
@@ -207,7 +182,10 @@ impl Vm {
         if self.rp >= self.rp_max {
             return Err(VmError::ReturnStackOverflow);
         }
-        maybe_write_cell_unchecked!(data, self.rp, x)?;
+        // SAFETY: Validated against overflow above.
+        unsafe {
+            data.write_cell_unchecked(self.rp, x);
+        }
         self.rp += SIZE;
         Ok(())
     }
@@ -218,10 +196,12 @@ impl Vm {
             return Err(VmError::ReturnStackUnderflow);
         }
         self.rp -= SIZE;
-        maybe_read_cell_unchecked!(data, self.rp)
+        // SAFETY: Validated against underflow above.
+        let x = unsafe { data.read_cell_unchecked(self.rp) };
+        Ok(x)
     }
 
-    fn check_addr<M: Mem>(&self, data: &mut Data<M>, addr: usize) -> VmResult<()> {
+    fn check_addr<M: Mem>(&self, data: &Data<M>, addr: usize) -> VmResult<()> {
         if addr < self.reserved() || addr >= data.size() {
             Err(VmError::AddressOutOfRange(addr))
         } else {
@@ -245,7 +225,7 @@ impl Vm {
             if self.ip == HALT {
                 return Ok(Stop::Halt);
             }
-            let x = maybe_read_cell_unchecked!(data, self.ip)?;
+            let x = data.read_cell(self.ip)?;
             let instr = PackedInstr::try_from(x)?;
             self.ip += SIZE;
             if let Some(stop) = self.step(data, instr)? {
@@ -268,7 +248,7 @@ impl Vm {
                 self.ip = self.rpop(data)?;
             }
             Op::Call => {
-                let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                let target = data.read_cell(self.ip)?;
                 self.check_addr(data, target)?;
                 self.ip += SIZE;
                 self.rpush(data, self.ip)?;
@@ -285,7 +265,7 @@ impl Vm {
                 return Ok(Some(Stop::Yield(YieldToken { ip: self.ip, index })));
             }
             Op::DoCreate => {
-                let does_addr = maybe_read_cell_unchecked!(data, self.ip)?;
+                let does_addr = data.read_cell(self.ip)?;
                 self.ip += SIZE;
                 self.push(data, self.ip)?;
                 self.ip = if does_addr != 0 {
@@ -296,17 +276,17 @@ impl Vm {
                 };
             }
             Op::Lit => {
-                let val = maybe_read_cell_unchecked!(data, self.ip)?;
+                let val = data.read_cell(self.ip)?;
                 self.push(data, val)?;
                 self.ip += SIZE;
             }
             Op::Jmp => {
-                let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                let target = data.read_cell(self.ip)?;
                 self.check_addr(data, target)?;
                 self.ip = target;
             }
             Op::JmpZ => {
-                let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                let target = data.read_cell(self.ip)?;
                 if self.pop(data)? == 0 {
                     self.check_addr(data, target)?;
                     self.ip = target;
@@ -326,10 +306,12 @@ impl Vm {
                     return Err(VmError::StackUnderflow);
                 }
                 let addr = self.tos;
-                let val = maybe_read_cell_unchecked!(data, self.sp - 2 * SIZE)?;
+                // SAFETY: Validated against underflow above.
+                let x = unsafe { data.read_cell_unchecked(self.sp - 2 * SIZE) };
                 self.sp -= 2 * SIZE;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
-                data.write_cell(addr, val)?;
+                let tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
+                self.tos = tos;
+                data.write_cell(addr, x)?;
             }
             Op::CFetch => {
                 if self.sp == Self::DS_ADDR {
@@ -343,9 +325,11 @@ impl Vm {
                     return Err(VmError::StackUnderflow);
                 }
                 let addr = self.tos;
-                let c = maybe_read_cell_unchecked!(data, self.sp - 2 * SIZE)? as u8;
+                // SAFETY: Validated against underflow above.
+                let c = unsafe { data.read_cell_unchecked(self.sp - 2 * SIZE) as u8 };
                 self.sp -= 2 * SIZE;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
+                let tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
+                self.tos = tos;
                 data.write_char(addr, c)?;
             }
             Op::Add => {
@@ -376,8 +360,11 @@ impl Vm {
                     return Err(VmError::StackUnderflow);
                 }
                 let tos = self.tos;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - 2 * SIZE)?;
-                maybe_write_cell_unchecked!(data, self.sp - 2 * SIZE, tos)?;
+                // SAFETY: Validated length above.
+                unsafe {
+                    self.tos = data.read_cell_unchecked(self.sp - 2 * SIZE);
+                    data.write_cell_unchecked(self.sp - 2 * SIZE, tos);
+                }
             }
             Op::Dup => {
                 if self.sp == Self::DS_ADDR {
@@ -403,30 +390,30 @@ impl Vm {
             }
             Op::PlusLoop => {
                 let step = self.pop(data)? as isize;
-                let fudged = maybe_read_cell_unchecked!(data, self.rp - SIZE)? as isize;
+                let fudged = data.read_cell(self.rp - SIZE)? as isize;
                 let (next, overflow) = fudged.overflowing_add(step);
                 if overflow {
                     self.rpop(data)?;
                     self.rpop(data)?;
                     self.ip += SIZE;
                 } else {
-                    maybe_write_cell_unchecked!(data, self.rp - SIZE, next as usize)?;
-                    let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                    data.write_cell(self.rp - SIZE, next as usize)?;
+                    let target = data.read_cell(self.ip)?;
                     self.check_addr(data, target)?;
                     self.ip = target;
                 }
             }
             Op::I => {
-                let fudged = maybe_read_cell_unchecked!(data, self.rp - SIZE)?;
-                let limit = maybe_read_cell_unchecked!(data, self.rp - 2 * SIZE)?;
+                let fudged = data.read_cell(self.rp - SIZE)?;
+                let limit = data.read_cell(self.rp - 2 * SIZE)?;
                 self.push(
                     data,
                     fudged.wrapping_sub(isize::MIN as usize).wrapping_add(limit),
                 )?;
             }
             Op::J => {
-                let fudged = maybe_read_cell_unchecked!(data, self.rp - 3 * SIZE)?;
-                let limit = maybe_read_cell_unchecked!(data, self.rp - 4 * SIZE)?;
+                let fudged = data.read_cell(self.rp - 3 * SIZE)?;
+                let limit = data.read_cell(self.rp - 4 * SIZE)?;
                 self.push(
                     data,
                     fudged.wrapping_sub(isize::MIN as usize).wrapping_add(limit),
@@ -441,7 +428,7 @@ impl Vm {
                 let limit = self.pop(data)?;
                 if index == limit {
                     // Jump.
-                    let target = maybe_read_cell_unchecked!(data, self.ip)?;
+                    let target = data.read_cell(self.ip)?;
                     self.check_addr(data, target)?;
                     self.ip = target;
                 } else {
@@ -454,7 +441,7 @@ impl Vm {
                 }
             }
             Op::Str => {
-                let len = maybe_read_cell_unchecked!(data, self.ip)?;
+                let len = data.read_cell(self.ip)?;
                 self.ip += SIZE;
                 self.push(data, self.ip)?;
                 self.push(data, len)?;
@@ -483,11 +470,13 @@ impl Vm {
             }
             Op::SpStore => {
                 let addr = self.pop(data)?;
+                // TODO: Check alignment.
                 if addr < Self::DS_ADDR || addr > self.sp_max {
                     return Err(VmError::AddressOutOfRange(addr));
                 }
                 self.sp = addr;
-                self.tos = maybe_read_cell_unchecked!(data, self.sp - SIZE)?;
+                // SAFETY: Validated within bounds above.
+                self.tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
             }
             Op::RpFetch => {
                 self.push(data, self.rp)?;

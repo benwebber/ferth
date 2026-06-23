@@ -38,6 +38,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         };
         let data = Data::new(mem);
         let vm = Vm::new(env.config.stack_cells, env.config.return_stack_cells);
+        assert!(vm.reserved() <= data.size(), "data space too small for VM");
         let layout_base = vm.reserved();
         Self {
             vm,
