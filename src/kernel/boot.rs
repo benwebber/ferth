@@ -474,13 +474,14 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn parse(&mut self) -> Result<()> {
-        let (src, srclen, toin) = self.dict().source()?;
+        let (src, srclen, to_in) = self.dict().source()?;
         self.push(src)?;
         self.push(srclen)?;
-        self.push(toin)?;
+        self.push(to_in)?;
         self.vm.step(&mut self.data, Op::Parse)?;
         let to_in = self.pop()?;
-        self.dict().set_to_in(to_in)?;
+        let to_in_addr = self.dict().addr(Layout::TO_IN);
+        self.data.write_cell(to_in_addr, to_in)?;
         Ok(())
     }
 
@@ -514,7 +515,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         while to_in < src_len && self.data.read_char(src + to_in)?.is_ascii_whitespace() {
             to_in += 1;
         }
-        self.dict().set_to_in(to_in)?;
+        let to_in_addr = self.dict().addr(Layout::TO_IN);
+        self.data.write_cell(to_in_addr, to_in)?;
         self.push(BL)?;
         self.parse()?;
         let len = self.pop()?;
