@@ -3,8 +3,8 @@ use crate::error::{Error, Ior};
 use crate::header::{Flags, Header, Info};
 use crate::{Result, SIZE};
 
-use super::MAX_WORD_LEN;
 use super::layout::Layout;
+use super::{INPUT_BUFFER_SIZE, MAX_WORD_LEN};
 
 pub(crate) struct Dict<'a, M: Mem> {
     data: &'a mut Data<M>,
@@ -94,6 +94,22 @@ impl<'a, M: Mem> Dict<'a, M> {
             .write_cell(self.layout_addr(Layout::DIAGNOSTIC_ADDR), addr)?;
         self.data
             .write_cell(self.layout_addr(Layout::DIAGNOSTIC_LEN), len)?;
+        Ok(())
+    }
+
+    pub(super) fn set_source(&mut self, code: &[u8]) -> Result<()> {
+        if code.len() > INPUT_BUFFER_SIZE {
+            return Err(Error::Throw(Ior::PARSED_STRING_OVERFLOW));
+        }
+        let input_addr = self.layout_addr(Layout::INPUT);
+        self.data.write(input_addr, code)?;
+        self.data
+            .write_cell(self.layout_addr(Layout::SOURCE_ADDR), input_addr)?;
+        self.data
+            .write_cell(self.layout_addr(Layout::SOURCE_LEN), code.len())?;
+        self.data
+            .write_cell(self.layout_addr(Layout::SOURCE_ID), -1isize as usize)?;
+        self.data.write_cell(self.layout_addr(Layout::TO_IN), 0)?;
         Ok(())
     }
 

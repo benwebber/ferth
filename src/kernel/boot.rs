@@ -316,7 +316,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     fn load_kernel(&mut self) -> Result<()> {
         for line in KERNEL.split(|&b| b == b'\n') {
             if !line.is_empty() {
-                self.set_source(line)?;
+                self.dict().set_source(line)?;
                 self.interpret()?;
             }
         }
