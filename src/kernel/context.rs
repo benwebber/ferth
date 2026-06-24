@@ -39,14 +39,6 @@ impl<'a, M: Mem, I: Io> Context<'a, M, I> {
         Ok(self.data.read(addr, len)?)
     }
 
-    pub(crate) fn write(&mut self, addr: usize, bytes: &[u8]) -> Result<()> {
-        Ok(self.data.write(addr, bytes)?)
-    }
-
-    pub(crate) fn write_cell(&mut self, addr: usize, x: usize) -> Result<()> {
-        Ok(self.data.write_cell(addr, x)?)
-    }
-
     pub(crate) fn emit(&mut self, c: u8) -> Result<()> {
         self.io.emit(c)
     }
@@ -57,10 +49,6 @@ impl<'a, M: Mem, I: Io> Context<'a, M, I> {
 
     pub(crate) fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
         self.io.refill(buf)
-    }
-
-    pub(crate) fn layout_addr(&self, offset: usize) -> usize {
-        self.layout_base + offset
     }
 
     pub(crate) fn dict(&mut self) -> Dict<'_, M> {

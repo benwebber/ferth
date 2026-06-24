@@ -4,7 +4,7 @@ use crate::io::Io;
 use crate::{Error, Result};
 
 use super::context::Context;
-use super::{FALSE, INPUT_BUFFER_SIZE, Layout, MAX_WORD_LEN, TRUE};
+use super::{FALSE, INPUT_BUFFER_SIZE, MAX_WORD_LEN, TRUE};
 
 /// Receive a single character from the input device.
 ///
@@ -70,13 +70,9 @@ pub fn find<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// See [`REFILL`](https://forth-standard.org/standard/core/REFILL).
 pub fn refill<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
     let mut buf = [0u8; INPUT_BUFFER_SIZE];
-    let input_addr = ctx.layout_addr(Layout::INPUT);
     match ctx.refill(&mut buf) {
         Ok(Some(len)) => {
-            ctx.write(input_addr, &buf[..len])?;
-            ctx.write_cell(ctx.layout_addr(Layout::SOURCE_ADDR), input_addr)?;
-            ctx.write_cell(ctx.layout_addr(Layout::SOURCE_LEN), len)?;
-            ctx.write_cell(ctx.layout_addr(Layout::TO_IN), 0)?;
+            ctx.dict().set_source(&buf[..len])?;
             ctx.push(TRUE)?;
             Ok(())
         }

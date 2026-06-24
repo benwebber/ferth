@@ -472,16 +472,13 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn parse(&mut self) -> Result<()> {
-        let src = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
-        let srclen = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
-        let toin = self.data.read_cell(self.layout_addr(Layout::TO_IN))?;
+        let (src, srclen, toin) = self.dict().source()?;
         self.push(src)?;
         self.push(srclen)?;
         self.push(toin)?;
         self.vm.step(&mut self.data, Op::Parse)?;
-        let toin = self.pop()?;
-        self.data
-            .write_cell(self.layout_addr(Layout::TO_IN), toin)?;
+        let to_in = self.pop()?;
+        self.dict().set_to_in(to_in)?;
         Ok(())
     }
 
@@ -509,14 +506,11 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     /// See [`PARSE-NAME`](https://forth-standard.org/standard/core/PARSE-NAME).
     // TODO: Thread this through the stack like the other words.
     fn parse_name(&mut self) -> Result<(usize, usize)> {
-        let src = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
-        let src_len = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
-        let mut to_in = self.data.read_cell(self.layout_addr(Layout::TO_IN))?;
+        let (src, src_len, mut to_in) = self.dict().source()?;
         while to_in < src_len && self.data.read_char(src + to_in)?.is_ascii_whitespace() {
             to_in += 1;
         }
-        self.data
-            .write_cell(self.layout_addr(Layout::TO_IN), to_in)?;
+        self.dict().set_to_in(to_in)?;
         self.push(BL)?;
         self.parse()?;
         let len = self.pop()?;

@@ -28,6 +28,16 @@ impl<'a, M: Mem> Dict<'a, M> {
         Ok(self.data.read_cell(self.layout_addr(Layout::LATEST))?)
     }
 
+    pub(crate) fn to_in(&self) -> Result<usize> {
+        Ok(self.data.read_cell(self.layout_addr(Layout::TO_IN))?)
+    }
+
+    pub(crate) fn set_to_in(&mut self, offset: usize) -> Result<()> {
+        Ok(self
+            .data
+            .write_cell(self.layout_addr(Layout::TO_IN), offset)?)
+    }
+
     pub(crate) fn set_latest(&mut self, addr: usize) -> Result<()> {
         Ok(self
             .data
@@ -97,6 +107,13 @@ impl<'a, M: Mem> Dict<'a, M> {
         Ok(())
     }
 
+    pub(super) fn source(&self) -> Result<(usize, usize, usize)> {
+        let addr = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
+        let len = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
+        let to_in = self.to_in()?;
+        Ok((addr, len, to_in))
+    }
+
     pub(super) fn set_source(&mut self, code: &[u8]) -> Result<()> {
         if code.len() > INPUT_BUFFER_SIZE {
             return Err(Error::Throw(Ior::PARSED_STRING_OVERFLOW));
@@ -109,7 +126,7 @@ impl<'a, M: Mem> Dict<'a, M> {
             .write_cell(self.layout_addr(Layout::SOURCE_LEN), code.len())?;
         self.data
             .write_cell(self.layout_addr(Layout::SOURCE_ID), -1isize as usize)?;
-        self.data.write_cell(self.layout_addr(Layout::TO_IN), 0)?;
+        self.set_to_in(0)?;
         Ok(())
     }
 
