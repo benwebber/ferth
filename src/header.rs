@@ -28,7 +28,7 @@ impl Layout {
 ///
 /// The `link` field links to the `code` field of the next word in the dictionary.
 ///
-/// The `code` field contains an [`Op`] code. The compiled `body` of the word follows the op code.
+/// The `code` field contains an [`Op`][crate::vm::Op] code. The compiled `body` of the word follows the op code.
 ///
 /// Assuming a 32-bit cell size, the header looks like this in memory:
 ///

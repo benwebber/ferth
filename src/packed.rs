@@ -6,8 +6,30 @@ use crate::{Result, SIZE};
 ///
 /// The least significant byte (`0`) holds the [`Op`]. The remaining bytes hold the payload, which depends on the op:
 ///
-/// * An [`Op::Yield`] instruction contains the builtin index in the byte `1`, and the *xt* in the higher bytes (`2..`).
-/// * All other ops contain the *xt* in the bytes after the least significant byte `1..`.
+/// * An [`Op::Yield`] instruction contains the builtin index in byte `1`, and the *xt* in the higher bytes (`2..`).
+/// * All other ops contain the *xt* in the bytes after the least significant byte (`1..`).
+///
+/// The packed representation ensures all instructions with operands have the same width, and that
+/// words like `see` can recover primitives' code addresses without a lookup table. This scheme
+/// restricts `Op` primitives to the first 2<sup>24</sup> addresses (16777216), and builtins to the
+/// first 2<sup>16</sup> (65566), minus the system's reserved addresses.
+///
+/// # Encoding only
+///
+/// [`PackedInstr::new`] encodes instructions, but this type does not provide any accessors to
+/// decode the packed data. The system only encodes instructions once, when they are defined.
+/// However it must decode instructions in the innermost loop of the VM
+/// ([`Vm::run`](crate::vm::Vm::run)).
+///
+/// An earlier revision decoded `op`, `xt`, and `operand` into struct fields. This negatively
+/// impacted performance for two reasons. First, most instructions do not need the packed data at
+/// execution time, so decoding the entire instruction cost extra work. More importantly, it
+/// changed how the compiler passed the instruction to `Vm::step`. As a `usize` newtype, it likely
+/// ends up in a register. As decoded struct fields, the generated code passed the instruction to
+/// [`Vm::step`](crate::vm::Vm::step) as a pointer to a set of values on the stack.
+///
+/// `Vm::step` decodes instructions lazily instead. Nearly every operation only requires the
+/// opcode byte. [`Op::Yield`] decodes the packed index in its own branch.
 #[derive(Debug, Clone, Copy)]
 pub struct PackedInstr(usize);
 

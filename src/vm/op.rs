@@ -268,7 +268,7 @@ ops! {
     /// ```
     LtZ = 0x21,
 
-    /// Push [`TRUE`] ([`usize::MAX`]) to the data stack if the value at the top of the stack is
+    /// Push [`TRUE`][`crate::TRUE`] ([`usize::MAX`]) to the data stack if the value at the top of the stack is
     /// equal to 0, `FALSE` (0) otherwise.
     ///
     /// ```text
