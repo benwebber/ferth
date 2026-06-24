@@ -471,9 +471,11 @@ impl Vm {
             }
             Op::SpStore => {
                 let addr = self.pop(data)?;
-                // TODO: Check alignment.
                 if addr < Self::DS_ADDR || addr > self.sp_max {
                     return Err(VmError::AddressOutOfRange(addr));
+                }
+                if !addr.is_multiple_of(SIZE) {
+                    return Err(VmError::AddressMisaligned(addr));
                 }
                 self.sp = addr;
                 // SAFETY: Validated within bounds above.
@@ -486,6 +488,9 @@ impl Vm {
                 let addr = self.pop(data)?;
                 if addr < self.rs_addr() || addr > self.rp_max {
                     return Err(VmError::AddressOutOfRange(addr));
+                }
+                if !addr.is_multiple_of(SIZE) {
+                    return Err(VmError::AddressMisaligned(addr));
                 }
                 self.rp = addr;
             }
