@@ -9,7 +9,6 @@ use crate::vm::{Op, Vm};
 use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
 use super::builtins::{emit, find, header, key, refill};
-use super::dict;
 use super::env;
 use super::host;
 use super::layout;
@@ -69,8 +68,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         debug!("KERNEL", "Compiled compiler");
         self.load_kernel()?;
         debug!("KERNEL", "Loaded kernel");
-        let xt = |name: &'static str| -> Result<usize> {
-            dict::find(&self, name.as_bytes())?
+        let mut xt = |name: &'static str| -> Result<usize> {
+            self.dict()
+                .find(name.as_bytes())?
                 .map(|(xt, _)| xt)
                 .ok_or(KernelError::MissingEntryPoint(name).into())
         };
@@ -440,7 +440,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
-        let xt = dict::create(self, name, (flags | Flags::COLON).into())?;
+        let xt = self.dict().create(name, (flags | Flags::COLON).into())?;
         self.data.write_cell(self.layout_addr(Layout::LATEST), xt)?;
         self.data.write_cell(self.layout_addr(Layout::HERE), xt)?;
         for &token in body {
@@ -450,7 +450,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     self.comma(x)?;
                 }
                 Token::Name(name) => {
-                    let xt = dict::find(self, name)?
+                    let xt = self
+                        .dict()
+                        .find(name)?
                         .map(|(xt, _)| xt)
                         .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
                     self.push(xt)?;
@@ -589,7 +591,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             Op::Yield => Flags::BUILTIN,
             _ => Flags::PRIMITIVE,
         };
-        let cfa = dict::create(self, name, (flags | kind).into())?;
+        let cfa = self.dict().create(name, (flags | kind).into())?;
         self.data
             .write_cell(self.layout_addr(Layout::HERE), cfa + SIZE)?;
         self.data
@@ -606,11 +608,11 @@ mod tests {
 
     #[test]
     fn tag_boot_words_with_kind() {
-        let k = Kernel::new([0u8; 65536], NoIo, Config::default())
+        let mut k = Kernel::new([0u8; 65536], NoIo, Config::default())
             .boot()
             .unwrap();
-        let flags = |name: &[u8]| {
-            let (xt, _) = dict::find(&k, name).unwrap().unwrap();
+        let mut flags = |name: &[u8]| {
+            let (xt, _) = k.dict().find(name).unwrap().unwrap();
             let header = Header::new(xt);
             let info: Info = k.data.read_cell(header.info_addr()).unwrap().into();
             info.flags()

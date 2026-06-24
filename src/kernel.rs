@@ -14,6 +14,7 @@ mod env;
 mod host;
 mod layout;
 
+use dict::Dict;
 use env::Environment;
 use layout::{INPUT_BUFFER_SIZE, Layout};
 
@@ -72,8 +73,12 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         self.layout_base + offset
     }
 
+    pub(crate) fn dict(&mut self) -> Dict<'_, M> {
+        Dict::new(&mut self.data, self.layout_base)
+    }
+
     fn undefined(&mut self, addr: usize, len: usize) -> Result<()> {
-        dict::set_diagnostic(self, addr, len)?;
+        self.dict().set_diagnostic(addr, len)?;
         Err(Error::Throw(Ior::UNDEFINED_WORD))
     }
 
@@ -123,7 +128,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
             Severity::Throw(ior) => ior,
             Severity::Abort => return Err(self.abort(e)),
         };
-        match dict::find(self, b"throw")? {
+        match self.dict().find(b"throw")? {
             Some((throw_xt, _)) => {
                 // Throw in Forth.
                 self.push(ior as usize)?;
