@@ -17,6 +17,7 @@
 //! assert_eq!(fe.stack().collect::<Vec<_>>(), vec![2, 4, 16, 256]);
 //! ```
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "unsafe"), forbid(unsafe_code))]
 
 mod data;
 mod double;

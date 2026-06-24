@@ -51,21 +51,22 @@ impl<M: Mem> Data<M> {
     /// # Safety
     ///
     /// The caller must verify `addr` is in range.
+    #[cfg(feature = "unsafe")]
     pub unsafe fn read_cell_unchecked(&self, addr: usize) -> usize {
-        #[cfg(feature = "unsafe")]
         // SAFETY: Caller guarantees that `addr` is in range.
         unsafe {
             usize::from_le_bytes(*(self.mem.as_ref().as_ptr().add(addr) as *const [u8; SIZE]))
         }
-        #[cfg(not(feature = "unsafe"))]
-        {
-            // Use `read` instead of `read_cell` because `read` specifically does not check
-            // alignment.
-            let bytes = self.read(addr, SIZE).expect("unchecked read out of range");
-            let mut buf = [0u8; SIZE];
-            buf.copy_from_slice(bytes);
-            usize::from_le_bytes(buf)
-        }
+    }
+
+    /// Read a single cell without checking address bounds or alignment.
+    #[cfg(not(feature = "unsafe"))]
+    pub fn read_cell_unchecked(&self, addr: usize) -> usize {
+        // Use `read` instead of `read_cell` because `read` specifically does not check alignment.
+        let bytes = self.read(addr, SIZE).expect("unchecked read out of range");
+        let mut buf = [0u8; SIZE];
+        buf.copy_from_slice(bytes);
+        usize::from_le_bytes(buf)
     }
 
     /// Read a single character (byte).
@@ -104,16 +105,16 @@ impl<M: Mem> Data<M> {
     /// # Safety
     ///
     /// The caller must verify `addr` is in range.
+    #[cfg(feature = "unsafe")]
     pub unsafe fn write_cell_unchecked(&mut self, addr: usize, x: usize) {
-        #[cfg(feature = "unsafe")]
-        unsafe {
-            *(self.mem.as_mut().as_mut_ptr().add(addr) as *mut [u8; SIZE]) = x.to_le_bytes()
-        };
-        #[cfg(not(feature = "unsafe"))]
-        {
-            self.write(addr, &x.to_le_bytes())
-                .expect("unchecked write out of range")
-        }
+        unsafe { *(self.mem.as_mut().as_mut_ptr().add(addr) as *mut [u8; SIZE]) = x.to_le_bytes() };
+    }
+
+    /// Write a single cell, without checking address bounds or alignment.
+    #[cfg(not(feature = "unsafe"))]
+    pub fn write_cell_unchecked(&mut self, addr: usize, x: usize) {
+        self.write(addr, &x.to_le_bytes())
+            .expect("unchecked write out of range")
     }
 
     /// Write a single character (byte).

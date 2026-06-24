@@ -31,9 +31,35 @@ macro_rules! binary {
         }
         let $b = $self.tos;
         // SAFETY: Validated against underflow above.
-        let $a = unsafe { $data.read_cell_unchecked($self.sp - 2 * SIZE) };
+        let $a = read_cell_unchecked!($data, $self.sp - 2 * SIZE);
         $self.tos = $body;
         $self.sp -= SIZE;
+    }};
+}
+
+macro_rules! read_cell_unchecked {
+    ($data:expr, $addr:expr) => {{
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            $data.read_cell_unchecked($addr)
+        }
+        #[cfg(not(feature = "unsafe"))]
+        {
+            $data.read_cell_unchecked($addr)
+        }
+    }};
+}
+
+macro_rules! write_cell_unchecked {
+    ($data:expr, $addr:expr, $x:expr) => {{
+        #[cfg(feature = "unsafe")]
+        unsafe {
+            $data.write_cell_unchecked($addr, $x);
+        }
+        #[cfg(not(feature = "unsafe"))]
+        {
+            $data.write_cell_unchecked($addr, $x);
+        }
     }};
 }
 
@@ -157,9 +183,7 @@ impl Vm {
             return Err(VmError::StackOverflow);
         }
         // SAFETY: Validated against overflow above.
-        unsafe {
-            data.write_cell_unchecked(self.sp - SIZE, self.tos);
-        }
+        write_cell_unchecked!(data, self.sp - SIZE, self.tos);
         self.tos = x;
         self.sp += SIZE;
         Ok(())
@@ -173,7 +197,7 @@ impl Vm {
         let x = self.tos;
         self.sp -= SIZE;
         // SAFETY: Validated against underflow above.
-        self.tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
+        self.tos = read_cell_unchecked!(data, self.sp - SIZE);
         Ok(x)
     }
 
@@ -183,9 +207,7 @@ impl Vm {
             return Err(VmError::ReturnStackOverflow);
         }
         // SAFETY: Validated against overflow above.
-        unsafe {
-            data.write_cell_unchecked(self.rp, x);
-        }
+        write_cell_unchecked!(data, self.rp, x);
         self.rp += SIZE;
         Ok(())
     }
@@ -197,7 +219,7 @@ impl Vm {
         }
         self.rp -= SIZE;
         // SAFETY: Validated against underflow above.
-        let x = unsafe { data.read_cell_unchecked(self.rp) };
+        let x = read_cell_unchecked!(data, self.rp);
         Ok(x)
     }
 
@@ -310,9 +332,9 @@ impl Vm {
                 }
                 let addr = self.tos;
                 // SAFETY: Validated against underflow above.
-                let x = unsafe { data.read_cell_unchecked(self.sp - 2 * SIZE) };
+                let x = read_cell_unchecked!(data, self.sp - 2 * SIZE);
                 self.sp -= 2 * SIZE;
-                let tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
+                let tos = read_cell_unchecked!(data, self.sp - SIZE);
                 self.tos = tos;
                 data.write_cell(addr, x)?;
             }
@@ -329,9 +351,9 @@ impl Vm {
                 }
                 let addr = self.tos;
                 // SAFETY: Validated against underflow above.
-                let c = unsafe { data.read_cell_unchecked(self.sp - 2 * SIZE) as u8 };
+                let c = read_cell_unchecked!(data, self.sp - 2 * SIZE) as u8;
                 self.sp -= 2 * SIZE;
-                let tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
+                let tos = read_cell_unchecked!(data, self.sp - SIZE);
                 self.tos = tos;
                 data.write_char(addr, c)?;
             }
@@ -364,10 +386,8 @@ impl Vm {
                 }
                 let tos = self.tos;
                 // SAFETY: Validated length above.
-                unsafe {
-                    self.tos = data.read_cell_unchecked(self.sp - 2 * SIZE);
-                    data.write_cell_unchecked(self.sp - 2 * SIZE, tos);
-                }
+                self.tos = read_cell_unchecked!(data, self.sp - 2 * SIZE);
+                write_cell_unchecked!(data, self.sp - 2 * SIZE, tos);
             }
             Op::Dup => {
                 if self.sp == Self::DS_ADDR {
@@ -479,7 +499,7 @@ impl Vm {
                 }
                 self.sp = addr;
                 // SAFETY: Validated within bounds above.
-                self.tos = unsafe { data.read_cell_unchecked(self.sp - SIZE) };
+                self.tos = read_cell_unchecked!(data, self.sp - SIZE);
             }
             Op::RpFetch => {
                 self.push(data, self.rp)?;
