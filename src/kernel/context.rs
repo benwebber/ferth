@@ -43,7 +43,9 @@ impl<'a, M: Mem, I: Io> Context<'a, M, I> {
         self.io.key()
     }
 
-    pub(crate) fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>> {
+    pub(crate) fn refill(&mut self) -> Result<Option<usize>> {
+        let mut dict = Dict::new(self.data, self.layout_base);
+        let buf = dict.input_mut()?;
         self.io.refill(buf)
     }
 

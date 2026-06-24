@@ -126,6 +126,16 @@ impl<M: Mem> Data<M> {
         Ok(())
     }
 
+    pub fn slice_mut(&mut self, addr: usize, len: usize) -> VmResult<&mut [u8]> {
+        let end = addr
+            .checked_add(len)
+            .ok_or(VmError::AddressOutOfRange(addr))?;
+        self.mem
+            .as_mut()
+            .get_mut(addr..end)
+            .ok_or(VmError::AddressOutOfRange(addr))
+    }
+
     pub fn copy_within(&mut self, src: usize, dest: usize, len: usize) -> VmResult<()> {
         let src_end = src
             .checked_add(len)

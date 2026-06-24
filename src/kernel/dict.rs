@@ -133,20 +133,29 @@ impl<'a, M: Mem> Dict<'a, M> {
         Ok((addr, len, to_in))
     }
 
+    pub(crate) fn input_mut(&mut self) -> Result<&mut [u8]> {
+        let addr = self.layout_addr(Layout::INPUT);
+        Ok(self.data.slice_mut(addr, INPUT_BUFFER_SIZE)?)
+    }
+
     pub(super) fn set_source(&mut self, code: &[u8]) -> Result<()> {
         if code.len() > INPUT_BUFFER_SIZE {
             return Err(Error::Throw(Ior::PARSED_STRING_OVERFLOW));
         }
         let input_addr = self.layout_addr(Layout::INPUT);
         self.data.write(input_addr, code)?;
+        self.set_source_len(code.len())
+    }
+
+    pub(crate) fn set_source_len(&mut self, len: usize) -> Result<()> {
+        let input_addr = self.layout_addr(Layout::INPUT);
         self.data
             .write_cell(self.layout_addr(Layout::SOURCE_ADDR), input_addr)?;
         self.data
-            .write_cell(self.layout_addr(Layout::SOURCE_LEN), code.len())?;
+            .write_cell(self.layout_addr(Layout::SOURCE_LEN), len)?;
         self.data
             .write_cell(self.layout_addr(Layout::SOURCE_ID), -1isize as usize)?;
-        self.set_to_in(0)?;
-        Ok(())
+        self.set_to_in(0)
     }
 
     fn layout_addr(&self, offset: usize) -> usize {
