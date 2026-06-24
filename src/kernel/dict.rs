@@ -16,13 +16,31 @@ impl<'a, M: Mem> Dict<'a, M> {
         Self { data, base_addr }
     }
 
+    pub(crate) fn here(&self) -> Result<usize> {
+        Ok(self.data.read_cell(self.layout_addr(Layout::HERE))?)
+    }
+
+    pub(crate) fn set_here(&mut self, addr: usize) -> Result<()> {
+        Ok(self.data.write_cell(self.layout_addr(Layout::HERE), addr)?)
+    }
+
+    pub(crate) fn latest(&self) -> Result<usize> {
+        Ok(self.data.read_cell(self.layout_addr(Layout::LATEST))?)
+    }
+
+    pub(crate) fn set_latest(&mut self, addr: usize) -> Result<()> {
+        Ok(self
+            .data
+            .write_cell(self.layout_addr(Layout::LATEST), addr)?)
+    }
+
     pub(crate) fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {
         let len: u8 = name
             .len()
             .try_into()
             .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
-        let latest = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
-        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
+        let latest = self.latest()?;
+        let here = self.here()?;
         // pad the name so as to always align info
         let pad = (SIZE - ((here + 1 + len as usize) % SIZE)) % SIZE;
         // name
@@ -48,7 +66,7 @@ impl<'a, M: Mem> Dict<'a, M> {
         if name.len() > MAX_WORD_LEN {
             return Ok(None);
         }
-        let mut xt = self.data.read_cell(self.layout_addr(Layout::LATEST))?;
+        let mut xt = self.latest()?;
         while xt != 0 {
             let header = Header::new(xt);
             let info: Info = self.data.read_cell(header.info_addr())?.into();

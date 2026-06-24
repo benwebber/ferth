@@ -105,7 +105,6 @@ pub fn header<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
     let mut buf = [0u8; MAX_WORD_LEN];
     buf[..len].copy_from_slice(ctx.read(addr, len)?);
     let cfa = ctx.dict().create(&buf[..len], 0)?;
-    ctx.write_cell(ctx.layout_addr(Layout::LATEST), cfa)?;
-    ctx.write_cell(ctx.layout_addr(Layout::HERE), cfa)?;
-    Ok(())
+    ctx.dict().set_latest(cfa)?;
+    ctx.dict().set_here(cfa)
 }

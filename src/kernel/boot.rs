@@ -439,8 +439,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
 
     fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
         let xt = self.dict().create(name, (flags | Flags::COLON).into())?;
-        self.data.write_cell(self.layout_addr(Layout::LATEST), xt)?;
-        self.data.write_cell(self.layout_addr(Layout::HERE), xt)?;
+        self.dict().set_latest(xt)?;
+        self.dict().set_here(xt)?;
         for &token in body {
             match token {
                 Token::Lit(x) => {
@@ -459,18 +459,16 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             }
         }
         self.comma(Op::Exit as usize)?;
-        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
+        let here = self.dict().here()?;
         self.data
             .write_cell(Header::new(xt).bodylen_addr(), here - xt)?;
         Ok(xt)
     }
 
-    fn comma(&mut self, val: usize) -> Result<()> {
-        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
-        self.data.write_cell(here, val)?;
-        self.data
-            .write_cell(self.layout_addr(Layout::HERE), here + SIZE)?;
-        Ok(())
+    fn comma(&mut self, x: usize) -> Result<()> {
+        let here = self.dict().here()?;
+        self.data.write_cell(here, x)?;
+        self.dict().set_here(here + SIZE)
     }
 
     fn parse(&mut self) -> Result<()> {
@@ -488,12 +486,11 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn compile_comma(&mut self) -> Result<()> {
-        let here = self.data.read_cell(self.layout_addr(Layout::HERE))?;
+        let here = self.dict().here()?;
         self.push(here)?;
         self.vm.step(&mut self.data, Op::CompileComma)?;
         let here = self.pop()?;
-        self.data.write_cell(self.layout_addr(Layout::HERE), here)?;
-        Ok(())
+        self.dict().set_here(here)
     }
 
     fn numberq(&mut self) -> Result<()> {
@@ -590,10 +587,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             _ => Flags::PRIMITIVE,
         };
         let cfa = self.dict().create(name, (flags | kind).into())?;
-        self.data
-            .write_cell(self.layout_addr(Layout::HERE), cfa + SIZE)?;
-        self.data
-            .write_cell(self.layout_addr(Layout::LATEST), cfa)?;
+        self.dict().set_here(cfa + SIZE)?;
+        self.dict().set_latest(cfa)?;
         Ok(cfa)
     }
 }
