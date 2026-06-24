@@ -479,7 +479,12 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         for line in KERNEL.split(|&b| b == b'\n') {
             if !line.is_empty() {
                 self.dict().set_source(line)?;
-                self.interpret()?;
+                let xt = self
+                    .dict()
+                    .find(b"(interpret)")?
+                    .map(|(xt, _)| xt)
+                    .ok_or(KernelError::MissingEntryPoint("(interpret)"))?;
+                self.execute(xt)?;
             }
         }
         Ok(())
@@ -656,101 +661,12 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         self.dict().set_here(here + SIZE)
     }
 
-    fn parse(&mut self) -> Result<()> {
-        let (src, srclen, to_in) = self.dict().source()?;
-        self.push(src)?;
-        self.push(srclen)?;
-        self.push(to_in)?;
-        self.vm.step(&mut self.data, Op::Parse)?;
-        let to_in = self.pop()?;
-        let to_in_addr = self.dict().addr(Layout::TO_IN);
-        self.data.write_cell(to_in_addr, to_in)?;
-        Ok(())
-    }
-
     fn compile_comma(&mut self) -> Result<()> {
         let here = self.dict().here()?;
         self.push(here)?;
         self.vm.step(&mut self.data, Op::CompileComma)?;
         let here = self.pop()?;
         self.dict().set_here(here)
-    }
-
-    fn numberq(&mut self) -> Result<()> {
-        // TODO: Separate dict/dict_mut to eliminate binding.
-        let base_addr = self.dict().addr(Layout::BASE);
-        let base = self.data.read_cell(base_addr)?;
-        self.push(base)?;
-        self.vm.step(&mut self.data, Op::Number)?;
-        Ok(())
-    }
-
-    /// Parse the next token in the parse area, skipping leading whitespace.
-    ///
-    /// ```text
-    /// parse-name ( "<spaces>name<space>" -- c-addr u )
-    /// ```
-    ///
-    /// See [`PARSE-NAME`](https://forth-standard.org/standard/core/PARSE-NAME).
-    // TODO: Thread this through the stack like the other words.
-    fn parse_name(&mut self) -> Result<(usize, usize)> {
-        let (src, src_len, mut to_in) = self.dict().source()?;
-        while to_in < src_len && self.data.read_char(src + to_in)?.is_ascii_whitespace() {
-            to_in += 1;
-        }
-        let to_in_addr = self.dict().addr(Layout::TO_IN);
-        self.data.write_cell(to_in_addr, to_in)?;
-        self.push(BL)?;
-        self.parse()?;
-        let len = self.pop()?;
-        let addr = self.pop()?;
-        Ok((addr, len))
-    }
-
-    /// The main interpreter loop.
-    ///
-    /// <https://forth-standard.org/standard/usage#section.3.4>
-    fn interpret(&mut self) -> Result<()> {
-        loop {
-            let (addr, len) = self.parse_name()?;
-            if len == 0 {
-                return Ok(());
-            }
-            self.push(addr)?;
-            self.push(len)?;
-            find(&mut self.context())?;
-            let flag = self.pop()? as isize;
-            // TODO: Separate dict/dict_mut to eliminate binding.
-            let state_addr = self.dict().addr(Layout::STATE);
-            let state = self.data.read_cell(state_addr)?;
-            if flag != 0 {
-                if state == 0 || flag == 1 {
-                    let xt = self.pop()?;
-                    self.execute(xt)?;
-                } else {
-                    self.compile_comma()?;
-                }
-            } else {
-                self.push(addr)?;
-                self.push(len)?;
-                self.numberq()?;
-                let ok = self.pop()? as isize;
-                if ok == 1 {
-                    let v = self.pop()?;
-                    if state != 0 {
-                        self.comma(Op::Lit as usize)?;
-                        self.comma(v)?;
-                    } else {
-                        self.push(v)?;
-                    }
-                } else {
-                    // numberq leaves ( c-addr u ) on failure; discard and report the word.
-                    self.pop()?;
-                    self.pop()?;
-                    return self.undefined(addr, len);
-                }
-            }
-        }
     }
 
     fn register_builtin(&mut self, name: &[u8], f: Builtin<M, I>, flags: Flags) -> Result<()> {

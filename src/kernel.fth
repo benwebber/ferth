@@ -249,14 +249,14 @@ create handler 0 ,
 \ Hide and redefine bootstrap words. Notice that to redefine :, we must first
 \ save the XT of :, because otherwise the interpreter would throw undefined word
 \ (-13) on :.
-' : dup dup >r  ( xt xt ) ( R: xt )
-(hide)          ( xt )
+' : dup dup     ( xt xt xt )
+(hide)          ( xt xt )
 execute :
   parse-name (header)
   (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
   -1 state !
 ;
-r> (hide)       ( R: )
+(hide)          ( xt -- )
 
 ' create (hide)
 : create

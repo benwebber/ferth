@@ -1,5 +1,5 @@
 use crate::data::{Data, Mem};
-use crate::error::{Ior, KernelError, Severity};
+use crate::error::{KernelError, Severity};
 use crate::header::{Flags, Header, Info};
 use crate::io::{Io, NoIo};
 use crate::packed::PackedInstr;
@@ -75,11 +75,6 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
 
     pub(crate) fn dict(&mut self) -> Dict<'_, M> {
         Dict::new(&mut self.data, self.layout_base)
-    }
-
-    fn undefined(&mut self, addr: usize, len: usize) -> Result<()> {
-        self.dict().set_diagnostic(addr, len)?;
-        Err(Error::Throw(Ior::UNDEFINED_WORD))
     }
 
     pub(super) fn execute(&mut self, xt: usize) -> Result<()> {

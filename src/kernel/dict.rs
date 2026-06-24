@@ -32,10 +32,6 @@ impl<'a, M: Mem> Dict<'a, M> {
         Ok(self.data.read_cell(self.layout_addr(Layout::LATEST))?)
     }
 
-    pub(crate) fn to_in(&self) -> Result<usize> {
-        Ok(self.data.read_cell(self.layout_addr(Layout::TO_IN))?)
-    }
-
     pub(crate) fn set_latest(&mut self, addr: usize) -> Result<()> {
         Ok(self
             .data
@@ -122,13 +118,6 @@ impl<'a, M: Mem> Dict<'a, M> {
         self.data
             .write_cell(self.layout_addr(Layout::DIAGNOSTIC_LEN), len)?;
         Ok(())
-    }
-
-    pub(super) fn source(&self) -> Result<(usize, usize, usize)> {
-        let addr = self.data.read_cell(self.layout_addr(Layout::SOURCE_ADDR))?;
-        let len = self.data.read_cell(self.layout_addr(Layout::SOURCE_LEN))?;
-        let to_in = self.to_in()?;
-        Ok((addr, len, to_in))
     }
 
     pub(crate) fn input_mut(&mut self) -> Result<&mut [u8]> {
