@@ -125,4 +125,20 @@ impl<M: Mem> Data<M> {
             .ok_or(VmError::AddressOutOfRange(addr))? = c;
         Ok(())
     }
+
+    pub fn copy_within(&mut self, src: usize, dest: usize, len: usize) -> VmResult<()> {
+        let src_end = src
+            .checked_add(len)
+            .ok_or(VmError::AddressOutOfRange(src))?;
+        let dest_end = dest
+            .checked_add(len)
+            .ok_or(VmError::AddressOutOfRange(dest))?;
+        let mem = self.mem.as_mut();
+        mem.get(src..src_end)
+            .ok_or(VmError::AddressOutOfRange(src))?;
+        mem.get(dest..dest_end)
+            .ok_or(VmError::AddressOutOfRange(dest))?;
+        mem.copy_within(src..src_end, dest);
+        Ok(())
+    }
 }

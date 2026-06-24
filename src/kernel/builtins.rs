@@ -50,9 +50,7 @@ pub fn find<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
         ctx.dict().set_diagnostic(addr, len)?;
         return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
     }
-    let mut buf = [0u8; MAX_WORD_LEN];
-    buf[..len].copy_from_slice(ctx.read(addr, len)?);
-    match ctx.dict().find(&buf[..len])? {
+    match ctx.dict().find_at(addr, len)? {
         Some((xt, flag)) => {
             ctx.push(xt)?;
             ctx.push(flag)
@@ -98,9 +96,7 @@ pub fn header<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
         ctx.dict().set_diagnostic(addr, len)?;
         return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
     }
-    let mut buf = [0u8; MAX_WORD_LEN];
-    buf[..len].copy_from_slice(ctx.read(addr, len)?);
-    let cfa = ctx.dict().create(&buf[..len], 0)?;
+    let cfa = ctx.dict().create_at(addr, len, 0)?;
     ctx.dict().set_latest(cfa)?;
     ctx.dict().set_here(cfa)
 }

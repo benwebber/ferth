@@ -44,11 +44,7 @@ impl<'a, M: Mem> Dict<'a, M> {
             .write_cell(self.layout_addr(Layout::LATEST), addr)?)
     }
 
-    pub(crate) fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {
-        let len: u8 = name
-            .len()
-            .try_into()
-            .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
+    fn header_at(&mut self, len: u8, flags: u8) -> Result<(usize, usize)> {
         let latest = self.latest()?;
         let here = self.here()?;
         // pad the name so as to always align info
@@ -56,7 +52,6 @@ impl<'a, M: Mem> Dict<'a, M> {
         // name
         let nfa = here + pad;
         self.data.write_char(nfa, len)?;
-        self.data.write(nfa + 1, name)?;
         // bodylen (0 until ;)
         let body_len = nfa + 1 + len as usize;
         self.data.write_cell(body_len, 0)?;
@@ -69,7 +64,31 @@ impl<'a, M: Mem> Dict<'a, M> {
         self.data.write_cell(link, latest)?;
         // code
         let cfa = link + SIZE;
+        Ok((nfa, cfa))
+    }
+
+    pub(crate) fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {
+        let len: u8 = name
+            .len()
+            .try_into()
+            .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
+        let (nfa, cfa) = self.header_at(len, flags)?;
+        self.data.write(nfa + 1, name)?;
         Ok(cfa)
+    }
+
+    pub(crate) fn create_at(&mut self, src_addr: usize, len: usize, flags: u8) -> Result<usize> {
+        let len: u8 = len
+            .try_into()
+            .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
+        let (nfa, cfa) = self.header_at(len, flags)?;
+        self.data.copy_within(src_addr, nfa + 1, len as usize)?;
+        Ok(cfa)
+    }
+
+    pub(crate) fn find_at(&self, addr: usize, len: usize) -> Result<Option<(usize, usize)>> {
+        let name = self.data.read(addr, len)?;
+        self.find(name)
     }
 
     pub(crate) fn find(&self, name: &[u8]) -> Result<Option<(usize, usize)>> {

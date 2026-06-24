@@ -35,10 +35,6 @@ impl<'a, M: Mem, I: Io> Context<'a, M, I> {
         Ok(self.vm.pop(self.data)?)
     }
 
-    pub(crate) fn read(&self, addr: usize, len: usize) -> Result<&[u8]> {
-        Ok(self.data.read(addr, len)?)
-    }
-
     pub(crate) fn emit(&mut self, c: u8) -> Result<()> {
         self.io.emit(c)
     }
