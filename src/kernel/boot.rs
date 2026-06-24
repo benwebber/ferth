@@ -197,7 +197,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
 
         macro_rules! addr {
             ($name:ident) => {
-                L(self.layout_addr(Layout::$name))
+                L(self.dict().addr(Layout::$name))
             };
         }
 
@@ -208,6 +208,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         //
         // `N(name)` compiles a call to a previously defined word. Any reference to an XT that
         // should be a data value at runtime (`['] word`) must be a literal (`L(xt)`).
+        let here = addr!(HERE);
+        let latest = addr!(LATEST);
 
         // cells
         compile!(b"cells", 0, [L(SIZE), N(b"um*"), N(b"drop")]);
@@ -216,7 +218,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         compile!(b"+!", 0, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
 
         // : allot ( n -- ) (here) +! ;
-        compile!(b"allot", 0, [addr!(HERE), N(b"+!")]);
+        compile!(b"allot", 0, [here, N(b"+!")]);
 
         // : , ( x -- ) here ! 1 cells allot ;
         //
@@ -224,7 +226,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         compile!(
             b",",
             0,
-            [addr!(HERE), N(b"@"), N(b"!"), L(1), N(b"cells"), N(b"allot")]
+            [here, N(b"@"), N(b"!"), L(1), N(b"cells"), N(b"allot")]
         );
 
         // : literal ( x -- ) ['] (lit) , , ; immediate
@@ -296,14 +298,14 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             [
                 L(Op::Exit as usize), N(b","),
                 // Calculate and set bodylen.
-                addr!(LATEST), N(b"@"),
+                latest, N(b"@"),
                 N(b"dup"), L((3 * SIZE).wrapping_neg()), N(b"+"),
                 N(b"swap"),
-                addr!(HERE), N(b"@"), N(b"swap"),
+                here, N(b"@"), N(b"swap"),
                 N(b"dup"), N(b"(nand)"), L(1), N(b"+"), N(b"+"), // inline -
                 N(b"swap"), N(b"!"),
                 // Unset hidden flag.
-                addr!(LATEST), N(b"@"),
+                latest, N(b"@"),
                 L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+"), N(b"dup"), N(b"c@"),
                 L(Flags::HIDDEN.into()), N(b"dup"), N(b"(nand)"), N(b"(nand)"), N(b"dup"), N(b"(nand)"), // inline invert, and
                 N(b"swap"), N(b"c!"),
@@ -491,7 +493,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn numberq(&mut self) -> Result<()> {
-        let base = self.data.read_cell(self.layout_addr(Layout::BASE))?;
+        // TODO: Separate dict/dict_mut to eliminate binding.
+        let base_addr = self.dict().addr(Layout::BASE);
+        let base = self.data.read_cell(base_addr)?;
         self.push(base)?;
         self.vm.step(&mut self.data, Op::Number)?;
         Ok(())
@@ -531,7 +535,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             self.push(len)?;
             find(&mut self.context())?;
             let flag = self.pop()? as isize;
-            let state = self.data.read_cell(self.layout_addr(Layout::STATE))?;
+            // TODO: Separate dict/dict_mut to eliminate binding.
+            let state_addr = self.dict().addr(Layout::STATE);
+            let state = self.data.read_cell(state_addr)?;
             if flag != 0 {
                 if state == 0 || flag == 1 {
                     let xt = self.pop()?;

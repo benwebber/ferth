@@ -16,6 +16,10 @@ impl<'a, M: Mem> Dict<'a, M> {
         Self { data, base_addr }
     }
 
+    pub(crate) fn addr(&self, offset: usize) -> usize {
+        self.base_addr.wrapping_add(offset)
+    }
+
     pub(crate) fn here(&self) -> Result<usize> {
         Ok(self.data.read_cell(self.layout_addr(Layout::HERE))?)
     }

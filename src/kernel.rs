@@ -73,10 +73,6 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         Context::new(&mut self.vm, &mut self.data, &mut self.io, self.layout_base)
     }
 
-    fn layout_addr(&self, offset: usize) -> usize {
-        self.layout_base + offset
-    }
-
     pub(crate) fn dict(&mut self) -> Dict<'_, M> {
         Dict::new(&mut self.data, self.layout_base)
     }
@@ -148,7 +144,8 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
 
     /// Abort and re-raise a fatal [`Error`].
     fn abort(&mut self, e: Error) -> Error {
-        let _ = self.data.write_cell(self.layout_addr(Layout::STATE), FALSE);
+        let state_addr = self.dict().addr(Layout::STATE);
+        let _ = self.data.write_cell(state_addr, FALSE);
         self.vm.reset();
         e
     }
