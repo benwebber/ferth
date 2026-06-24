@@ -204,6 +204,8 @@ impl Vm {
     fn check_addr<M: Mem>(&self, data: &Data<M>, addr: usize) -> VmResult<()> {
         if addr < self.reserved() || addr >= data.size() {
             Err(VmError::AddressOutOfRange(addr))
+        } else if !addr.is_multiple_of(SIZE) {
+            Err(VmError::AddressMisaligned(addr))
         } else {
             Ok(())
         }
@@ -211,7 +213,7 @@ impl Vm {
 
     pub fn call<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<Stop> {
         self.rpush(data, 0)?;
-        self.ip = addr;
+        self.jump(data, addr)?;
         self.run(data)
     }
 
@@ -233,26 +235,35 @@ impl Vm {
         }
     }
 
+    fn jump<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<()> {
+        self.check_addr(data, addr)?;
+        self.ip = addr;
+        Ok(())
+    }
+
+    fn ret<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<()> {
+        self.ip = self.rpop(data)?;
+        Ok(())
+    }
+
     pub fn step<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
         match op {
             Op::Halt => {
                 return Ok(Some(Stop::Halt));
             }
             Op::Exit => {
-                self.ip = self.rpop(data)?;
+                self.ret(data)?;
             }
             Op::Call => {
                 let target = data.read_cell(self.ip)?;
-                self.check_addr(data, target)?;
                 self.ip += SIZE;
                 self.rpush(data, self.ip)?;
-                self.ip = target;
+                self.jump(data, target)?;
             }
             Op::Execute => {
                 let target = self.pop(data)?;
-                self.check_addr(data, target)?;
                 self.rpush(data, self.ip)?;
-                self.ip = target;
+                self.jump(data, target)?;
             }
             Op::Yield => {
                 let x = data.read_cell(self.ip - SIZE)?;
@@ -263,11 +274,10 @@ impl Vm {
                 let does_addr = data.read_cell(self.ip)?;
                 self.ip += SIZE;
                 self.push(data, self.ip)?;
-                self.ip = if does_addr != 0 {
-                    self.check_addr(data, does_addr)?;
-                    does_addr
+                if does_addr != 0 {
+                    self.jump(data, does_addr)?;
                 } else {
-                    self.rpop(data)?
+                    self.ret(data)?;
                 };
             }
             Op::Lit => {
@@ -277,14 +287,12 @@ impl Vm {
             }
             Op::Jmp => {
                 let target = data.read_cell(self.ip)?;
-                self.check_addr(data, target)?;
-                self.ip = target;
+                self.jump(data, target)?;
             }
             Op::JmpZ => {
                 let target = data.read_cell(self.ip)?;
                 if self.pop(data)? == 0 {
-                    self.check_addr(data, target)?;
-                    self.ip = target;
+                    self.jump(data, target)?;
                 } else {
                     self.ip += SIZE;
                 }
@@ -394,8 +402,7 @@ impl Vm {
                 } else {
                     data.write_cell(self.rp - SIZE, next as usize)?;
                     let target = data.read_cell(self.ip)?;
-                    self.check_addr(data, target)?;
-                    self.ip = target;
+                    self.jump(data, target)?;
                 }
             }
             Op::I => {
@@ -424,8 +431,7 @@ impl Vm {
                 if index == limit {
                     // Jump.
                     let target = data.read_cell(self.ip)?;
-                    self.check_addr(data, target)?;
-                    self.ip = target;
+                    self.jump(data, target)?;
                 } else {
                     // Step over target.
                     self.ip += SIZE;
