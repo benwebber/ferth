@@ -81,12 +81,14 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         let info: Info = self.data.read_cell(Header::new(xt).info_addr())?.into();
         let flags = info.flags();
         let mut stop = if flags.contains(Flags::PRIMITIVE) {
-            let instr = PackedInstr::try_from(self.data.read_cell(xt)?).map_err(Error::from)?;
-            if instr.op() == Op::Execute {
+            let op: Op = (self.data.read_cell(xt)? & PackedInstr::OP_MASK)
+                .try_into()
+                .map_err(Error::from)?;
+            if op == Op::Execute {
                 let target = self.pop()?;
                 return self.execute(target);
             }
-            match self.vm.step(&mut self.data, instr) {
+            match self.vm.step(&mut self.data, op) {
                 Ok(Some(s)) => s,
                 Ok(None) => return Ok(()),
                 Err(e) => self.throw(e.into())?,

@@ -225,22 +225,16 @@ impl Vm {
             if self.ip == HALT {
                 return Ok(Stop::Halt);
             }
-            let x = data.read_cell(self.ip)?;
-            let instr = PackedInstr::try_from(x)?;
+            let op = (data.read_cell(self.ip)? & PackedInstr::OP_MASK).try_into()?;
             self.ip += SIZE;
-            if let Some(stop) = self.step(data, instr)? {
+            if let Some(stop) = self.step(data, op)? {
                 return Ok(stop);
             }
         }
     }
 
-    pub fn step<M: Mem>(
-        &mut self,
-        data: &mut Data<M>,
-        instr: impl Into<PackedInstr>,
-    ) -> VmResult<Option<Stop>> {
-        let instr = instr.into();
-        match instr.op() {
+    pub fn step<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
+        match op {
             Op::Halt => {
                 return Ok(Some(Stop::Halt));
             }
@@ -261,7 +255,8 @@ impl Vm {
                 self.ip = target;
             }
             Op::Yield => {
-                let index = instr.operand().expect("Yield always carries an operand");
+                let x = data.read_cell(self.ip - SIZE)?;
+                let index = (x >> 8) & 0xff;
                 return Ok(Some(Stop::Yield(YieldToken { ip: self.ip, index })));
             }
             Op::DoCreate => {
@@ -564,8 +559,8 @@ impl Vm {
             Op::Decode => {
                 let ip = self.pop(data)?;
                 let x = data.read_cell(ip)?;
-                let decoded = PackedInstr::try_from(x)?;
-                let (operand, next) = match decoded.op() {
+                let op: Op = (x & PackedInstr::OP_MASK).try_into()?;
+                let (operand, next) = match op {
                     Op::Lit
                     | Op::Jmp
                     | Op::JmpZ
@@ -579,7 +574,7 @@ impl Vm {
                     }
                     _ => (0, ip + SIZE),
                 };
-                self.push(data, decoded.op() as usize)?;
+                self.push(data, op as usize)?;
                 self.push(data, operand)?;
                 self.push(data, next)?;
             }
@@ -820,9 +815,9 @@ mod tests {
     fn op_yield_reads_index_and_stops() {
         let (mut v, mut d) = vm();
         let base = v.reserved();
+        d.write_cell(base, (Op::Yield as usize) | (7 << 8)).unwrap();
         v.ip = base + SIZE;
-        let instr = PackedInstr::try_from((Op::Yield as usize) | (7 << 8)).unwrap();
-        let stop = v.step(&mut d, instr).unwrap();
+        let stop = v.step(&mut d, Op::Yield).unwrap();
         assert!(matches!(stop, Some(Stop::Yield(ref t)) if t.index == 7));
         assert_eq!(v.ip, base + SIZE);
     }

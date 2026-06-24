@@ -1,5 +1,5 @@
 use crate::error::KernelError;
-use crate::vm::{Op, VmError};
+use crate::vm::Op;
 use crate::{Result, SIZE};
 
 /// A packed instruction cell.
@@ -25,21 +25,6 @@ impl PackedInstr {
         Ok(Self(u))
     }
 
-    pub fn op(&self) -> Op {
-        Op::try_from(self.0 & Self::OP_MASK).expect("op validated on construction")
-    }
-
-    pub fn xt(&self) -> usize {
-        self.0 >> Self::xt_shift(self.op())
-    }
-
-    pub fn operand(&self) -> Option<usize> {
-        match self.op() {
-            Op::Yield => Some((self.0 >> 8) & 0xff),
-            _ => None,
-        }
-    }
-
     /// The number of bytes the *xt* may occupy.
     const fn xt_bytes(op: Op) -> usize {
         match op {
@@ -63,22 +48,6 @@ impl From<PackedInstr> for usize {
     }
 }
 
-impl From<Op> for PackedInstr {
-    fn from(op: Op) -> Self {
-        Self(op as usize)
-    }
-}
-
-impl TryFrom<usize> for PackedInstr {
-    type Error = VmError;
-
-    fn try_from(u: usize) -> core::result::Result<Self, Self::Error> {
-        // Validate the op byte but preserve the whole word, including the payload.
-        Op::try_from(u & Self::OP_MASK)?;
-        Ok(Self(u))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,52 +59,15 @@ mod tests {
     #[test]
     fn new_primitive_packs_op_and_xt() {
         let instr = PackedInstr::new(Op::Add, XT, 0).unwrap();
-        assert_eq!(instr.op(), Op::Add);
-        assert_eq!(instr.xt(), XT);
-        assert_eq!(instr.operand(), None);
         assert_eq!(usize::from(instr), (Op::Add as usize) | (XT << 8));
     }
 
     #[test]
     fn new_yield_packs_op_index_and_xt() {
         let instr = PackedInstr::new(Op::Yield, XT, INDEX).unwrap();
-        assert_eq!(instr.op(), Op::Yield);
-        assert_eq!(instr.operand(), Some(INDEX));
-        assert_eq!(instr.xt(), XT);
         assert_eq!(
             usize::from(instr),
             (Op::Yield as usize) | (INDEX << 8) | (XT << 16)
-        );
-    }
-
-    #[test]
-    fn round_trips_through_usize() {
-        for instr in [
-            PackedInstr::new(Op::Dup, XT, 0).unwrap(),
-            PackedInstr::new(Op::Yield, XT, INDEX).unwrap(),
-        ] {
-            let decoded = PackedInstr::try_from(usize::from(instr)).unwrap();
-            assert_eq!(decoded.op(), instr.op());
-            assert_eq!(decoded.xt(), instr.xt());
-            assert_eq!(decoded.operand(), instr.operand());
-        }
-    }
-
-    #[test]
-    fn try_from_preserves_payload() {
-        // Guards the regression where decoding kept only the op byte.
-        let raw = (Op::Yield as usize) | (INDEX << 8) | (XT << 16);
-        let instr = PackedInstr::try_from(raw).unwrap();
-        assert_eq!(instr.op(), Op::Yield);
-        assert_eq!(instr.operand(), Some(INDEX));
-        assert_eq!(instr.xt(), XT);
-    }
-
-    #[test]
-    fn try_from_rejects_invalid_op() {
-        assert_eq!(
-            PackedInstr::try_from(0xfe).unwrap_err(),
-            VmError::InvalidOpCode(0xfe)
         );
     }
 
@@ -156,13 +88,5 @@ mod tests {
             PackedInstr::new(Op::Yield, too_big, 0),
             Err(Error::Kernel(KernelError::XtTooLarge(xt))) if xt == too_big
         ));
-    }
-
-    #[test]
-    fn from_op_has_no_payload() {
-        let instr = PackedInstr::from(Op::Add);
-        assert_eq!(instr.op(), Op::Add);
-        assert_eq!(instr.xt(), 0);
-        assert_eq!(instr.operand(), None);
     }
 }
