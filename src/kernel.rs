@@ -9,31 +9,31 @@ use crate::{Error, FALSE, Result, TRUE};
 
 mod boot;
 mod builtins;
+mod context;
 pub(crate) mod dict;
 mod env;
-mod host;
 mod layout;
 
+use context::Context;
 use dict::Dict;
 use env::Environment;
 use layout::{INPUT_BUFFER_SIZE, Layout};
 
 pub use env::Config;
-pub use host::Host;
 
 /// The maximum word length in bytes.
 const MAX_WORD_LEN: usize = 31;
 /// The maximum number of builtins in the builtins table.
 const MAX_BUILTINS: usize = 256;
 
-pub type Builtin = fn(&mut dyn Host) -> Result<()>;
+pub(crate) type Builtin<M, I> = fn(&mut Context<'_, M, I>) -> Result<()>;
 
 /// The outer interpreter.
 pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Booting> {
     vm: Vm,
     data: Data<M>,
     io: I,
-    builtins: [Option<Builtin>; MAX_BUILTINS],
+    builtins: [Option<Builtin<M, I>>; MAX_BUILTINS],
     builtins_len: usize,
     layout_base: usize,
     env: Environment,
@@ -67,6 +67,10 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
 
     pub fn stack(&self) -> impl Iterator<Item = usize> + '_ {
         self.vm.stack(&self.data)
+    }
+
+    pub(crate) fn context(&mut self) -> Context<'_, M, I> {
+        Context::new(&mut self.vm, &mut self.data, &mut self.io, self.layout_base)
     }
 
     fn layout_addr(&self, offset: usize) -> usize {
@@ -110,7 +114,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
                 Stop::Yield(token) => {
                     let f = self.builtins[token.index]
                         .ok_or(KernelError::InvalidBuiltin(token.index as u8))?;
-                    stop = match f(self) {
+                    stop = match f(&mut self.context()) {
                         Ok(()) => match self.vm.resume(&mut self.data, token) {
                             Ok(s) => s,
                             Err(e) => self.throw(e.into())?,

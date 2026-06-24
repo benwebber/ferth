@@ -10,7 +10,6 @@ use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
 use super::builtins::{emit, find, header, key, refill};
 use super::env;
-use super::host;
 use super::layout;
 use super::{Builtin, Kernel, MAX_BUILTINS};
 use crate::packed::PackedInstr;
@@ -19,7 +18,6 @@ use env::Environment;
 use layout::Layout;
 
 pub use env::Config;
-pub use host::Host;
 
 const KERNEL: &[u8] = include_bytes!("../kernel.fth");
 
@@ -175,7 +173,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     /// parsing words are difficult, or inefficient, to express in Forth. The inner interpreter
     /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
     fn register_builtins(&mut self) -> Result<()> {
-        let builtins: &[(&[u8], Builtin, Flags)] = &[
+        let builtins: &[(&[u8], Builtin<M, I>, Flags)] = &[
             (b"emit", emit, Flags::EMPTY),
             (b"(find)", find, Flags::EMPTY),
             (b"key", key, Flags::EMPTY),
@@ -540,7 +538,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             }
             self.push(addr)?;
             self.push(len)?;
-            find(self)?;
+            find(&mut self.context())?;
             let flag = self.pop()? as isize;
             let state = self.data.read_cell(self.layout_addr(Layout::STATE))?;
             if flag != 0 {
@@ -573,7 +571,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         }
     }
 
-    fn register_builtin(&mut self, name: &[u8], f: Builtin, flags: Flags) -> Result<()> {
+    fn register_builtin(&mut self, name: &[u8], f: Builtin<M, I>, flags: Flags) -> Result<()> {
         let idx = self.builtins_len;
         if idx >= MAX_BUILTINS {
             return Err(KernelError::BuiltinTableFull.into());
