@@ -168,7 +168,6 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             let xt = self.define(name, Flags::PRIMITIVE)?;
             let instr = PackedInstr::new(*op, xt, 0)?;
             self.data.write_cell(xt, instr.into())?;
-            self.dict().comma(Op::Exit as usize)?;
         }
         Ok(())
     }
@@ -691,8 +690,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         self.builtins_len += 1;
         let cfa = self.define(name, flags)?;
         let instr = PackedInstr::new(Op::Yield, cfa, idx)?;
-        self.data.write_cell(cfa, instr.into())?;
-        self.dict().comma(Op::Exit as usize)
+        Ok(self.data.write_cell(cfa, instr.into())?)
     }
 
     fn define(&mut self, name: &[u8], flags: Flags) -> Result<usize> {
