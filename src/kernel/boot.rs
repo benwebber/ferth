@@ -664,7 +664,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
         let here = self.dict().here()?;
         self.push(here)?;
-        self.vm.enter(&mut self.data, xt)?;
+        self.execute(xt)?;
         let here = self.pop()?;
         self.dict().set_here(here)
     }
