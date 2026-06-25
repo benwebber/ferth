@@ -168,7 +168,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             let xt = self.define(name, *op, Flags::PRIMITIVE)?;
             let instr = PackedInstr::new(*op, xt, 0)?;
             self.data.write_cell(xt, instr.into())?;
-            self.comma(Op::Exit as usize)?;
+            self.dict().comma(Op::Exit as usize)?;
         }
         Ok(())
     }
@@ -600,8 +600,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         for &token in body {
             match token {
                 Token::Lit(x) => {
-                    self.comma(Op::Lit as usize)?;
-                    self.comma(x)?;
+                    self.dict().comma(Op::Lit as usize)?;
+                    self.dict().comma(x)?;
                 }
                 Token::Name(name) => {
                     let xt = self
@@ -617,7 +617,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     self.push(xt)?;
                     self.compile_comma()?;
                     let hole = self.dict().here()?;
-                    self.comma(0)?;
+                    self.dict().comma(0)?;
                     self.rpush(hole)?;
                 }
                 Token::Else => {
@@ -626,7 +626,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     self.push(xt)?;
                     self.compile_comma()?;
                     let hole = self.dict().here()?;
-                    self.comma(0)?;
+                    self.dict().comma(0)?;
                     let here = self.dict().here()?;
                     self.data.write_cell(orig, here)?;
                     self.rpush(hole)?;
@@ -646,23 +646,17 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     let xt = self.dict().find(b"(jmp)")?.unwrap().0; // TODO: unwrap
                     self.push(xt)?;
                     self.compile_comma()?;
-                    self.comma(dest)?;
+                    self.dict().comma(dest)?;
                     let here = self.dict().here()?;
                     self.data.write_cell(hole, here)?;
                 }
             }
         }
-        self.comma(Op::Exit as usize)?;
+        self.dict().comma(Op::Exit as usize)?;
         let here = self.dict().here()?;
         self.data
             .write_cell(Header::new(xt).bodylen_addr(), here - xt)?;
         Ok(xt)
-    }
-
-    fn comma(&mut self, x: usize) -> Result<()> {
-        let here = self.dict().here()?;
-        self.data.write_cell(here, x)?;
-        self.dict().set_here(here + SIZE)
     }
 
     fn compile_comma(&mut self) -> Result<()> {
@@ -683,7 +677,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         let cfa = self.define(name, Op::Yield, flags | Flags::BUILTIN)?;
         let instr = PackedInstr::new(Op::Yield, cfa, idx)?;
         self.data.write_cell(cfa, instr.into())?;
-        self.comma(Op::Exit as usize)
+        self.dict().comma(Op::Exit as usize)
     }
 
     fn define(&mut self, name: &[u8], code: Op, flags: Flags) -> Result<usize> {

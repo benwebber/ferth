@@ -38,6 +38,12 @@ impl<'a, M: Mem> Dict<'a, M> {
             .write_cell(self.layout_addr(Layout::LATEST), addr)?)
     }
 
+    pub(crate) fn comma(&mut self, x: usize) -> Result<()> {
+        let here = self.here()?;
+        self.data.write_cell(here, x)?;
+        self.set_here(here + SIZE)
+    }
+
     fn header_at(&mut self, len: u8, flags: u8) -> Result<(usize, usize)> {
         let latest = self.latest()?;
         let here = self.here()?;
