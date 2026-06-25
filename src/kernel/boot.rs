@@ -581,32 +581,13 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(())
     }
 
-    fn rpush(&mut self, x: usize) -> Result<()> {
-        let xt = self
-            .dict()
-            .find(b">r")?
-            .map(|(xt, _)| xt)
-            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        self.push(x)?;
-        self.vm.enter(&mut self.data, xt)?;
-        Ok(())
-    }
-
-    fn rpop(&mut self) -> Result<usize> {
-        let xt = self
-            .dict()
-            .find(b"r>")?
-            .map(|(xt, _)| xt)
-            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
-        self.vm.enter(&mut self.data, xt)?;
-        self.pop()
-    }
-
     fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
         let xt = self.dict().create(name, (flags | Flags::COLON).into())?;
         self.dict().set_latest(xt)?;
         self.dict().set_here(xt)?;
 
+        let mut labels = [0usize; 16];
+        let mut depth = 0;
         for &token in body {
             match token {
                 Token::Lit(x) => {
@@ -628,10 +609,12 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     self.compile_comma()?;
                     let hole = self.dict().here()?;
                     self.dict().comma(0)?;
-                    self.rpush(hole)?;
+                    labels[depth] = hole;
+                    depth += 1;
                 }
                 Token::Else => {
-                    let orig = self.rpop()?;
+                    depth -= 1;
+                    let orig = labels[depth];
                     let xt = self.dict().find(b"(jmp)")?.unwrap().0; // TODO: unwrap
                     self.push(xt)?;
                     self.compile_comma()?;
@@ -639,20 +622,25 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     self.dict().comma(0)?;
                     let here = self.dict().here()?;
                     self.data.write_cell(orig, here)?;
-                    self.rpush(hole)?;
+                    labels[depth] = hole;
+                    depth += 1;
                 }
                 Token::Then => {
-                    let hole = self.rpop()?;
+                    depth -= 1;
+                    let hole = labels[depth];
                     let here = self.dict().here()?;
                     self.data.write_cell(hole, here)?;
                 }
                 Token::Begin => {
                     let here = self.dict().here()?;
-                    self.rpush(here)?;
+                    labels[depth] = here;
+                    depth += 1;
                 }
                 Token::Repeat => {
-                    let hole = self.rpop()?;
-                    let dest = self.rpop()?;
+                    depth -= 1;
+                    let hole = labels[depth];
+                    depth -= 1;
+                    let dest = labels[depth];
                     let xt = self.dict().find(b"(jmp)")?.unwrap().0; // TODO: unwrap
                     self.push(xt)?;
                     self.compile_comma()?;
