@@ -113,10 +113,6 @@ pub struct Vm {
     rp: usize,
     /// The value on the top of the data stack.
     tos: usize,
-    /// The length of the data stack.
-    ds_len: usize,
-    /// The length of the return stack.
-    rs_len: usize,
     /// The maximum value of the stack pointer.
     ///
     /// Cached for performance.
@@ -143,8 +139,6 @@ impl Vm {
             sp: Self::DS_ADDR,
             tos: 0,
             rp: sp_max,
-            ds_len,
-            rs_len,
             sp_max,
             rp_max,
         }
@@ -158,7 +152,7 @@ impl Vm {
 
     /// Return the number of bytes reserved in memory by the VM's internal state (e.g. stacks).
     pub fn reserved(&self) -> usize {
-        (self.ds_len + self.rs_len + 1) * SIZE
+        self.rp_max
     }
 
     pub fn stack<'a, M: Mem>(&self, data: &'a Data<M>) -> impl Iterator<Item = usize> + 'a {
@@ -224,7 +218,7 @@ impl Vm {
     }
 
     fn check_addr<M: Mem>(&self, data: &Data<M>, addr: usize) -> VmResult<()> {
-        if addr < self.reserved() || addr >= data.size() {
+        if addr < self.rp_max || addr >= data.size() {
             Err(VmError::AddressOutOfRange(addr))
         } else if !addr.is_multiple_of(SIZE) {
             Err(VmError::AddressMisaligned(addr))
