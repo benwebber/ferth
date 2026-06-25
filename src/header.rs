@@ -1,5 +1,5 @@
 use core::mem::offset_of;
-use core::ops::{BitAnd, BitOr};
+use core::ops::BitOr;
 
 #[repr(C)]
 struct Layout {
@@ -108,7 +108,6 @@ impl Flags {
     pub const BOOTSTRAP: Self = Self(0b0000100);
     pub const PRIMITIVE: Self = Self(0b0001000);
     pub const COLON: Self = Self(0b0100000);
-    pub const CREATE: Self = Self(0b1000000);
 
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
@@ -130,14 +129,6 @@ impl From<Flags> for u8 {
 impl From<Flags> for usize {
     fn from(flags: Flags) -> Self {
         flags.0 as usize
-    }
-}
-
-impl BitAnd<Flags> for Flags {
-    type Output = Self;
-
-    fn bitand(self, rhs: Flags) -> Self::Output {
-        Self(self.0 & rhs.0)
     }
 }
 

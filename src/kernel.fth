@@ -45,14 +45,13 @@
 : (hidden-flag) %010 ;
 : (hide) (flags-addr) dup c@ (hidden-flag) or swap c! ;
 : (bootstrap) (latest) @ (flags-addr) dup c@ %100 or swap c! ;
-: (set-create) (latest) @ (flags-addr) dup c@ %01000000 or swap c! ;
 
 : bl $20 ;
 : here (here) @ ;
 : aligned ( addr -- a-addr ) 1 cells -1 + + 1 cells -1 + invert and ;
 : align ( -- ) here aligned here - allot ;
 : create
-  bl parse (header) (set-create) ['] (docreate) @ , 0 ,
+  bl parse (header) ['] (docreate) @ , 0 ,
 ; (bootstrap) \ Replace with parse-name.
 
 \ (rp@) points to the next cell, and (docol) pushes a call frame onto the stack.
@@ -262,7 +261,7 @@ execute :
 
 ' create (hide)
 : create
-  parse-name (header) (set-create) ['] (docreate) @ , 0 ,
+  parse-name (header) ['] (docreate) @ , 0 ,
 ;
 
 \ Redefine `;` to call `(tail-optimize)` after executing. Compile the current XT
