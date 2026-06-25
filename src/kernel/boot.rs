@@ -81,6 +81,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         let state = Booted {
             xt_catch: xt("catch")?,
             xt_interpret: xt("(interpret)")?,
+            xt_throw: xt("throw")?,
         };
         Ok(Kernel {
             vm: self.vm,

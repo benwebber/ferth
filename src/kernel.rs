@@ -104,11 +104,11 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
             Severity::Throw(ior) => ior,
             Severity::Abort => return Err(self.abort(e)),
         };
-        match self.dict().find(b"throw")? {
-            Some((throw_xt, _)) => {
+        match self.state.throw_xt() {
+            Some(throw_xt) => {
                 // Throw in Forth.
                 self.push(ior as usize)?;
-                match self.vm.enter(&mut self.data, throw_xt) {
+                match self.vm.enter(&mut self.data, throw_xt.into()) {
                     Ok(stop) => Ok(stop),
                     Err(e) => Err(self.abort(e.into())),
                 }
