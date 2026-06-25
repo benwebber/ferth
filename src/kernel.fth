@@ -173,7 +173,7 @@ create handler 0 ,
 : (instr-size) ( addr -- n )
   \ All of these instructions take one operand, for two cells.
   \ TODO: Expose (call)?
-  dup @ $25           - 0= if drop 2 cells exit then
+  dup @ ['] (call)  @ - 0= if drop 2 cells exit then
   dup @ ['] (lit)   @ - 0= if drop 2 cells exit then
   dup @ ['] (jmp)   @ - 0= if drop 2 cells exit then
   dup @ ['] (jmpz)  @ - 0= if drop 2 cells exit then
@@ -204,7 +204,7 @@ create handler 0 ,
 : (tail-optimize) ( xt -- )
   \ Skip if body is less than three cells (probably a primitive).
   dup (body-len) 3 cells u< if drop exit then
-  (tail) dup @ $25 - 0= if
+  (tail) dup @ ['] (call) @ - 0= if
     \ Replace `Call` with `Jmp`. Dead `Exit` remains.
     ['] (jmp) @ swap !
   else
