@@ -582,13 +582,23 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn rpush(&mut self, x: usize) -> Result<()> {
+        let xt = self
+            .dict()
+            .find(b">r")?
+            .map(|(xt, _)| xt)
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
         self.push(x)?;
-        self.vm.step(&mut self.data, Op::ToR)?;
+        self.vm.enter(&mut self.data, xt)?;
         Ok(())
     }
 
     fn rpop(&mut self) -> Result<usize> {
-        self.vm.step(&mut self.data, Op::RFrom)?;
+        let xt = self
+            .dict()
+            .find(b"r>")?
+            .map(|(xt, _)| xt)
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
+        self.vm.enter(&mut self.data, xt)?;
         self.pop()
     }
 
@@ -660,9 +670,14 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn compile_comma(&mut self) -> Result<()> {
+        let xt = self
+            .dict()
+            .find(b"(compile,)")?
+            .map(|(xt, _)| xt)
+            .ok_or(Error::Throw(Ior::UNDEFINED_WORD))?;
         let here = self.dict().here()?;
         self.push(here)?;
-        self.vm.step(&mut self.data, Op::CompileComma)?;
+        self.vm.enter(&mut self.data, xt)?;
         let here = self.pop()?;
         self.dict().set_here(here)
     }

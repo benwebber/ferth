@@ -233,10 +233,33 @@ impl Vm {
         }
     }
 
-    pub fn call<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<Stop> {
+    #[cfg(test)]
+    fn call<M: Mem>(&mut self, data: &mut Data<M>, addr: usize) -> VmResult<Stop> {
         self.rpush(data, 0)?;
         self.jump(data, addr)?;
         self.run(data)
+    }
+
+    fn dispatch<M: Mem>(&mut self, data: &mut Data<M>, xt: usize) -> VmResult<Option<Stop>> {
+        let info: Info = data.read_cell(Header::new(xt).info_addr())?.into();
+        if info.flags().contains(Flags::PRIMITIVE) {
+            let op = (data.read_cell(xt)? & PackedInstr::OP_MASK).try_into()?;
+            // Run the op in place. Do not push a stack frame.
+            // for >r
+            self.step(data, op)
+        } else {
+            self.rpush(data, self.ip)?;
+            self.jump(data, xt)?;
+            Ok(None)
+        }
+    }
+
+    pub fn enter<M: Mem>(&mut self, data: &mut Data<M>, xt: usize) -> VmResult<Stop> {
+        self.ip = HALT;
+        match self.dispatch(data, xt)? {
+            Some(stop) => Ok(stop),
+            None => self.run(data),
+        }
     }
 
     pub fn resume<M: Mem>(&mut self, data: &mut Data<M>, token: YieldToken) -> VmResult<Stop> {
@@ -244,7 +267,7 @@ impl Vm {
         self.run(data)
     }
 
-    pub fn run<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Stop> {
+    fn run<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Stop> {
         loop {
             if self.ip == HALT {
                 return Ok(Stop::Halt);
@@ -268,7 +291,7 @@ impl Vm {
         Ok(())
     }
 
-    pub fn step<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
+    fn step<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
         match op {
             Op::Halt => {
                 return Ok(Some(Stop::Halt));
@@ -284,8 +307,7 @@ impl Vm {
             }
             Op::Execute => {
                 let target = self.pop(data)?;
-                self.rpush(data, self.ip)?;
-                self.jump(data, target)?;
+                return self.dispatch(data, target);
             }
             Op::Yield => {
                 let x = data.read_cell(self.ip - SIZE)?;

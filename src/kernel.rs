@@ -1,10 +1,8 @@
 use crate::data::{Data, Mem};
 use crate::error::{KernelError, Severity};
-use crate::header::{Flags, Header, Info};
 use crate::io::{Io, NoIo};
-use crate::packed::PackedInstr;
 use crate::state::{Booted, Booting, State};
-use crate::vm::{Op, Stop, Vm};
+use crate::vm::{Stop, Vm};
 use crate::{Error, FALSE, Result, TRUE};
 
 mod boot;
@@ -78,26 +76,9 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     }
 
     pub(super) fn execute(&mut self, xt: usize) -> Result<()> {
-        let info: Info = self.data.read_cell(Header::new(xt).info_addr())?.into();
-        let flags = info.flags();
-        let mut stop = if flags.contains(Flags::PRIMITIVE) {
-            let op: Op = (self.data.read_cell(xt)? & PackedInstr::OP_MASK)
-                .try_into()
-                .map_err(Error::from)?;
-            if op == Op::Execute {
-                let target = self.pop()?;
-                return self.execute(target);
-            }
-            match self.vm.step(&mut self.data, op) {
-                Ok(Some(s)) => s,
-                Ok(None) => return Ok(()),
-                Err(e) => self.throw(e.into())?,
-            }
-        } else {
-            match self.vm.call(&mut self.data, xt) {
-                Ok(s) => s,
-                Err(e) => self.throw(e.into())?,
-            }
+        let mut stop = match self.vm.enter(&mut self.data, xt) {
+            Ok(s) => s,
+            Err(e) => self.throw(e.into())?,
         };
         loop {
             match stop {
@@ -127,7 +108,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
             Some((throw_xt, _)) => {
                 // Throw in Forth.
                 self.push(ior as usize)?;
-                match self.vm.call(&mut self.data, throw_xt) {
+                match self.vm.enter(&mut self.data, throw_xt) {
                     Ok(stop) => Ok(stop),
                     Err(e) => Err(self.abort(e.into())),
                 }
