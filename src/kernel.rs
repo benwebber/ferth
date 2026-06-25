@@ -98,7 +98,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         }
     }
 
-    /// Raise a catachable error as a Forth exception, or abort.
+    /// Raise a catchable error as a Forth exception, or abort.
     fn throw(&mut self, e: Error) -> Result<Stop> {
         let ior = match e.severity() {
             Severity::Throw(ior) => ior,

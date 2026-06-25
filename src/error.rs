@@ -56,7 +56,7 @@ pub enum Error {
     Io,
     /// A Forth exception.
     Throw(isize),
-    /// An kernel error.
+    /// A kernel error.
     Kernel(KernelError),
 }
 

@@ -243,11 +243,14 @@ impl Vm {
     fn dispatch<M: Mem>(&mut self, data: &mut Data<M>, xt: usize) -> VmResult<Option<Stop>> {
         let info: Info = data.read_cell(Header::new(xt).info_addr())?.into();
         if info.flags().contains(Flags::PRIMITIVE) {
+            // `RPush` pushes an arbitrary value to the stack. `Exit` cannot follow an `RPush`
+            // because it will pop whatever value `RPush` pushed and try to jump there. If we know
+            // the word is a primitive, we can execute it inline instead of nesting.
             let op = (data.read_cell(xt)? & PackedInstr::OP_MASK).try_into()?;
-            // Run the op in place. Do not push a stack frame.
-            // for >r
+            // Step instead of call.
             self.step(data, op)
         } else {
+            // Otherwise, call the word like normal.
             self.rpush(data, self.ip)?;
             self.jump(data, xt)?;
             Ok(None)

@@ -205,7 +205,7 @@ ops! {
     CStore = 0x1A,
 
     // Arithmetic
-    /// Add the two two values on the data stack.
+    /// Add the top two values on the data stack.
     ///
     /// ```text
     /// + ( n1 n2 -- n3 )
@@ -215,13 +215,13 @@ ops! {
     /// Multiply the top two items on the data stack.
     ///
     /// ```text
-    /// * ( u1 u2 -- ud )
+    /// um* ( u1 u2 -- ud )
     /// ```
     UmMul = 0x1C,
 
     /// Fundamental division operation.
     ///
-    /// Divide the double `ud` by `u1`, pushing the quotion `u3` and the remainder `u2`.
+    /// Divide the double `ud` by `u1`, pushing the quotient `u3` and the remainder `u2`.
     ///
     /// ```text
     /// um/mod (ud u1 -- u2 u3)
