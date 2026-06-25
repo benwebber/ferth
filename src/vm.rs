@@ -575,7 +575,7 @@ impl Vm {
                 let info: Info = data.read_cell(Header::new(xt).info_addr())?.into();
                 let flags = info.flags();
                 let mut h = here;
-                if flags.contains(Flags::PRIMITIVE) || flags.contains(Flags::BUILTIN) {
+                if flags.contains(Flags::PRIMITIVE) {
                     let x = data.read_cell(xt)?;
                     data.write_cell(h, x)?;
                     h += SIZE;

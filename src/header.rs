@@ -107,7 +107,6 @@ impl Flags {
     pub const HIDDEN: Self = Self(0b0000010);
     pub const BOOTSTRAP: Self = Self(0b0000100);
     pub const PRIMITIVE: Self = Self(0b0001000);
-    pub const BUILTIN: Self = Self(0b0010000);
     pub const COLON: Self = Self(0b0100000);
     pub const CREATE: Self = Self(0b1000000);
 

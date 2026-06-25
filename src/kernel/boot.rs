@@ -165,7 +165,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             (b"(decode)", Op::Decode),
         ];
         for (name, op) in opcodes {
-            let xt = self.define(name, *op, Flags::PRIMITIVE)?;
+            let xt = self.define(name, Flags::PRIMITIVE)?;
             let instr = PackedInstr::new(*op, xt, 0)?;
             self.data.write_cell(xt, instr.into())?;
             self.dict().comma(Op::Exit as usize)?;
@@ -674,18 +674,16 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         }
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
-        let cfa = self.define(name, Op::Yield, flags | Flags::BUILTIN)?;
+        let cfa = self.define(name, flags)?;
         let instr = PackedInstr::new(Op::Yield, cfa, idx)?;
         self.data.write_cell(cfa, instr.into())?;
         self.dict().comma(Op::Exit as usize)
     }
 
-    fn define(&mut self, name: &[u8], code: Op, flags: Flags) -> Result<usize> {
-        let kind = match code {
-            Op::Yield => Flags::BUILTIN,
-            _ => Flags::PRIMITIVE,
-        };
-        let cfa = self.dict().create(name, (flags | kind).into())?;
+    fn define(&mut self, name: &[u8], flags: Flags) -> Result<usize> {
+        let cfa = self
+            .dict()
+            .create(name, (flags | Flags::PRIMITIVE).into())?;
         self.dict().set_here(cfa + SIZE)?;
         self.dict().set_latest(cfa)?;
         Ok(cfa)
@@ -710,7 +708,7 @@ mod tests {
             info.flags()
         };
         assert!(flags(b"dup").contains(Flags::PRIMITIVE));
-        assert!(flags(b"(find)").contains(Flags::BUILTIN));
+        assert!(flags(b"(find)").contains(Flags::PRIMITIVE));
         assert!(flags(b"cells").contains(Flags::COLON));
     }
 }
