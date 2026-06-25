@@ -179,15 +179,15 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     /// parsing words are difficult, or inefficient, to express in Forth. The inner interpreter
     /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
     fn register_builtins(&mut self) -> Result<()> {
-        let builtins: &[(&[u8], Builtin<M, I>, Flags)] = &[
-            (b"emit", emit, Flags::EMPTY),
-            (b"(find)", find, Flags::EMPTY),
-            (b"key", key, Flags::EMPTY),
-            (b"refill", refill, Flags::EMPTY),
-            (b"(header)", header, Flags::EMPTY),
+        let builtins: &[(&[u8], Builtin<M, I>)] = &[
+            (b"emit", emit),
+            (b"(find)", find),
+            (b"key", key),
+            (b"refill", refill),
+            (b"(header)", header),
         ];
-        for (name, f, flags) in builtins {
-            self.register_builtin(name, *f, *flags)?;
+        for (name, f) in builtins {
+            self.register_builtin(name, *f)?;
         }
         Ok(())
     }
@@ -582,10 +582,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
-        let xt = self.dict().create(name, (flags | Flags::COLON).into())?;
-        self.dict().set_latest(xt)?;
+        let xt = self.define(name, flags | Flags::COLON)?;
+        // `define` advances `here`. We want to compile the body directly.
         self.dict().set_here(xt)?;
-
         let mut labels = [0usize; 16];
         let mut depth = 0;
         for &token in body {
@@ -670,22 +669,20 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         self.dict().set_here(here)
     }
 
-    fn register_builtin(&mut self, name: &[u8], f: Builtin<M, I>, flags: Flags) -> Result<()> {
+    fn register_builtin(&mut self, name: &[u8], f: Builtin<M, I>) -> Result<()> {
         let idx = self.builtins_len;
         if idx >= MAX_BUILTINS {
             return Err(KernelError::BuiltinTableFull.into());
         }
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
-        let cfa = self.define(name, flags)?;
+        let cfa = self.define(name, Flags::PRIMITIVE)?;
         let instr = PackedInstr::new(Op::Yield, cfa, idx)?;
         Ok(self.data.write_cell(cfa, instr.into())?)
     }
 
     fn define(&mut self, name: &[u8], flags: Flags) -> Result<usize> {
-        let cfa = self
-            .dict()
-            .create(name, (flags | Flags::PRIMITIVE).into())?;
+        let cfa = self.dict().create(name, flags.into())?;
         self.dict().set_here(cfa + SIZE)?;
         self.dict().set_latest(cfa)?;
         Ok(cfa)
