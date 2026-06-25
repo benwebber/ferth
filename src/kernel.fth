@@ -41,8 +41,6 @@
 
 : ( $29 parse drop drop ; immediate
 
-: and (nand) invert ;
-
 \ TODO: Figure out consistent vocabulary for compiler directives.
 : (hidden-flag) %010 ;
 : (hide) (flags-addr) dup c@ (hidden-flag) or swap c! ;
@@ -64,8 +62,6 @@
 : then here swap ! ; immediate
 : else ['] (jmp) compile, here 0 , swap here swap ! ; immediate
 : exit ['] (exit) compile, ; immediate
-
-: ?dup dup if dup then ;
 
 \ 2. EXCEPTIONS
 \ =============
@@ -159,11 +155,11 @@ create handler 0 ,
 \ definitions. See below.
 
 : over >r dup r> swap ;
-: 2dup over over ;
 
 : xor over over and invert >r or r> and ;
 
 \ Overflow-safe comparison operators.
+\ TODO: Figure out how to store the current XT without ' and hide it later.
 : <  ( n1 n2 -- flag ) 2dup xor 0< if      drop 0< else - 0< then ;
 : u< ( u1 u2 -- flag ) 2dup xor 0< if swap drop 0< else - 0< then ;
 
@@ -246,9 +242,15 @@ create handler 0 ,
 
 : ' parse-name (find) 0= if (diagnostic!) -13 throw then ;
 
-\ Hide and redefine bootstrap words. Notice that to redefine :, we must first
-\ save the XT of :, because otherwise the interpreter would throw undefined word
-\ (-13) on :.
+\ Hide and redefine bootstrap words.
+' and (hide)
+: and (nand) invert ;
+
+' ?dup (hide)
+: ?dup dup if dup then ;
+
+\ Notice that to redefine :, we must first save the XT of :, because otherwise
+\ the interpreter would throw undefined word (-13) on :.
 ' : dup dup     ( xt xt xt )
 (hide)          ( xt xt )
 execute :
@@ -336,9 +338,17 @@ execute :
 \ ==============
 
 : rot >r swap r> swap ;
+
+' 2dup (hide)
+: 2dup over over ;
+
+' 2drop (hide)
 : 2drop drop drop ;
+
+' 2swap (hide)
 : 2swap rot >r rot r> ;
 
+' (interpret) ( xt )
 : (interpret)
   begin
     parse-name                  ( c-addr u )
@@ -356,3 +366,4 @@ execute :
   repeat
   2drop
 ;
+(hide)        ( xt -- )

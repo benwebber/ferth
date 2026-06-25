@@ -362,7 +362,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // : 2dup over over ;
         compile!(
             b"2dup",
-            Flags::EMPTY,
+            Flags::BOOTSTRAP,
             [
                 N(b">r"), N(b"dup"), N(b"r>"), N(b"swap"), // over
                 N(b">r"), N(b"dup"), N(b"r>"), N(b"swap"), // over
@@ -372,7 +372,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // : 2drop drop drop ;
         compile!(
             b"2drop",
-            Flags::EMPTY,
+            Flags::BOOTSTRAP,
             [N(b"drop"), N(b"drop")]
         );
 
@@ -380,7 +380,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // : 2swap rot >r rot r> ;
         compile!(
             b"2swap",
-            Flags::EMPTY,
+            Flags::BOOTSTRAP,
             [
                 N(b">r"), N(b"swap"), N(b"r>"), N(b"swap"),
                 N(b">r"),
@@ -392,18 +392,19 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // : ?dup dup if dup then ;
         compile!(
             b"?dup",
-            Flags::EMPTY,
+            Flags::BOOTSTRAP,
             [N(b"dup"), JmpZ(0), N(b"dup"), Label(0)]
         );
 
         compile!(
             b"and",
-            Flags::EMPTY,
+            Flags::BOOTSTRAP,
             [N(b"(nand)"), N(b"dup"), N(b"(nand)")]
         );
 
         compile!(
             b"<",
+            // TODO: Figure out how to hide this before parse-name.
             Flags::EMPTY,
             [N(b"dup"), N(b"(nand)"), L(1), N(b"+"), N(b"+"), N(b"0<")]
         );
@@ -423,7 +424,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         const SKIP: u8 = 9;
         compile!(
             b"(interpret)",
-            Flags::EMPTY,
+            Flags::BOOTSTRAP,
             [
                 // begin
                 Label(BEGIN),
