@@ -173,15 +173,15 @@ create handler 0 ,
 : (instr-size) ( addr -- n )
   \ All of these instructions take one operand, for two cells.
   \ TODO: Expose (call)?
-  dup @ ['] (call)  @ - 0= if drop 2 cells exit then
-  dup @ ['] (lit)   @ - 0= if drop 2 cells exit then
-  dup @ ['] (jmp)   @ - 0= if drop 2 cells exit then
-  dup @ ['] (jmpz)  @ - 0= if drop 2 cells exit then
-  dup @ ['] (+loop) @ - 0= if drop 2 cells exit then
-  dup @ ['] (?do)   @ - 0= if drop 2 cells exit then
+  dup @ $ff and ['] (call)  @ $ff and - 0= if drop 2 cells exit then
+  dup @ $ff and ['] (lit)   @ $ff and - 0= if drop 2 cells exit then
+  dup @ $ff and ['] (jmp)   @ $ff and - 0= if drop 2 cells exit then
+  dup @ $ff and ['] (jmpz)  @ $ff and - 0= if drop 2 cells exit then
+  dup @ $ff and ['] (+loop) @ $ff and - 0= if drop 2 cells exit then
+  dup @ $ff and ['] (?do)   @ $ff and - 0= if drop 2 cells exit then
   \ `Str` takes a variable length operand: `[Str][len][data...]`, for a total of
   \ `2 * SIZE + len(data)` bytes, aligned up.
-  dup @ ['] (s")    @ - 0= if 1 cells + @ aligned 2 cells + exit then
+  dup @ $ff and ['] (s")    @ $ff and - 0= if 1 cells + @ aligned 2 cells + exit then
   drop 1 cells
 ;
 
@@ -204,7 +204,7 @@ create handler 0 ,
 : (tail-optimize) ( xt -- )
   \ Skip if body is less than three cells (probably a primitive).
   dup (body-len) 3 cells u< if drop exit then
-  (tail) dup @ ['] (call) @ - 0= if
+  (tail) dup @ $ff and ['] (call) @ $ff and - 0= if
     \ Replace `Call` with `Jmp`. Dead `Exit` remains.
     ['] (jmp) @ swap !
   else
