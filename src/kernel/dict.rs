@@ -47,24 +47,19 @@ impl<'a, M: Mem> Dict<'a, M> {
     fn header_at(&mut self, len: u8, flags: u8) -> Result<(usize, usize)> {
         let latest = self.latest()?;
         let here = self.here()?;
-        // pad the name so as to always align info
-        let pad = (SIZE - ((here + 1 + len as usize) % SIZE)) % SIZE;
+        let header = Header::from_name_len(here, len as usize);
         // name
-        let nfa = here + pad;
-        self.data.write_char(nfa, len)?;
-        // bodylen (0 until ;)
-        let body_len = nfa + 1 + len as usize;
-        self.data.write_cell(body_len, 0)?;
+        let name_addr = header.bodylen_addr() - len as usize - 1;
+        self.data.write_char(name_addr, len)?;
+        // bodylen: 0 until ; executes
+        self.data.write_cell(header.bodylen_addr(), 0)?;
         // info
-        let info = body_len + SIZE;
-        self.data
-            .write_cell(info, Info::new(flags.into(), len).into())?;
+        let info = Info::new(flags.into(), len);
+        self.data.write_cell(header.info_addr(), info.into())?;
         // link
-        let link = info + SIZE;
-        self.data.write_cell(link, latest)?;
+        self.data.write_cell(header.link_addr(), latest)?;
         // code
-        let cfa = link + SIZE;
-        Ok((nfa, cfa))
+        Ok((name_addr, header.code_addr()))
     }
 
     pub(crate) fn create(&mut self, name: &[u8], flags: u8) -> Result<usize> {

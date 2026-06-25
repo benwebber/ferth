@@ -1,6 +1,8 @@
 use core::mem::offset_of;
 use core::ops::BitOr;
 
+use crate::SIZE;
+
 #[repr(C)]
 struct Layout {
     bodylen: usize,
@@ -56,6 +58,16 @@ pub struct Header(usize);
 impl Header {
     pub fn new(addr: usize) -> Self {
         Self(addr)
+    }
+
+    pub(crate) fn from_name_len(here: usize, len: usize) -> Self {
+        let bodylen_addr = (here + 1 + len).next_multiple_of(SIZE);
+        let offset = Layout::CODE - Layout::BODYLEN;
+        Header::new(bodylen_addr + offset)
+    }
+
+    pub fn code_addr(&self) -> usize {
+        self.0
     }
 
     pub fn link_addr(&self) -> usize {
