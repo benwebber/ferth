@@ -25,9 +25,12 @@ const KERNEL: &[u8] = include_bytes!("../kernel.fth");
 enum Token {
     Lit(usize),
     Name(&'static [u8]),
-    Label(u8),
-    Jmp(u8),
-    JmpZ(u8),
+    If,
+    Else,
+    Then,
+    Begin,
+    While,
+    Repeat,
 }
 
 impl<M: Mem, I: Io> Kernel<M, I, Booting> {
@@ -204,7 +207,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             };
         }
 
-        use Token::{Lit as L, Name as N, Label, Jmp, JmpZ};
+        use Token::{Lit as L, Name as N, *};
 
         // This sequence hand-compiles the words `:`, `;`, `literal`, and their direct
         // dependencies. This code *is* Forth, just not written as text.
@@ -393,7 +396,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         compile!(
             b"?dup",
             Flags::BOOTSTRAP,
-            [N(b"dup"), JmpZ(0), N(b"dup"), Label(0)]
+            [N(b"dup"), If, N(b"dup"), Then]
         );
 
         compile!(
@@ -412,65 +415,38 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         let state = addr!(STATE);
         let to_in = addr!(TO_IN);
         let source_len = addr!(SOURCE_LEN);
-        const BEGIN: u8 = 0;
-        const END: u8 = 1;
-        const EMPTY: u8 = 2;
-        const ENDIF: u8 = 3;
-        const NOT_FOUND: u8 = 4;
-        const NEXT: u8 = 5;
-        const EXECUTE: u8 = 6;
-        const UNDEFINED: u8 = 7;
-        const END_NUMBER: u8 = 8;
-        const SKIP: u8 = 9;
         compile!(
             b"(interpret)",
             Flags::BOOTSTRAP,
             [
-                // begin
-                Label(BEGIN),
-                    to_in, N(b"@"), source_len, N(b"@"), N(b"<"), JmpZ(END),
-                    // bl parse
+                Begin,
+                    to_in, N(b"@"), source_len, N(b"@"), N(b"<"),
+                While,
                     L(BL), N(b"parse"),
-                    N(b"dup"), JmpZ(EMPTY),
-                        // 2dup (find)
+                    N(b"dup"), If,
                         N(b"2dup"), N(b"(find)"),
-                        // ?dup if
-                        N(b"?dup"), JmpZ(NOT_FOUND),
-                            // 2swap 2drop
+                        N(b"?dup"), If,
                             N(b"2swap"), N(b"2drop"),
-                            // 0< (state) @ and if
-                            N(b"0<"), state, N(b"@"), N(b"and"), JmpZ(EXECUTE),
-                                // compile,
-                                N(b"compile,"), Jmp(NEXT),
-                            // else
-                            Label(EXECUTE),
+                            N(b"0<"), state, N(b"@"), N(b"and"), If,
+                                N(b"compile,"),
+                            Else,
                                 N(b"execute"),
-                            // then
-                        // else
-                        Jmp(NEXT),
-                        Label(NOT_FOUND),
-                            // (number?)
-                            N(b"(number?)"), JmpZ(UNDEFINED),
-                            // (state( @ if
-                            state, N(b"@"), JmpZ(SKIP),
-                                // postpone literal
-                                N(b"literal"),
-                            Label(SKIP),
-                                Jmp(END_NUMBER),
-                            Label(UNDEFINED),
-                                // TODO
+                            Then,
+                        Else,
+                            N(b"(number?)"), If,
+                                state, N(b"@"), If,
+                                    // NOTE: `postpone literal` compiles to `literal`.
+                                    N(b"literal"),
+                                Then,
+                            Else,
                                 N(b"2drop"),
                                 L(0), L(1), L(0), N(b"um/mod"),
-                            Label(END_NUMBER),
-                        // then
-                        Label(NEXT),
-                            Jmp(ENDIF),
-                    Label(EMPTY),
+                            Then,
+                        Then,
+                    Else,
                         N(b"2drop"),
-                    Label(ENDIF),
-                // repeat
-                Jmp(BEGIN),
-                Label(END),
+                    Then,
+                Repeat,
             ]
         );
         Ok(())
@@ -605,15 +581,22 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(())
     }
 
+    fn rpush(&mut self, x: usize) -> Result<()> {
+        self.push(x)?;
+        self.vm.step(&mut self.data, Op::ToR)?;
+        Ok(())
+    }
+
+    fn rpop(&mut self) -> Result<usize> {
+        self.vm.step(&mut self.data, Op::RFrom)?;
+        self.pop()
+    }
+
     fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
         let xt = self.dict().create(name, (flags | Flags::COLON).into())?;
         self.dict().set_latest(xt)?;
         self.dict().set_here(xt)?;
-        const LABELS: usize = 16;
-        const PATCHES: usize = 16;
-        let mut labels: [usize; LABELS] = [0; LABELS];
-        let mut patches: [(usize, u8); PATCHES] = [(0, 0); PATCHES];
-        let mut patches_len: usize = 0;
+
         for &token in body {
             match token {
                 Token::Lit(x) => {
@@ -629,25 +612,45 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     self.push(xt)?;
                     self.compile_comma()?;
                 }
-                Token::Label(l) => labels[l as usize] = self.dict().here()?,
-                Token::Jmp(l) | Token::JmpZ(l) => {
-                    let name: &[u8] = if matches!(token, Token::Jmp(_)) {
-                        b"(jmp)"
-                    } else {
-                        b"(jmpz)"
-                    };
-                    let xt = self.dict().find(name)?.unwrap().0; // TODO: unwrap
+                Token::If | Token::While => {
+                    let xt = self.dict().find(b"(jmpz)")?.unwrap().0; // TODO: unwrap
                     self.push(xt)?;
                     self.compile_comma()?;
                     let hole = self.dict().here()?;
                     self.comma(0)?;
-                    patches[patches_len] = (hole, l);
-                    patches_len += 1;
+                    self.rpush(hole)?;
+                }
+                Token::Else => {
+                    let orig = self.rpop()?;
+                    let xt = self.dict().find(b"(jmp)")?.unwrap().0; // TODO: unwrap
+                    self.push(xt)?;
+                    self.compile_comma()?;
+                    let hole = self.dict().here()?;
+                    self.comma(0)?;
+                    let here = self.dict().here()?;
+                    self.data.write_cell(orig, here)?;
+                    self.rpush(hole)?;
+                }
+                Token::Then => {
+                    let hole = self.rpop()?;
+                    let here = self.dict().here()?;
+                    self.data.write_cell(hole, here)?;
+                }
+                Token::Begin => {
+                    let here = self.dict().here()?;
+                    self.rpush(here)?;
+                }
+                Token::Repeat => {
+                    let hole = self.rpop()?;
+                    let dest = self.rpop()?;
+                    let xt = self.dict().find(b"(jmp)")?.unwrap().0; // TODO: unwrap
+                    self.push(xt)?;
+                    self.compile_comma()?;
+                    self.comma(dest)?;
+                    let here = self.dict().here()?;
+                    self.data.write_cell(hole, here)?;
                 }
             }
-        }
-        for (hole, l) in &patches[..patches_len] {
-            self.data.write_cell(*hole, labels[*l as usize])?;
         }
         self.comma(Op::Exit as usize)?;
         let here = self.dict().here()?;
