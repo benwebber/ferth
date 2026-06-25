@@ -3,6 +3,7 @@
 : - invert 1 + + ;
 : (flags-addr) 2 cells - 1 + ;
 : or invert swap invert (nand) ;
+: and (nand) invert ;
 : (immediate-flag) %001 ;
 : immediate (latest) @ (flags-addr) dup c@ (immediate-flag) or swap c! ;
 : \ source >in ! drop ; immediate
@@ -61,6 +62,7 @@
 : then here swap ! ; immediate
 : else ['] (jmp) compile, here 0 , swap here swap ! ; immediate
 : exit ['] (exit) compile, ; immediate
+: ?dup dup if dup then ;
 
 \ 2. EXCEPTIONS
 \ =============
@@ -154,6 +156,7 @@ create handler 0 ,
 \ definitions. See below.
 
 : over >r dup r> swap ;
+: 2dup over over ;
 
 : xor over over and invert >r or r> and ;
 
@@ -242,12 +245,6 @@ create handler 0 ,
 : ' parse-name (find) 0= if (diagnostic!) -13 throw then ;
 
 \ Hide and redefine bootstrap words.
-' and (hide)
-: and (nand) invert ;
-
-' ?dup (hide)
-: ?dup dup if dup then ;
-
 \ Notice that to redefine :, we must first save the XT of :, because otherwise
 \ the interpreter would throw undefined word (-13) on :.
 ' : dup dup     ( xt xt xt )
@@ -338,13 +335,8 @@ execute :
 
 : rot >r swap r> swap ;
 
-' 2dup (hide)
-: 2dup over over ;
-
-' 2drop (hide)
 : 2drop drop drop ;
 
-' 2swap (hide)
 : 2swap rot >r rot r> ;
 
 ' (interpret) ( xt )

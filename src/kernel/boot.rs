@@ -31,6 +31,9 @@ enum Token {
     Begin,
     While,
     Repeat,
+    Inline(&'static [Token]),
+    // Fetch a variable value at runtime.
+    Variable(usize),
 }
 
 impl<M: Mem, I: Io> Kernel<M, I, Booting> {
@@ -68,7 +71,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         debug!("KERNEL", "Defined variables");
         self.compile_wrappers()?;
         debug!("KERNEL", "Compiled wrappers");
-        self.compile_compiler()?;
+        self.compile_interpreter()?;
         debug!("KERNEL", "Compiled compiler");
         self.load_kernel()?;
         debug!("KERNEL", "Loaded kernel");
@@ -192,30 +195,35 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(())
     }
 
-    /// Compile compiler words.
+    /// Compile interpreter words such as `:`, `;`, and `(interpret)`.
     #[rustfmt::skip]
-    fn compile_compiler(&mut self) -> Result<()> {
+    fn compile_interpreter(&mut self) -> Result<()> {
         macro_rules! compile {
             ($s:expr, $flags:expr, [$($body:expr),* $(,)?]) => {
                 self.compile($s, $flags.into(), &[$($body),*])?;
             };
         }
 
-        macro_rules! addr {
-            ($name:ident) => {
-                L(self.dict().addr(Layout::$name))
-            };
-        }
-
         use Token::{Lit as L, Name as N, *};
 
-        // This sequence hand-compiles the words `:`, `;`, `literal`, and their direct
-        // dependencies. This code *is* Forth, just not written as text.
+        // This sequence hand-compiles the words `:`, `;`, `literal`, `(interpret)`, and their
+        // direct dependencies. This code *is* Forth, just not written as text.
+        //
+        // Along the way, we need to define some helper words such as `and` and `over`. Kernel code
+        // is trusted input, and the bootstrap words do not need to handle every case. Some of
+        // these definitions are deliberately incomplete. For example, the definition of `<` is not
+        // overflow-safe.
+        //
+        // To avoid polluting the wordlist with incomplete definitions, the kernel *inlines* as
+        // many definitions as it can. We will redefine them correctly in Forth.
         //
         // `N(name)` compiles a call to a previously defined word. Any reference to an XT that
         // should be a data value at runtime (`['] word`) must be a literal (`L(xt)`).
-        let here = addr!(HERE);
-        let latest = addr!(LATEST);
+        //
+        // At the end of the boot, a check verifies that every word with the `BOOTSTRAP` flag has
+        // been redefined in Forth.
+        const HERE: Token = Variable(Layout::HERE);
+        const LATEST: Token = Variable(Layout::LATEST);
 
         // cells
         compile!(b"cells", 0, [L(SIZE), N(b"um*"), N(b"drop")]);
@@ -224,7 +232,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         compile!(b"+!", 0, [N(b"dup"), N(b">r"), N(b"@"), N(b"+"), N(b"r>"), N(b"!")]);
 
         // : allot ( n -- ) (here) +! ;
-        compile!(b"allot", 0, [here, N(b"+!")]);
+        let here_addr = self.dict().addr(Layout::HERE);
+        compile!(b"allot", 0, [L(here_addr), N(b"+!")]);
 
         // : , ( x -- ) here ! 1 cells allot ;
         //
@@ -232,7 +241,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         compile!(
             b",",
             0,
-            [here, N(b"@"), N(b"!"), L(1), N(b"cells"), N(b"allot")]
+            [HERE, N(b"!"), L(1), N(b"cells"), N(b"allot")]
         );
 
         // : literal ( x -- ) ['] (lit) , , ; immediate
@@ -263,7 +272,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // ;
         //
         // Parse a word and create a definition for it. This simple definition does not set the
-        // hidden flag. The Forth kernel replaces it.
+        // hidden flag. It also does not skip leading whitespace or process whitespace characters
+        // other than SPACE (BL). The Forth kernel replaces it.
         compile!(
             b":",
             Flags::BOOTSTRAP,
@@ -296,24 +306,26 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // and set bodylen. We cannot define a simpler version of `;` here and redefine a more
         // complete version in in Forth because this `;` would terminate that definition.
         //
-        // It should be possible, however, to implement an optimizing `;` in Forth that compiles
-        // jumps for tail calls.
+        // However, it possible to extend this definition later. The Forth kernel extends it to
+        // support tail-call optimization.
+        const INVERT: Token = Inline(&[N(b"dup"), N(b"(nand)")]);
+        const MINUS: Token = Inline(&[INVERT, L(1), N(b"+"), N(b"+")]);
+        const AND: Token = Inline(&[N(b"(nand)"), N(b"dup"), N(b"(nand)")]);
         compile!(
             b";",
             Flags::IMMEDIATE,
             [
                 L(Op::Exit as usize), N(b","),
                 // Calculate and set bodylen.
-                latest, N(b"@"),
-                N(b"dup"), L((3 * SIZE).wrapping_neg()), N(b"+"),
+                LATEST,
+                N(b"dup"), L(3 * SIZE), MINUS,
                 N(b"swap"),
-                here, N(b"@"), N(b"swap"),
-                N(b"dup"), N(b"(nand)"), L(1), N(b"+"), N(b"+"), // inline -
+                HERE, N(b"swap"), MINUS,
                 N(b"swap"), N(b"!"),
                 // Unset hidden flag.
-                latest, N(b"@"),
-                L((2 * SIZE).wrapping_neg()), N(b"+"), L(1), N(b"+"), N(b"dup"), N(b"c@"),
-                L(Flags::HIDDEN.into()), N(b"dup"), N(b"(nand)"), N(b"(nand)"), N(b"dup"), N(b"(nand)"), // inline invert, and
+                LATEST,
+                L(2 * SIZE), MINUS, L(1), N(b"+"), N(b"dup"), N(b"c@"),
+                L(Flags::HIDDEN.into()), INVERT, AND,
                 N(b"swap"), N(b"c!"),
                 L(FALSE), N(b"state"), N(b"!"),
             ]
@@ -361,90 +373,43 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // As above, note that `postpone literal` has the effect of compiling a call to `literal`
         // into the current definition. We can compile `literal` directly here.
 
-        // : over >r dup r> swap ;
-        // : 2dup over over ;
-        compile!(
-            b"2dup",
-            Flags::BOOTSTRAP,
-            [
-                N(b">r"), N(b"dup"), N(b"r>"), N(b"swap"), // over
-                N(b">r"), N(b"dup"), N(b"r>"), N(b"swap"), // over
-            ]
-        );
-
-        // : 2drop drop drop ;
-        compile!(
-            b"2drop",
-            Flags::BOOTSTRAP,
-            [N(b"drop"), N(b"drop")]
-        );
-
-        // : rot >r swap r> swap ;
-        // : 2swap rot >r rot r> ;
-        compile!(
-            b"2swap",
-            Flags::BOOTSTRAP,
-            [
-                N(b">r"), N(b"swap"), N(b"r>"), N(b"swap"),
-                N(b">r"),
-                N(b">r"), N(b"swap"), N(b"r>"), N(b"swap"),
-                N(b"r>"),
-            ]
-        );
-
-        // : ?dup dup if dup then ;
-        compile!(
-            b"?dup",
-            Flags::BOOTSTRAP,
-            [N(b"dup"), If, N(b"dup"), Then]
-        );
-
-        compile!(
-            b"and",
-            Flags::BOOTSTRAP,
-            [N(b"(nand)"), N(b"dup"), N(b"(nand)")]
-        );
-
-        compile!(
-            b"<",
-            // TODO: Figure out how to hide this before parse-name.
-            Flags::EMPTY,
-            [N(b"dup"), N(b"(nand)"), L(1), N(b"+"), N(b"+"), N(b"0<")]
-        );
-
-        let state = addr!(STATE);
-        let to_in = addr!(TO_IN);
-        let source_len = addr!(SOURCE_LEN);
+        const OVER: Token = Inline(&[N(b">r"), N(b"dup"), N(b"r>"), N(b"swap")]);
+        const TWO_DUP: Token = Inline(&[OVER, OVER]);
+        const TWO_DROP: Token = Inline(&[N(b"drop"), N(b"drop")]);
+        const ROT: Token = Inline(&[N(b">r"), N(b"swap"), N(b"r>"), N(b"swap")]);
+        const TWO_SWAP: Token = Inline(&[ROT, N(b">r"), ROT, N(b"r>")]);
+        const Q_DUP: Token = Inline(&[N(b"dup"), If, N(b"dup"), Then]);
+        const LT: Token = Inline(&[N(b"dup"), N(b"(nand)"), L(1), N(b"+"), N(b"+"), N(b"0<")]);
         compile!(
             b"(interpret)",
             Flags::BOOTSTRAP,
             [
                 Begin,
-                    to_in, N(b"@"), source_len, N(b"@"), N(b"<"),
+                    Variable(Layout::TO_IN), Variable(Layout::SOURCE_LEN), LT,
                 While,
                     L(BL), N(b"parse"),
                     N(b"dup"), If,
-                        N(b"2dup"), N(b"(find)"),
-                        N(b"?dup"), If,
-                            N(b"2swap"), N(b"2drop"),
-                            N(b"0<"), state, N(b"@"), N(b"and"), If,
+                        TWO_DUP, N(b"(find)"),
+                        Q_DUP, If,
+                            TWO_SWAP, TWO_DROP,
+                            N(b"0<"), Variable(Layout::STATE), AND, If,
                                 N(b"compile,"),
                             Else,
                                 N(b"execute"),
                             Then,
                         Else,
                             N(b"(number?)"), If,
-                                state, N(b"@"), If,
+                                Variable(Layout::STATE), If,
                                     // NOTE: `postpone literal` compiles to `literal`.
                                     N(b"literal"),
                                 Then,
                             Else,
-                                N(b"2drop"),
+                                TWO_DROP,
                                 L(0), L(1), L(0), N(b"um/mod"),
                             Then,
                         Then,
                     Else,
-                        N(b"2drop"),
+                        TWO_DROP,
                     Then,
                 Repeat,
             ]
@@ -585,9 +550,18 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         let xt = self.define(name, flags | Flags::COLON)?;
         // `define` advances `here`. We want to compile the body directly.
         self.dict().set_here(xt)?;
+        self.compile_tokens(body)?;
+        self.dict().comma(Op::Exit as usize)?;
+        let here = self.dict().here()?;
+        self.data
+            .write_cell(Header::new(xt).bodylen_addr(), here - xt)?;
+        Ok(xt)
+    }
+
+    fn compile_tokens(&mut self, tokens: &[Token]) -> Result<()> {
         let mut labels = [0usize; 16];
         let mut depth = 0;
-        for &token in body {
+        for &token in tokens {
             match token {
                 Token::Lit(x) => {
                     self.dict().comma(Op::Lit as usize)?;
@@ -647,13 +621,14 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
                     let here = self.dict().here()?;
                     self.data.write_cell(hole, here)?;
                 }
+                Token::Inline(t) => self.compile_tokens(t)?,
+                Token::Variable(offset) => {
+                    let addr = self.dict().addr(offset);
+                    self.compile_tokens(&[Token::Lit(addr), Token::Name(b"@")])?;
+                }
             }
         }
-        self.dict().comma(Op::Exit as usize)?;
-        let here = self.dict().here()?;
-        self.data
-            .write_cell(Header::new(xt).bodylen_addr(), here - xt)?;
-        Ok(xt)
+        Ok(())
     }
 
     fn compile_comma(&mut self) -> Result<()> {
