@@ -43,9 +43,16 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             ..Default::default()
         };
         let data = Data::new(mem);
-        let vm = Vm::new(env.config.stack_cells, env.config.return_stack_cells);
-        assert!(vm.reserved() <= data.size(), "data space too small for VM");
-        let layout_base = vm.reserved();
+        let vm = Vm::new(
+            data.size(),
+            env.config.stack_cells,
+            env.config.return_stack_cells,
+        );
+        let layout_base = Vm::DATA_BASE;
+        assert!(
+            layout_base + Layout::DATA <= vm.data_top(),
+            "data space too small for VM"
+        );
         Self {
             vm,
             data,
@@ -109,8 +116,8 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             (Layout::TO_IN, 0),
             (Layout::BASE, 10),
             (Layout::STATE, 0),
-            (Layout::SP0, Vm::DS_ADDR),
-            (Layout::RP0, self.vm.rs_addr() + SIZE),
+            (Layout::SP0, self.vm.sp0()),
+            (Layout::RP0, self.vm.rp0() - SIZE),
             (Layout::DIAGNOSTIC_ADDR, 0),
             (Layout::DIAGNOSTIC_LEN, 0),
         ];

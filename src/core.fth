@@ -114,7 +114,7 @@
 : */ ( n1 n2 n3 -- n4 ) */mod swap drop ;
 
 : 2/ dup 1 rshift swap 0 invert 1 rshift invert and or ;
-: depth (sp@) (sp0) @ - 1 cells / ;
+: depth (sp@) (sp0) @ swap - 1 cells / ;
 : 2@ dup cell+ @ swap @ ;
 : 2! swap over ! cell+ ! ;
 
@@ -324,7 +324,7 @@ variable (leave-list)
   depth
   \ Print <depth>.
   [char] < emit dup 0 <# #s #> type [char] > emit space
-  0 ?do i cells (sp0) @ + @ . loop
+  0 ?do (sp0) @ i cells - @ . loop
 ;
 
 : evaluate ( i*x c-addr u -- j*x )

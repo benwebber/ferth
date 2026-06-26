@@ -56,7 +56,7 @@
 ; (bootstrap) \ Replace with parse-name.
 
 \ (rp@) points to the next cell, and (docol) pushes a call frame onto the stack.
-: r@ (rp@) 2 cells - @ ;
+: r@ (rp@) 2 cells + @ ;
 
 : if ['] (jmpz) compile, here 0 , ; immediate
 : then here swap ! ; immediate
