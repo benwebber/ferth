@@ -214,7 +214,7 @@ mod tests {
         use crate::error::VmError;
         let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
 
-        // Force a a data stack overflow, an irrecoverable error.
+        // Force a data stack overflow, an irrecoverable error.
         fe.evaluate(b": overflow begin 1 again ;").unwrap();
         assert!(matches!(
             fe.evaluate(b"' overflow catch"),
@@ -230,8 +230,8 @@ mod tests {
     fn test_catch_recoverable_error() {
         let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
 
-        // Re-raise recoverable errors (division by zero) as a Forth ception. `catch` returns its
-        // ior.
+        // Re-raise recoverable errors (division by zero) as a Forth exception. `catch` returns its
+        // *ior*.
         fe.evaluate(b": divzero 0 0 0 um/mod ;").unwrap();
         fe.evaluate(b"' divzero catch").unwrap();
         assert_eq!(fe.pop().unwrap() as isize, Ior::DIVISION_BY_ZERO);
