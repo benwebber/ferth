@@ -240,7 +240,7 @@ impl Vm {
             // `RPush` pushes an arbitrary value to the stack. `Exit` cannot follow an `RPush`
             // because it will pop whatever value `RPush` pushed and try to jump there. If we know
             // the word is a primitive, we can execute it inline instead of nesting.
-            let op = (data.read_cell(xt)? & PackedInstr::OP_MASK).try_into()?;
+            let op = PackedInstr::from(data.read_cell(xt)?).op()?;
             // Step instead of call.
             self.step(data, op)
         } else {
@@ -269,7 +269,7 @@ impl Vm {
             if self.ip == HALT {
                 return Ok(Stop::Halt);
             }
-            let op = (data.read_cell(self.ip)? & PackedInstr::OP_MASK).try_into()?;
+            let op = PackedInstr::from(data.read_cell(self.ip)?).op()?;
             self.ip += SIZE;
             if let Some(stop) = self.step(data, op)? {
                 return Ok(stop);
@@ -609,7 +609,7 @@ impl Vm {
             Op::Decode => {
                 let ip = self.pop(data)?;
                 let x = data.read_cell(ip)?;
-                let op: Op = (x & PackedInstr::OP_MASK).try_into()?;
+                let op = PackedInstr::from(x).op()?;
                 let (operand, next) = match op {
                     Op::Lit
                     | Op::Jmp

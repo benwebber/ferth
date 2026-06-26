@@ -1,5 +1,5 @@
 use crate::error::KernelError;
-use crate::vm::Op;
+use crate::vm::{Op, VmResult};
 use crate::{Result, SIZE};
 
 /// A packed instruction cell.
@@ -14,12 +14,10 @@ use crate::{Result, SIZE};
 /// restricts `Op` primitives to the first 2<sup>24</sup> addresses (16777216), and builtins to the
 /// first 2<sup>16</sup> (65566), minus the system's reserved addresses.
 ///
-/// # Encoding only
+/// # Performance
 ///
-/// [`PackedInstr::new`] encodes instructions, but this type does not provide any accessors to
-/// decode the packed data. The system only encodes instructions once, when they are defined.
-/// However it must decode instructions in the innermost loop of the VM
-/// ([`Vm::run`](crate::vm::Vm::run)).
+/// The system only encodes instructions once, when they are defined. However it must decode them
+/// in the innermost loop of the VM ([`Vm::run`](crate::vm::Vm::run)).
 ///
 /// An earlier revision decoded `op`, `xt`, and `operand` into struct fields. This negatively
 /// impacted performance for two reasons. First, most instructions do not need the packed data at
@@ -34,7 +32,7 @@ use crate::{Result, SIZE};
 pub struct PackedInstr(usize);
 
 impl PackedInstr {
-    pub const OP_MASK: usize = 0xff;
+    const OP_MASK: usize = 0xff;
 
     pub fn new(op: Op, xt: usize, index: usize) -> Result<Self> {
         if xt >> (8 * Self::xt_bytes(op)) != 0 {
@@ -45,6 +43,13 @@ impl PackedInstr {
             _ => (op as usize) | (xt << Self::xt_shift(op)),
         };
         Ok(Self(u))
+    }
+
+    // Inline. The hottest path of the system decodes opcodes.
+    #[inline(always)]
+    // TODO: The `VmResult` return type smells. All the methods should use the same error type.
+    pub fn op(&self) -> VmResult<Op> {
+        Op::try_from(self.0 & Self::OP_MASK)
     }
 
     /// The number of bytes the *xt* may occupy.
@@ -67,6 +72,12 @@ impl PackedInstr {
 impl From<PackedInstr> for usize {
     fn from(instr: PackedInstr) -> Self {
         instr.0
+    }
+}
+
+impl From<usize> for PackedInstr {
+    fn from(u: usize) -> Self {
+        PackedInstr(u)
     }
 }
 
