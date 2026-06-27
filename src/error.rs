@@ -26,6 +26,7 @@ impl_ior!(
     UNDEFINED_WORD = -13,
     PARSED_STRING_OVERFLOW = -18,
     DEFINITION_NAME_TOO_LONG = -19,
+    ADDRESS_ALIGNMENT_EXCEPTION = -23,
 );
 
 impl From<Ior> for isize {
@@ -75,9 +76,8 @@ impl Error {
                 VmError::StackUnderflow => Throw(Ior::STACK_UNDERFLOW),
                 VmError::ReturnStackUnderflow => Throw(Ior::RETURN_STACK_UNDERFLOW),
                 VmError::DivisionByZero => Throw(Ior::DIVISION_BY_ZERO),
-                VmError::AddressOutOfRange(_) | VmError::AddressMisaligned(_) => {
-                    Throw(Ior::INVALID_MEMORY_ADDRESS)
-                }
+                VmError::AddressOutOfRange(_) => Throw(Ior::INVALID_MEMORY_ADDRESS),
+                VmError::AddressMisaligned(_) => Throw(Ior::ADDRESS_ALIGNMENT_EXCEPTION),
             },
             Error::Io | Error::Kernel(_) => Abort,
         }
