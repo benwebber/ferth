@@ -118,7 +118,7 @@ variable (dump-end)
   repeat
 ;
 
-: ? ( a-addr -- ) @ 0 <# #s #> type ;
+: ? ( a-addr -- ) @ 0 <# #s #> type space ;
 
 : (opcode) ( xt -- op ) @ $ff and ;
 
