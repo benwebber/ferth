@@ -402,17 +402,21 @@ variable (leave-list)
   while
     ['] (interpret) catch
     ?dup if
-      dup -3 = if drop ." stack overflow " else
-      dup -4 = if drop ." stack underflow " else
-      dup -5 = if drop ." return stack overflow " else
-      dup -6 = if drop ." return stack underflow " else
-      dup -9 = if drop ." invalid memory address " else
-      dup -10 = if drop ." division by zero " else
-      dup -13 = if drop ." undefined word: " (diagnostic) else
-      dup -19 = if drop ." definition name too long: " (diagnostic) else
-      dup -20 = if drop ." parsed string overflow " else
-      dup -21 = if drop ." unsupported operation " else
-      ." error: " . then then then then then then then then then then cr
+      \ -1 (ABORT) and -56 (QUIT) silently return to the prompt.
+      dup -1 = over -56 = or 0= if
+        dup -2 = if drop (diagnostic) else
+        dup -3 = if drop ." stack overflow " else
+        dup -4 = if drop ." stack underflow " else
+        dup -5 = if drop ." return stack overflow " else
+        dup -6 = if drop ." return stack underflow " else
+        dup -9 = if drop ." invalid memory address " else
+        dup -10 = if drop ." division by zero " else
+        dup -13 = if drop ." undefined word: " (diagnostic) else
+        dup -19 = if drop ." definition name too long: " (diagnostic) else
+        dup -20 = if drop ." parsed string overflow " else
+        dup -21 = if drop ." unsupported operation " else
+        ." error: " . then then then then then then then then then then then cr
+      else drop then
       \ Reset compilation state and clear stack.
       postpone [
       (sp0) @ (sp!)
@@ -422,10 +426,10 @@ variable (leave-list)
   repeat
 ;
 
-: abort ( -- ) (sp0) @ (sp!) quit ;
+: abort ( i*x -- ) -1 throw ;
 
 : (abort") ( flag c-addr u -- )
-  rot if type abort else 2drop then
+  rot if (diagnostic!) -2 throw else 2drop then
 ;
 
 : abort" postpone s" postpone (abort") ; immediate

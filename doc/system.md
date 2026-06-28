@@ -33,7 +33,7 @@ This document specifies the system behaviour according to the Forth-2012 [docume
 <dd>None. <code>accept</code> consumes but does not display a terminating <code>LF</code>.
 
 <dt>exception abort sequence (as in <a href="https://forth-standard.org/standard/core/ABORTq"><code>ABORT"</code></a>)
-<dd>Type the string then call <code>abort</code>. <code>abort</code> clears the stacks and calls <code>quit</code>.
+<dd>Throw <code>-2</code>, caught in `quit`. `quit` clears the stacks and prints the error message.
 
 <dt>format of the control-flow stack (<a href="https://forth-standard.org/standard/usage#usage:controlstack">3.2.3.2 Control-flow stack</a>)
 <dd>The data stack. There is no separate control-flow stack.
