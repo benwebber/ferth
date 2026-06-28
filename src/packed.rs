@@ -82,6 +82,13 @@ impl From<usize> for PackedInstr {
 }
 
 #[cfg(test)]
+impl From<Op> for PackedInstr {
+    fn from(op: Op) -> Self {
+        PackedInstr(op as usize)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::Error;

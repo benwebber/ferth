@@ -262,9 +262,8 @@ impl Vm {
             // `RPush` pushes an arbitrary value to the stack. `Exit` cannot follow an `RPush`
             // because it will pop whatever value `RPush` pushed and try to jump there. If we know
             // the word is a primitive, we can execute it inline instead of nesting.
-            let op = PackedInstr::from(data.read_cell(xt)?).op()?;
-            // Step instead of call.
-            self.step(data, op)
+            let instr = PackedInstr::from(data.read_cell(xt)?);
+            self.step(data, instr)
         } else {
             // Otherwise, call the word like normal.
             self.rpush(data, self.ip)?;
@@ -291,9 +290,9 @@ impl Vm {
             if self.ip == HALT {
                 return Ok(Stop::Halt);
             }
-            let op = PackedInstr::from(data.read_cell(self.ip)?).op()?;
+            let instr = PackedInstr::from(data.read_cell(self.ip)?);
             self.ip += SIZE;
-            if let Some(stop) = self.step(data, op)? {
+            if let Some(stop) = self.step(data, instr)? {
                 return Ok(stop);
             }
         }
@@ -310,7 +309,8 @@ impl Vm {
         Ok(())
     }
 
-    fn step<M: Mem>(&mut self, data: &mut Data<M>, op: Op) -> VmResult<Option<Stop>> {
+    fn step<M: Mem>(&mut self, data: &mut Data<M>, instr: PackedInstr) -> VmResult<Option<Stop>> {
+        let op = instr.op()?;
         match op {
             Op::Halt => {
                 return Ok(Some(Stop::Halt));
@@ -329,8 +329,7 @@ impl Vm {
                 return self.dispatch(data, target);
             }
             Op::Yield => {
-                let x = data.read_cell(self.ip - SIZE)?;
-                let index = (x >> 8) & 0xff;
+                let index = (usize::from(instr) >> 8) & 0xff;
                 return Ok(Some(Stop::Yield(YieldToken { ip: self.ip, index })));
             }
             Op::DoCreate => {
@@ -867,7 +866,10 @@ mod tests {
     #[test]
     fn op_halt() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::Halt).unwrap(), Some(Stop::Halt));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Halt)).unwrap(),
+            Some(Stop::Halt)
+        );
     }
 
     // Yield
@@ -875,12 +877,9 @@ mod tests {
     #[test]
     fn op_yield_reads_index_and_stops() {
         let (mut v, mut d) = vm();
-        let base = Vm::DATA_BASE;
-        d.write_cell(base, (Op::Yield as usize) | (7 << 8)).unwrap();
-        v.ip = base + SIZE;
-        let stop = v.step(&mut d, Op::Yield).unwrap();
+        let instr = PackedInstr::from((Op::Yield as usize) | (7 << 8));
+        let stop = v.step(&mut d, instr).unwrap();
         assert!(matches!(stop, Some(Stop::Yield(ref t)) if t.index == 7));
-        assert_eq!(v.ip, base + SIZE);
     }
 
     // Exit
@@ -890,14 +889,17 @@ mod tests {
         let (mut v, mut d) = vm();
         let ret = Vm::DATA_BASE;
         v.rpush(&mut d, ret).unwrap();
-        v.step(&mut d, Op::Exit).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Exit)).unwrap();
         assert_eq!(v.ip, ret);
     }
 
     #[test]
     fn op_exit_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::Exit), Err(VmError::ReturnStackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Exit)),
+            Err(VmError::ReturnStackUnderflow)
+        );
     }
 
     // Lit
@@ -908,7 +910,7 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, 99usize).unwrap();
         v.ip = base;
-        v.step(&mut d, Op::Lit).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Lit)).unwrap();
         assert_eq!(ds(&v, &d), vec![99]);
         assert_eq!(v.ip, base + SIZE);
     }
@@ -922,7 +924,10 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, 1usize).unwrap();
         v.ip = base;
-        assert_eq!(v.step(&mut d, Op::Lit), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Lit)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // Str
@@ -935,7 +940,7 @@ mod tests {
         d.write_cell(base, len).unwrap();
         d.write(base + SIZE, b"abc").unwrap();
         v.ip = base;
-        v.step(&mut d, Op::Str).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Str)).unwrap();
         let padded = (len + SIZE - 1) & !(SIZE - 1);
         let stack = ds(&v, &d);
         assert_eq!(stack[0], base + SIZE);
@@ -952,7 +957,10 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, 1usize).unwrap();
         v.ip = base;
-        assert_eq!(v.step(&mut d, Op::Str), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Str)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // Jmp
@@ -964,7 +972,7 @@ mod tests {
         let target = base + 8 * SIZE;
         d.write_cell(base, target).unwrap();
         v.ip = base;
-        v.step(&mut d, Op::Jmp).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Jmp)).unwrap();
         assert_eq!(v.ip, target);
     }
 
@@ -978,7 +986,7 @@ mod tests {
         d.write_cell(base, target).unwrap();
         v.ip = base;
         v.push(&mut d, 0).unwrap();
-        v.step(&mut d, Op::JmpZ).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::JmpZ)).unwrap();
         assert_eq!(v.ip, target);
     }
 
@@ -990,7 +998,7 @@ mod tests {
         d.write_cell(base, target).unwrap();
         v.ip = base;
         v.push(&mut d, 1).unwrap();
-        v.step(&mut d, Op::JmpZ).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::JmpZ)).unwrap();
         assert_eq!(v.ip, base + SIZE);
     }
 
@@ -1000,7 +1008,10 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, 0usize).unwrap();
         v.ip = base;
-        assert_eq!(v.step(&mut d, Op::JmpZ), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::JmpZ)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // Do
@@ -1010,14 +1021,17 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0).unwrap();
         v.push(&mut d, 5).unwrap();
-        v.step(&mut d, Op::Do).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Do)).unwrap();
         assert_eq!(rlen(&v), 2);
     }
 
     #[test]
     fn op_do_pop_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::Do), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Do)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1028,7 +1042,10 @@ mod tests {
         }
         v.push(&mut d, 0).unwrap();
         v.push(&mut d, 5).unwrap();
-        assert_eq!(v.step(&mut d, Op::Do), Err(VmError::ReturnStackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Do)),
+            Err(VmError::ReturnStackOverflow)
+        );
     }
 
     // QDo
@@ -1042,7 +1059,7 @@ mod tests {
         v.ip = base;
         v.push(&mut d, 3).unwrap();
         v.push(&mut d, 3).unwrap();
-        v.step(&mut d, Op::QDo).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::QDo)).unwrap();
         assert_eq!(v.ip, target);
         assert_eq!(rlen(&v), 0);
     }
@@ -1055,7 +1072,7 @@ mod tests {
         v.ip = base;
         v.push(&mut d, 0).unwrap();
         v.push(&mut d, 5).unwrap();
-        v.step(&mut d, Op::QDo).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::QDo)).unwrap();
         assert_eq!(v.ip, base + SIZE);
         assert_eq!(rlen(&v), 2);
     }
@@ -1066,7 +1083,10 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, 0usize).unwrap();
         v.ip = base;
-        assert_eq!(v.step(&mut d, Op::QDo), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::QDo)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // PlusLoop
@@ -1084,7 +1104,7 @@ mod tests {
         d.write_cell(base, back).unwrap();
         v.ip = base;
         v.push(&mut d, 1usize).unwrap();
-        v.step(&mut d, Op::PlusLoop).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::PlusLoop)).unwrap();
         assert_eq!(v.ip, back);
         assert_eq!(rlen(&v), 2);
     }
@@ -1101,7 +1121,7 @@ mod tests {
         d.write_cell(base, 0usize).unwrap();
         v.ip = base;
         v.push(&mut d, 1usize).unwrap();
-        v.step(&mut d, Op::PlusLoop).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::PlusLoop)).unwrap();
         assert_eq!(v.ip, base + SIZE);
         assert_eq!(rlen(&v), 0);
     }
@@ -1114,7 +1134,10 @@ mod tests {
         let base = Vm::DATA_BASE + 8 * SIZE;
         d.write_cell(base, 0usize).unwrap();
         v.ip = base;
-        assert_eq!(v.step(&mut d, Op::PlusLoop), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::PlusLoop)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // Unloop
@@ -1124,7 +1147,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.rpush(&mut d, 10).unwrap();
         v.rpush(&mut d, 20).unwrap();
-        v.step(&mut d, Op::Unloop).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Unloop)).unwrap();
         assert_eq!(rlen(&v), 0);
     }
 
@@ -1132,7 +1155,7 @@ mod tests {
     fn op_unloop_underflow() {
         let (mut v, mut d) = vm();
         assert_eq!(
-            v.step(&mut d, Op::Unloop),
+            v.step(&mut d, PackedInstr::from(Op::Unloop)),
             Err(VmError::ReturnStackUnderflow)
         );
     }
@@ -1147,7 +1170,7 @@ mod tests {
         let fudged = index.wrapping_sub(limit).wrapping_add(isize::MIN as usize);
         v.rpush(&mut d, limit).unwrap();
         v.rpush(&mut d, fudged).unwrap();
-        v.step(&mut d, Op::I).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::I)).unwrap();
         assert_eq!(ds(&v, &d), vec![index]);
     }
 
@@ -1161,7 +1184,10 @@ mod tests {
         let fudged = isize::MIN as usize;
         v.rpush(&mut d, limit).unwrap();
         v.rpush(&mut d, fudged).unwrap();
-        assert_eq!(v.step(&mut d, Op::I), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::I)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // J
@@ -1183,7 +1209,7 @@ mod tests {
         v.rpush(&mut d, outer_fudged).unwrap();
         v.rpush(&mut d, inner_limit).unwrap();
         v.rpush(&mut d, inner_fudged).unwrap();
-        v.step(&mut d, Op::J).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::J)).unwrap();
         assert_eq!(ds(&v, &d), vec![outer_index]);
     }
 
@@ -1197,7 +1223,10 @@ mod tests {
         v.rpush(&mut d, isize::MIN as usize).unwrap();
         v.rpush(&mut d, 3).unwrap();
         v.rpush(&mut d, isize::MIN as usize).unwrap();
-        assert_eq!(v.step(&mut d, Op::J), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::J)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // Drop
@@ -1206,14 +1235,17 @@ mod tests {
     fn op_drop_ok() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 42).unwrap();
-        v.step(&mut d, Op::Drop).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Drop)).unwrap();
         assert_eq!(ds(&v, &d), vec![]);
     }
 
     #[test]
     fn op_drop_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::Drop), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Drop)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // Swap
@@ -1223,7 +1255,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
         v.push(&mut d, 2).unwrap();
-        v.step(&mut d, Op::Swap).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Swap)).unwrap();
         assert_eq!(ds(&v, &d), vec![2, 1]);
     }
 
@@ -1231,7 +1263,10 @@ mod tests {
     fn op_swap_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::Swap), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Swap)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // Dup
@@ -1241,14 +1276,17 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
         v.push(&mut d, 2).unwrap();
-        v.step(&mut d, Op::Dup).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Dup)).unwrap();
         assert_eq!(ds(&v, &d), vec![1, 2, 2]);
     }
 
     #[test]
     fn op_dup_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::Dup), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Dup)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1257,7 +1295,10 @@ mod tests {
         for i in 0..DS_LEN {
             v.push(&mut d, i).unwrap();
         }
-        assert_eq!(v.step(&mut d, Op::Dup), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Dup)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // SpFetch
@@ -1267,7 +1308,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
         let sp_before = v.sp;
-        v.step(&mut d, Op::SpFetch).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::SpFetch)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[stack.len() - 1], sp_before);
     }
@@ -1278,7 +1319,10 @@ mod tests {
         for i in 0..DS_LEN {
             v.push(&mut d, i).unwrap();
         }
-        assert_eq!(v.step(&mut d, Op::SpFetch), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::SpFetch)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // SpStore
@@ -1290,7 +1334,7 @@ mod tests {
         v.push(&mut d, 2).unwrap();
         let target = v.sp0() - SIZE;
         v.push(&mut d, target).unwrap();
-        v.step(&mut d, Op::SpStore).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::SpStore)).unwrap();
         assert_eq!(v.sp, target);
     }
 
@@ -1299,7 +1343,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0usize).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::SpStore),
+            v.step(&mut d, PackedInstr::from(Op::SpStore)),
             Err(VmError::AddressOutOfRange(0))
         );
     }
@@ -1310,7 +1354,7 @@ mod tests {
         let too_high = v.sp0() + SIZE;
         v.push(&mut d, too_high).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::SpStore),
+            v.step(&mut d, PackedInstr::from(Op::SpStore)),
             Err(VmError::AddressOutOfRange(too_high))
         );
     }
@@ -1318,7 +1362,10 @@ mod tests {
     #[test]
     fn op_spstore_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::SpStore), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::SpStore)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // ToR
@@ -1327,7 +1374,7 @@ mod tests {
     fn op_tor_ok() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 77).unwrap();
-        v.step(&mut d, Op::ToR).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::ToR)).unwrap();
         assert_eq!(ds(&v, &d), vec![]);
         assert_eq!(rlen(&v), 1);
         assert_eq!(rpeek(&mut v, &mut d), 77);
@@ -1336,7 +1383,10 @@ mod tests {
     #[test]
     fn op_tor_pop_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::ToR), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::ToR)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1346,7 +1396,10 @@ mod tests {
             v.rpush(&mut d, i).unwrap();
         }
         v.push(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::ToR), Err(VmError::ReturnStackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::ToR)),
+            Err(VmError::ReturnStackOverflow)
+        );
     }
 
     // RFrom
@@ -1355,7 +1408,7 @@ mod tests {
     fn op_rfrom_ok() {
         let (mut v, mut d) = vm();
         v.rpush(&mut d, 88).unwrap();
-        v.step(&mut d, Op::RFrom).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::RFrom)).unwrap();
         assert_eq!(ds(&v, &d), vec![88]);
         assert_eq!(rlen(&v), 0);
     }
@@ -1364,7 +1417,7 @@ mod tests {
     fn op_rfrom_rpop_underflow() {
         let (mut v, mut d) = vm();
         assert_eq!(
-            v.step(&mut d, Op::RFrom),
+            v.step(&mut d, PackedInstr::from(Op::RFrom)),
             Err(VmError::ReturnStackUnderflow)
         );
     }
@@ -1376,7 +1429,10 @@ mod tests {
             v.push(&mut d, i).unwrap();
         }
         v.rpush(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::RFrom), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::RFrom)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // RpFetch
@@ -1385,7 +1441,7 @@ mod tests {
     fn op_rpfetch_ok() {
         let (mut v, mut d) = vm();
         let rp = v.rp;
-        v.step(&mut d, Op::RpFetch).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::RpFetch)).unwrap();
         assert_eq!(ds(&v, &d), vec![rp]);
     }
 
@@ -1395,7 +1451,10 @@ mod tests {
         for i in 0..DS_LEN {
             v.push(&mut d, i).unwrap();
         }
-        assert_eq!(v.step(&mut d, Op::RpFetch), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::RpFetch)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // RpStore
@@ -1405,7 +1464,7 @@ mod tests {
         let (mut v, mut d) = vm();
         let target = v.rp0();
         v.push(&mut d, target).unwrap();
-        v.step(&mut d, Op::RpStore).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::RpStore)).unwrap();
         assert_eq!(v.rp, target);
     }
 
@@ -1415,7 +1474,7 @@ mod tests {
         let too_low = v.data_top() - SIZE;
         v.push(&mut d, too_low).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::RpStore),
+            v.step(&mut d, PackedInstr::from(Op::RpStore)),
             Err(VmError::AddressOutOfRange(too_low))
         );
     }
@@ -1426,7 +1485,7 @@ mod tests {
         let too_high = v.rp0() + SIZE;
         v.push(&mut d, too_high).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::RpStore),
+            v.step(&mut d, PackedInstr::from(Op::RpStore)),
             Err(VmError::AddressOutOfRange(too_high))
         );
     }
@@ -1434,7 +1493,10 @@ mod tests {
     #[test]
     fn op_rpstore_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::RpStore), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::RpStore)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // Fetch
@@ -1445,14 +1507,17 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, 0xBEEFusize).unwrap();
         v.push(&mut d, base).unwrap();
-        v.step(&mut d, Op::Fetch).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Fetch)).unwrap();
         assert_eq!(ds(&v, &d), vec![0xBEEF]);
     }
 
     #[test]
     fn op_fetch_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::Fetch), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Fetch)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1460,7 +1525,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, Vm::DATA_BASE + 1).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::Fetch),
+            v.step(&mut d, PackedInstr::from(Op::Fetch)),
             Err(VmError::AddressMisaligned(Vm::DATA_BASE + 1))
         );
     }
@@ -1473,7 +1538,7 @@ mod tests {
         let base = Vm::DATA_BASE;
         v.push(&mut d, 0xcafeusize).unwrap();
         v.push(&mut d, base).unwrap();
-        v.step(&mut d, Op::Store).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Store)).unwrap();
         assert_eq!(d.read_cell(base).unwrap(), 0xcafe);
         assert_eq!(ds(&v, &d), vec![]);
     }
@@ -1482,7 +1547,10 @@ mod tests {
     fn op_store_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0).unwrap();
-        assert_eq!(v.step(&mut d, Op::Store), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Store)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1491,7 +1559,7 @@ mod tests {
         v.push(&mut d, 1usize).unwrap();
         v.push(&mut d, Vm::DATA_BASE + 1).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::Store),
+            v.step(&mut d, PackedInstr::from(Op::Store)),
             Err(VmError::AddressMisaligned(Vm::DATA_BASE + 1))
         );
     }
@@ -1504,14 +1572,17 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_char(base, b'X').unwrap();
         v.push(&mut d, base).unwrap();
-        v.step(&mut d, Op::CFetch).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::CFetch)).unwrap();
         assert_eq!(ds(&v, &d), vec![b'X' as usize]);
     }
 
     #[test]
     fn op_cfetch_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::CFetch), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::CFetch)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1519,7 +1590,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, MEM + 1).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::CFetch),
+            v.step(&mut d, PackedInstr::from(Op::CFetch)),
             Err(VmError::AddressOutOfRange(MEM + 1))
         );
     }
@@ -1532,7 +1603,7 @@ mod tests {
         let base = Vm::DATA_BASE;
         v.push(&mut d, b'Z' as usize).unwrap();
         v.push(&mut d, base).unwrap();
-        v.step(&mut d, Op::CStore).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::CStore)).unwrap();
         assert_eq!(d.read_char(base).unwrap(), b'Z');
         assert_eq!(ds(&v, &d), vec![]);
     }
@@ -1541,7 +1612,10 @@ mod tests {
     fn op_cstore_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0).unwrap();
-        assert_eq!(v.step(&mut d, Op::CStore), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::CStore)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1550,7 +1624,7 @@ mod tests {
         v.push(&mut d, b'A' as usize).unwrap();
         v.push(&mut d, MEM + 1).unwrap();
         assert_eq!(
-            v.step(&mut d, Op::CStore),
+            v.step(&mut d, PackedInstr::from(Op::CStore)),
             Err(VmError::AddressOutOfRange(MEM + 1))
         );
     }
@@ -1562,7 +1636,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 3).unwrap();
         v.push(&mut d, 4).unwrap();
-        v.step(&mut d, Op::Add).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Add)).unwrap();
         assert_eq!(ds(&v, &d), vec![7]);
     }
 
@@ -1570,7 +1644,10 @@ mod tests {
     fn op_add_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::Add), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Add)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // UmMul
@@ -1580,7 +1657,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 6).unwrap();
         v.push(&mut d, 7).unwrap();
-        v.step(&mut d, Op::UmMul).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::UmMul)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], 42);
         assert_eq!(stack[1], 0);
@@ -1590,7 +1667,10 @@ mod tests {
     fn op_ummul_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::UmMul), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::UmMul)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     #[test]
@@ -1599,7 +1679,7 @@ mod tests {
         v.push(&mut d, 17).unwrap();
         v.push(&mut d, 0).unwrap();
         v.push(&mut d, 5).unwrap();
-        v.step(&mut d, Op::UmDivMod).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::UmDivMod)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], 2);
         assert_eq!(stack[1], 3);
@@ -1611,7 +1691,10 @@ mod tests {
         v.push(&mut d, 1).unwrap();
         v.push(&mut d, 0).unwrap();
         v.push(&mut d, 0).unwrap();
-        assert_eq!(v.step(&mut d, Op::UmDivMod), Err(VmError::DivisionByZero));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::UmDivMod)),
+            Err(VmError::DivisionByZero)
+        );
     }
 
     #[test]
@@ -1619,7 +1702,10 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
         v.push(&mut d, 2).unwrap();
-        assert_eq!(v.step(&mut d, Op::UmDivMod), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::UmDivMod)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // Nand
@@ -1629,7 +1715,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0b1010).unwrap();
         v.push(&mut d, 0b1100).unwrap();
-        v.step(&mut d, Op::Nand).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Nand)).unwrap();
         assert_eq!(ds(&v, &d), vec![!(0b1010 & 0b1100usize)]);
     }
 
@@ -1637,7 +1723,10 @@ mod tests {
     fn op_nand_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::Nand), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::Nand)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // LShift
@@ -1647,7 +1736,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
         v.push(&mut d, 3).unwrap();
-        v.step(&mut d, Op::LShift).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::LShift)).unwrap();
         assert_eq!(ds(&v, &d), vec![8]);
     }
 
@@ -1655,7 +1744,10 @@ mod tests {
     fn op_lshift_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::LShift), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::LShift)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // RShift
@@ -1665,7 +1757,7 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 16).unwrap();
         v.push(&mut d, 2).unwrap();
-        v.step(&mut d, Op::RShift).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::RShift)).unwrap();
         assert_eq!(ds(&v, &d), vec![4]);
     }
 
@@ -1673,7 +1765,10 @@ mod tests {
     fn op_rshift_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
-        assert_eq!(v.step(&mut d, Op::RShift), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::RShift)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // LtZ
@@ -1682,7 +1777,7 @@ mod tests {
     fn op_ltz_negative() {
         let (mut v, mut d) = vm();
         v.push(&mut d, -1isize as usize).unwrap();
-        v.step(&mut d, Op::LtZ).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::LtZ)).unwrap();
         assert_eq!(ds(&v, &d), vec![TRUE]);
     }
 
@@ -1690,14 +1785,17 @@ mod tests {
     fn op_ltz_nonnegative() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0).unwrap();
-        v.step(&mut d, Op::LtZ).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::LtZ)).unwrap();
         assert_eq!(ds(&v, &d), vec![FALSE]);
     }
 
     #[test]
     fn op_ltz_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::LtZ), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::LtZ)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // EqZ
@@ -1706,7 +1804,7 @@ mod tests {
     fn op_eqz_zero() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 0).unwrap();
-        v.step(&mut d, Op::EqZ).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::EqZ)).unwrap();
         assert_eq!(ds(&v, &d), vec![TRUE]);
     }
 
@@ -1714,14 +1812,17 @@ mod tests {
     fn op_eqz_nonzero() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 5).unwrap();
-        v.step(&mut d, Op::EqZ).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::EqZ)).unwrap();
         assert_eq!(ds(&v, &d), vec![FALSE]);
     }
 
     #[test]
     fn op_eqz_underflow() {
         let (mut v, mut d) = vm();
-        assert_eq!(v.step(&mut d, Op::EqZ), Err(VmError::StackUnderflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::EqZ)),
+            Err(VmError::StackUnderflow)
+        );
     }
 
     // DoCreate
@@ -1734,7 +1835,7 @@ mod tests {
         let ret = base + 9 * SIZE;
         v.rpush(&mut d, ret).unwrap();
         v.ip = base + SIZE;
-        v.step(&mut d, Op::DoCreate).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::DoCreate)).unwrap();
         assert_eq!(ds(&v, &d), vec![base + 2 * SIZE]);
         assert_eq!(v.ip, ret);
         assert_eq!(rlen(&v), 0);
@@ -1747,7 +1848,7 @@ mod tests {
         let does_addr = base + 8 * SIZE;
         d.write_cell(base + SIZE, does_addr).unwrap();
         v.ip = base + SIZE;
-        v.step(&mut d, Op::DoCreate).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::DoCreate)).unwrap();
         assert_eq!(ds(&v, &d), vec![base + 2 * SIZE]);
         assert_eq!(v.ip, does_addr);
         assert_eq!(rlen(&v), 0);
@@ -1762,7 +1863,10 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, Op::DoCreate as usize).unwrap();
         d.write_cell(base + SIZE, 0usize).unwrap();
-        assert_eq!(v.step(&mut d, Op::DoCreate), Err(VmError::StackOverflow));
+        assert_eq!(
+            v.step(&mut d, PackedInstr::from(Op::DoCreate)),
+            Err(VmError::StackOverflow)
+        );
     }
 
     // Parse
@@ -1776,7 +1880,7 @@ mod tests {
         v.push(&mut d, base).unwrap();
         v.push(&mut d, 7).unwrap();
         v.push(&mut d, 0).unwrap();
-        v.step(&mut d, Op::Parse).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Parse)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], base);
         assert_eq!(stack[1], 3);
@@ -1792,7 +1896,7 @@ mod tests {
         v.push(&mut d, base).unwrap();
         v.push(&mut d, 7).unwrap();
         v.push(&mut d, 0).unwrap();
-        v.step(&mut d, Op::Parse).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Parse)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], base);
         assert_eq!(stack[1], 3);
@@ -1808,7 +1912,7 @@ mod tests {
         v.push(&mut d, base).unwrap();
         v.push(&mut d, 3).unwrap();
         v.push(&mut d, 0).unwrap();
-        v.step(&mut d, Op::Parse).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Parse)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], base);
         assert_eq!(stack[1], 3);
@@ -1825,7 +1929,7 @@ mod tests {
         v.push(&mut d, base).unwrap();
         v.push(&mut d, 3).unwrap();
         v.push(&mut d, 10).unwrap();
-        v.step(&mut d, Op::Number).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Number)).unwrap();
         assert_eq!(ds(&v, &d), vec![123, 1]);
     }
 
@@ -1837,7 +1941,7 @@ mod tests {
         v.push(&mut d, base).unwrap();
         v.push(&mut d, 3).unwrap();
         v.push(&mut d, 10).unwrap();
-        v.step(&mut d, Op::Number).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Number)).unwrap();
         assert_eq!(ds(&v, &d), vec![base, 3, 0]);
     }
 
@@ -1853,7 +1957,7 @@ mod tests {
         v.push(&mut d, base).unwrap();
         v.push(&mut d, 4).unwrap();
         v.push(&mut d, 10).unwrap();
-        v.step(&mut d, Op::ToNumber).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::ToNumber)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], 123);
         assert_eq!(stack[1], 0);
@@ -1870,7 +1974,7 @@ mod tests {
         d.write_cell(base, Op::Lit as usize).unwrap();
         d.write_cell(base + SIZE, 42).unwrap();
         v.push(&mut d, base).unwrap();
-        v.step(&mut d, Op::Decode).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Decode)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], Op::Lit as usize);
         assert_eq!(stack[1], 42);
@@ -1883,7 +1987,7 @@ mod tests {
         let base = Vm::DATA_BASE;
         d.write_cell(base, Op::Dup as usize).unwrap();
         v.push(&mut d, base).unwrap();
-        v.step(&mut d, Op::Decode).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::Decode)).unwrap();
         let stack = ds(&v, &d);
         assert_eq!(stack[0], Op::Dup as usize);
         assert_eq!(stack[1], 0);
@@ -1903,7 +2007,7 @@ mod tests {
         let here = xt + SIZE;
         v.push(&mut d, xt).unwrap();
         v.push(&mut d, here).unwrap();
-        v.step(&mut d, Op::CompileComma).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::CompileComma)).unwrap();
         assert_eq!(d.read_cell(here).unwrap(), Op::Dup as usize);
         assert_eq!(ds(&v, &d), vec![here + SIZE]);
     }
