@@ -95,7 +95,7 @@ pub fn header<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
         ctx.dict().set_diagnostic(addr, len)?;
         return Err(Error::Throw(Ior::DEFINITION_NAME_TOO_LONG));
     }
-    let cfa = ctx.dict().create_at(addr, len, 0)?;
-    ctx.dict().set_latest(cfa)?;
-    ctx.dict().set_here(cfa)
+    let code_addr = ctx.dict().create_at(addr, len, 0)?;
+    ctx.dict().set_latest(code_addr)?;
+    ctx.dict().set_here(code_addr)
 }

@@ -67,18 +67,19 @@ impl<'a, M: Mem> Dict<'a, M> {
             .len()
             .try_into()
             .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
-        let (nfa, cfa) = self.header_at(len, flags)?;
-        self.data.write(nfa + 1, name)?;
-        Ok(cfa)
+        let (name_addr, code_addr) = self.header_at(len, flags)?;
+        self.data.write(name_addr + 1, name)?;
+        Ok(code_addr)
     }
 
     pub(crate) fn create_at(&mut self, src_addr: usize, len: usize, flags: u8) -> Result<usize> {
         let len: u8 = len
             .try_into()
             .map_err(|_| Error::Throw(Ior::DEFINITION_NAME_TOO_LONG))?;
-        let (nfa, cfa) = self.header_at(len, flags)?;
-        self.data.copy_within(src_addr, nfa + 1, len as usize)?;
-        Ok(cfa)
+        let (name_addr, code_addr) = self.header_at(len, flags)?;
+        self.data
+            .copy_within(src_addr, name_addr + 1, len as usize)?;
+        Ok(code_addr)
     }
 
     pub(crate) fn find_at(&self, addr: usize, len: usize) -> Result<Option<(usize, usize)>> {

@@ -658,16 +658,16 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         }
         self.builtins[idx] = Some(f);
         self.builtins_len += 1;
-        let cfa = self.define(name, Flags::PRIMITIVE)?;
-        let instr = PackedInstr::new(Op::Yield, cfa, idx)?;
-        Ok(self.data.write_cell(cfa, instr.into())?)
+        let code_addr = self.define(name, Flags::PRIMITIVE)?;
+        let instr = PackedInstr::new(Op::Yield, code_addr, idx)?;
+        Ok(self.data.write_cell(code_addr, instr.into())?)
     }
 
     fn define(&mut self, name: &[u8], flags: Flags) -> Result<usize> {
-        let cfa = self.dict().create(name, flags.into())?;
-        self.dict().set_here(cfa + SIZE)?;
-        self.dict().set_latest(cfa)?;
-        Ok(cfa)
+        let code_addr = self.dict().create(name, flags.into())?;
+        self.dict().set_here(code_addr + SIZE)?;
+        self.dict().set_latest(code_addr)?;
+        Ok(code_addr)
     }
 }
 
