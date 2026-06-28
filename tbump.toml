@@ -1,0 +1,21 @@
+# Uncomment this if your project is hosted on GitHub:
+# github_url = "https://github.com/<user or organization>/<project>/"
+
+[version]
+current = "0.1.0-dev.0"
+
+regex = '''
+  (?P<major>\d+)
+  \.
+  (?P<minor>\d+)
+  \.
+  (?P<patch>\d+)
+  (?P<prelease>\-\w+\.\d+)?
+  '''
+
+[git]
+message_template = "Release {new_version}"
+tag_template = "v{new_version}"
+
+[[file]]
+src = "Cargo.toml"
