@@ -8,6 +8,12 @@
 : nip swap drop ;
 : tuck ( x1 x2 -- x2 x1 x2 ) swap over ;
 
+: :noname
+  here 0 (header)
+  (latest) @
+  -1 state !
+;
+
 : unused ( -- u )
   \ Address of data stack scratch cell (last cell in memory).
   (sp0) @ 1 cells +

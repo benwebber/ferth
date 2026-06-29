@@ -145,6 +145,7 @@ Ferth implements the following words from the Forth-2012 standard.
 [`0>`](https://forth-standard.org/standard/core/Zeromore)
 [`2>r`](https://forth-standard.org/standard/core/TwotoR)
 [`2r>`](https://forth-standard.org/standard/core/TwoRfrom)
+[`:noname`](https://forth-standard.org/standard/core/ColonNONAME)
 [`<>`](https://forth-standard.org/standard/core/ne)
 [`?do`](https://forth-standard.org/standard/core/qDO)
 [`\`](https://forth-standard.org/standard/core/bs)
