@@ -13,19 +13,19 @@ impl std::fmt::Debug for TtesterError {
 }
 
 macro_rules! ttester {
-    ($name:ident $(, $filename:expr)?) => {
+    ($name:ident $(, $filename:expr)*) => {
         #[test]
         fn $name() -> std::result::Result<(), TtesterError> {
             let src: Vec<u8> = [
                 include_bytes!("ttester-shim.fth") as &[u8],
-                include_bytes!("ttester.4th"),
+                include_bytes!("forth2012-test-suite/src/ttester.fs"),
                 // ttester "vectors" errors, or redirects them, to ERROR-XT.
                 // The user can customize how the test harness handles errors by setting ERROR-XT
                 // to a custom handler. Here the handler:
                 //   1. raises a DivisionByZero to fail the test, and
                 //   2. calls the test suite's ERROR1, which prints the error.
                 b": ERROR-THROW ERROR1 1 0 / ; ' ERROR-THROW ERROR-XT !\n",
-                $(include_bytes!($filename),)?
+                $(include_bytes!($filename) as &[u8],)*
             ]
             .concat();
             // BufIo errors when output buffer fills, so it must be large enough to hold all test
@@ -47,4 +47,8 @@ macro_rules! ttester {
 }
 
 ttester!(test_load_test_harness);
-ttester!(test_core, "core.fr");
+ttester!(
+    test_core,
+    "forth2012-test-suite/src/core.fr",
+    "forth2012-test-suite/src/coreplustest.fth"
+);
