@@ -3,9 +3,8 @@
 : - invert 1 + + ;
 : (flags-addr) 2 cells - 1 + ;
 : or invert swap invert (nand) ;
-: and (nand) invert ;
-: (immediate-flag) %001 ;
-: immediate (latest) @ (flags-addr) dup c@ (immediate-flag) or swap c! ;
+: (set-flag) swap (flags-addr) dup >r c@ or r> c! ;
+: immediate (latest) @ %1 (set-flag) ;
 : \ source >in ! drop ; immediate
 
 \ KERNEL
@@ -42,12 +41,15 @@
 
 : ( $29 parse drop drop ; immediate
 
-\ TODO: Figure out consistent vocabulary for compiler directives.
-: (hidden-flag) %010 ;
-: (hide) (flags-addr) dup c@ (hidden-flag) or swap c! ;
-: (bootstrap) (latest) @ (flags-addr) dup c@ %100 or swap c! ;
-: (compile-only) (latest) @ (flags-addr) dup c@ %10000 or swap c! ;
-: (compile-only?) (flags-addr) c@ %10000 and 0= invert ;
+: and (nand) invert ;
+
+: (flag?) ( xt u -- flag ) swap (flags-addr) c@ and 0= invert ;
+: (hidden) %10 (set-flag) ;
+: (hidden?) %10 (flag?) ;
+: (bootstrap) (latest) @ %100 (set-flag) ;
+: (bootstrap?) %100 (flag?) ;
+: (compile-only) (latest) @ %10000 (set-flag) ;
+: (compile-only?) %10000 (flag?) ;
 
 : bl $20 ;
 : here (here) @ ;
@@ -249,16 +251,16 @@ create handler 0 ,
 \ Hide and redefine bootstrap words.
 \ Notice that to redefine :, we must first save the XT of :, because otherwise
 \ the interpreter would throw undefined word (-13) on :.
-' : dup dup     ( xt xt xt )
-(hide)          ( xt xt )
+' : dup dup   ( xt xt xt )
+(hidden)      ( xt xt )
 execute :
   parse-name (header)
-  (latest) @ (flags-addr) dup c@ (hidden-flag) or swap c!
+  (latest) @ (hidden)
   -1 state !
 ;
-(hide)          ( xt -- )
+(hidden)      ( xt -- )
 
-' create (hide)
+' create (hidden)
 : create
   parse-name (header) ['] (docreate) @ , 0 ,
 ;
@@ -309,7 +311,7 @@ execute :
 : constant >r : r> postpone literal postpone ; ;
 : variable align here 0 , constant ;
 
-' ['] (hide)
+' ['] (hidden)
 : ['] parse-name (find) drop postpone literal ; immediate (compile-only)
 
 \ 7. DIAGNOSTIC CHECKS
@@ -321,8 +323,8 @@ execute :
   begin
     dup 0= invert                     ( latest flag )
   while                               ( latest )
-    dup (flags-addr) c@ %100 and      ( latest bootstrap )
-    over (flags-addr) c@ %010 and 0=  ( latest bootstrap !hidden )
+    dup (bootstrap?)                  ( latest bootstrap? )
+    over (hidden?) 0=                 ( latest bootstrap? !hidden? )
     and if
       drop                            ( )
       -256 throw
@@ -361,4 +363,4 @@ execute :
   repeat
   2drop
 ;
-(hide)        ( xt -- )
+(hidden)        ( xt -- )
