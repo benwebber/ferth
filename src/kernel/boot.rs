@@ -554,7 +554,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     }
 
     fn compile(&mut self, name: &[u8], flags: Flags, body: &[Token]) -> Result<usize> {
-        let xt = self.define(name, flags | Flags::COLON)?;
+        let xt = self.define(name, flags)?;
         // `define` advances `here`. We want to compile the body directly.
         self.dict().set_here(xt)?;
         self.compile_tokens(body)?;
@@ -690,6 +690,6 @@ mod tests {
         };
         assert!(flags(b"dup").contains(Flags::PRIMITIVE));
         assert!(flags(b"(find)").contains(Flags::PRIMITIVE));
-        assert!(flags(b"cells").contains(Flags::COLON));
+        assert!(!flags(b"cells").contains(Flags::PRIMITIVE));
     }
 }

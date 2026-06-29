@@ -119,7 +119,6 @@ impl Flags {
     pub const HIDDEN: Self = Self(0b0000010);
     pub const BOOTSTRAP: Self = Self(0b0000100);
     pub const PRIMITIVE: Self = Self(0b0001000);
-    pub const COLON: Self = Self(0b0100000);
 
     pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
