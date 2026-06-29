@@ -173,22 +173,25 @@ create handler 0 ,
 : while ['] (jmpz) compile, here 0 , swap ; immediate (compile-only)
 : repeat ['] (jmp) compile, , here swap ! ; immediate (compile-only)
 
-\ Returns the length of the body in cells.
+\ Returns the length of the body in bytes.
 : (body-len) ( xt -- u ) 3 cells - @ ;
+
+: (opcode) ( xt -- char ) @ $ff and ;
+: (opcode?) ( xt char -- flag ) (opcode) - 0= ;
 
 \ Calculate the size of the instruction at addr.
 : (instr-size) ( addr -- n )
   \ All of these instructions take one operand, for two cells.
   \ TODO: Expose (call)?
-  dup @ $ff and ['] (call)  @ $ff and - 0= if drop 2 cells exit then
-  dup @ $ff and ['] (lit)   @ $ff and - 0= if drop 2 cells exit then
-  dup @ $ff and ['] (jmp)   @ $ff and - 0= if drop 2 cells exit then
-  dup @ $ff and ['] (jmpz)  @ $ff and - 0= if drop 2 cells exit then
-  dup @ $ff and ['] (+loop) @ $ff and - 0= if drop 2 cells exit then
-  dup @ $ff and ['] (?do)   @ $ff and - 0= if drop 2 cells exit then
+  dup (opcode) ['] (call)  (opcode?) if drop 2 cells exit then
+  dup (opcode) ['] (lit)   (opcode?) if drop 2 cells exit then
+  dup (opcode) ['] (jmp)   (opcode?) if drop 2 cells exit then
+  dup (opcode) ['] (jmpz)  (opcode?) if drop 2 cells exit then
+  dup (opcode) ['] (+loop) (opcode?) if drop 2 cells exit then
+  dup (opcode) ['] (?do)   (opcode?) if drop 2 cells exit then
   \ `Str` takes a variable length operand: `[Str][len][data...]`, for a total of
   \ `2 * SIZE + len(data)` bytes, aligned up.
-  dup @ $ff and ['] (s")    @ $ff and - 0= if 1 cells + @ aligned 2 cells + exit then
+  dup (opcode) ['] (s")    (opcode?) if 1 cells + @ aligned 2 cells + exit then
   drop 1 cells
 ;
 
@@ -211,7 +214,7 @@ create handler 0 ,
 : (tail-optimize) ( xt -- )
   \ Skip if body is less than three cells (probably a primitive).
   dup (body-len) 3 cells u< if drop exit then
-  (tail) dup @ $ff and ['] (call) @ $ff and - 0= if
+  (tail) dup (opcode) ['] (call) (opcode?) if
     \ Replace `Call` with `Jmp`. Dead `Exit` remains.
     ['] (jmp) @ swap !
   else

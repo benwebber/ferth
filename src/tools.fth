@@ -120,8 +120,6 @@ variable (dump-end)
 
 : ? ( a-addr -- ) @ 0 <# #s #> type space ;
 
-: (opcode) ( xt -- op ) @ $ff and ;
-
 : (.xt) ( xt -- ) (>name) type space ;
 
 : (see-instr) ( ip -- next)
