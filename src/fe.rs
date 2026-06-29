@@ -1,6 +1,6 @@
 use crate::Result;
 use crate::data::Mem;
-use crate::error::KernelError;
+use crate::error::{Error, KernelError};
 use crate::io::{Io, NoIo};
 use crate::kernel::{Config, Kernel};
 use crate::log::debug;
@@ -90,7 +90,22 @@ impl<M: Mem, I: Io> Fe<M, I, Loading> {
 impl<M: Mem, I: Io> Fe<M, I, Ready> {
     /// Load and interpret code from the current input source.
     pub fn load(&mut self) -> Result<()> {
-        self.kernel.execute(self.state.xt_load)
+        // unwrap: Safe because typestate validates kernel already defined `catch`.
+        // TODO: add boot XTs to Ready state.
+        let catch_xt = self
+            .kernel
+            .dict()
+            .find(b"catch")
+            .unwrap()
+            .map(|(xt, _)| xt)
+            .unwrap();
+        self.push(self.state.xt_load)?;
+        self.kernel.execute(catch_xt)?;
+        let code = self.pop()? as isize;
+        if code != 0 {
+            return Err(Error::Throw(code));
+        }
+        Ok(())
     }
 
     /// Run `quit`, the Forth interpreter loop.
