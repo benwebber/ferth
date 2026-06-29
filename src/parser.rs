@@ -9,24 +9,20 @@ pub fn parse_num(bytes: &[u8], base: u32) -> Option<usize> {
         return Some(bytes[1] as usize);
     }
 
-    let (neg, rest) = if let Some((&b'-', rest)) = bytes.split_first() {
-        (true, rest)
-    } else {
-        (false, bytes)
-    };
-
-    if rest.is_empty() {
-        return None;
-    }
-
-    let (base, rest) = if let Some((&b'#', rest)) = rest.split_first() {
+    let (base, rest) = if let Some((&b'#', rest)) = bytes.split_first() {
         (10u32, rest)
-    } else if let Some((&b'$', rest)) = rest.split_first() {
+    } else if let Some((&b'$', rest)) = bytes.split_first() {
         (16u32, rest)
-    } else if let Some((&b'%', rest)) = rest.split_first() {
+    } else if let Some((&b'%', rest)) = bytes.split_first() {
         (2u32, rest)
     } else {
-        (base, rest)
+        (base, bytes)
+    };
+
+    let (neg, rest) = if let Some((&b'-', rest)) = rest.split_first() {
+        (true, rest)
+    } else {
+        (false, rest)
     };
 
     if rest.is_empty() {
