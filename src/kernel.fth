@@ -46,6 +46,8 @@
 : (hidden-flag) %010 ;
 : (hide) (flags-addr) dup c@ (hidden-flag) or swap c! ;
 : (bootstrap) (latest) @ (flags-addr) dup c@ %100 or swap c! ;
+: (compile-only) (latest) @ (flags-addr) dup c@ %10000 or swap c! ;
+: (compile-only?) (flags-addr) c@ %10000 and 0= invert ;
 
 : bl $20 ;
 : here (here) @ ;
@@ -58,10 +60,10 @@
 \ (rp@) points to the next cell, and (docol) pushes a call frame onto the stack.
 : r@ (rp@) 2 cells + @ ;
 
-: if ['] (jmpz) compile, here 0 , ; immediate
-: then here swap ! ; immediate
-: else ['] (jmp) compile, here 0 , swap here swap ! ; immediate
-: exit ['] (exit) compile, ; immediate
+: if ['] (jmpz) compile, here 0 , ; immediate (compile-only)
+: then here swap ! ; immediate (compile-only)
+: else ['] (jmp) compile, here 0 , swap here swap ! ; immediate (compile-only)
+: exit ['] (exit) compile, ; immediate (compile-only)
 : ?dup dup if dup then ;
 
 \ 2. EXCEPTIONS
@@ -165,9 +167,9 @@ create handler 0 ,
 : <  ( n1 n2 -- flag ) 2dup xor 0< if      drop 0< else - 0< then ;
 : u< ( u1 u2 -- flag ) 2dup xor 0< if swap drop 0< else - 0< then ;
 
-: begin here ; immediate
-: while ['] (jmpz) compile, here 0 , swap ; immediate
-: repeat ['] (jmp) compile, , here swap ! ; immediate
+: begin here ; immediate (compile-only)
+: while ['] (jmpz) compile, here 0 , swap ; immediate (compile-only)
+: repeat ['] (jmp) compile, , here swap ! ; immediate (compile-only)
 
 \ Returns the length of the body in cells.
 : (body-len) ( xt -- u ) 3 cells - @ ;
@@ -264,7 +266,7 @@ execute :
 \ Redefine `;` to call `(tail-optimize)` after executing. Compile the current XT
 \ of `;` into the definition.
 ' ; ( xt )
-: ; literal execute (latest) @ (tail-optimize) ; immediate ( )
+: ; literal execute (latest) @ (tail-optimize) ; immediate (compile-only) ( )
 
 \ Micro-optimization. The following defined words *can* use TCO.
 ' and (tail-optimize)
@@ -299,7 +301,7 @@ execute :
     \ The word is immediate.
     compile,
   then
-; immediate
+; immediate (compile-only)
 
 \ 7. POSTPONE DEFINITIONS
 \ =======================
@@ -308,7 +310,7 @@ execute :
 : variable align here 0 , constant ;
 
 ' ['] (hide)
-: ['] parse-name (find) drop postpone literal ; immediate
+: ['] parse-name (find) drop postpone literal ; immediate (compile-only)
 
 \ 7. DIAGNOSTIC CHECKS
 \ ====================
@@ -346,7 +348,9 @@ execute :
   dup while                     ( c-addr u )
     2dup (find) ?dup if         ( c-addr u xt flag )
       2swap 2drop               ( xt flag )
-      0< state @ and if compile, else execute then
+      0< state @ and if compile, else
+      dup (compile-only?) state @ 0= and if -14 throw else
+      execute then then
     else                        ( c-addr u )
       (number?) if              ( n )
         state @ if postpone literal then \ Left on stack if in interpretation mode.

@@ -175,8 +175,28 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             (b"(compile,)", Op::CompileComma),
             (b"(decode)", Op::Decode),
         ];
+        let compile_only: &[&[u8]] = &[
+            b"(lit)",
+            b"(exit)",
+            b"(jmp)",
+            b"(jmpz)",
+            b"(call)",
+            b"(docreate)",
+            b"(s\")",
+            b"(yield)",
+            b"(do)",
+            b"(?do)",
+            b"(+loop)",
+            b"i",
+            b"j",
+            b"unloop",
+        ];
         for (name, op) in opcodes {
-            let xt = self.define(name, Flags::PRIMITIVE)?;
+            let mut flags = Flags::PRIMITIVE;
+            if compile_only.contains(name) {
+                flags = flags | Flags::COMPILE_ONLY;
+            }
+            let xt = self.define(name, flags)?;
             let instr = PackedInstr::new(*op, xt, 0)?;
             self.data.write_cell(xt, instr.into())?;
         }
@@ -258,7 +278,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // original top of stack.
         compile!(
             b"literal",
-            Flags::IMMEDIATE,
+            Flags::IMMEDIATE | Flags::COMPILE_ONLY,
             [L(Op::Lit as usize), N(b","), N(b",")]
         );
 
@@ -269,7 +289,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         // this definition. Here we can compile it directly.
         compile!(
             b"[']",
-            Flags::IMMEDIATE | Flags::BOOTSTRAP,
+            Flags::IMMEDIATE | Flags::BOOTSTRAP | Flags::COMPILE_ONLY,
             [L(BL), N(b"parse"), N(b"(find)"), N(b"drop"), N(b"literal")]
         );
 
@@ -320,7 +340,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         const AND: Token = Inline(&[N(b"(nand)"), N(b"dup"), N(b"(nand)")]);
         compile!(
             b";",
-            Flags::IMMEDIATE,
+            Flags::IMMEDIATE | Flags::COMPILE_ONLY,
             [
                 L(Op::Exit as usize), N(b","),
                 // Calculate and set bodylen.

@@ -28,10 +28,10 @@
 : does> r> (latest) @ cell+ ! ;
 : chars ( -- ) ;
 
-: until ['] (jmpz) compile, , ; immediate
-: again ['] (jmp) compile, , ; immediate
+: until ['] (jmpz) compile, , ; immediate (compile-only)
+: again ['] (jmp) compile, , ; immediate (compile-only)
 
-: [ false state ! ; immediate
+: [ false state ! ; immediate (compile-only)
 : ] true state ! ;
 
 : > swap < ;
@@ -75,10 +75,10 @@
 
 : 2>r ( x1 x2 -- ) ( R: -- x1 x2 )
   ['] swap compile, ['] >r compile, ['] >r compile,
-; immediate
+; immediate (compile-only)
 : 2r> ( -- x1 x2 ) ( R: x1 x2 -- )
   ['] r> compile, ['] r> compile, ['] swap compile,
-; immediate
+; immediate (compile-only)
 : 2over ( x1 x2 x3 x4 -- x1 x2 x3 x4 x1 x2 )
   2>r 2dup 2r> 2swap
 ;
@@ -188,7 +188,7 @@
 
 : char+ 1 + ;
 : char ( "<spaces>name>" -- char ) bl word char+ c@ ;
-: [char] char postpone literal ; immediate
+: [char] char postpone literal ; immediate (compile-only)
 
 \ output
 : cr ( -- ) $0a emit ;
@@ -258,9 +258,9 @@ variable hld
 \ dot commands
 : u. ( u -- ) 0 <# #s #> type space ;
 : . ( n -- ) dup abs 0 <# #s rot sign #> type space ;
-: ." ( C: "ccc<quote>" -- ) ( -- ) postpone s" postpone type ; immediate
+: ." ( C: "ccc<quote>" -- ) ( -- ) postpone s" postpone type ; immediate (compile-only)
 
-: recurse (latest) @ compile, ; immediate
+: recurse (latest) @ compile, ; immediate (compile-only)
 
 \ ==============================================================================
 \ LOOPS
@@ -274,7 +274,7 @@ variable (leave-list)
   (leave-list) @
   0 (leave-list) !
   here
-; immediate
+; immediate (compile-only)
 
 : +loop
   postpone (+loop)
@@ -284,9 +284,9 @@ variable (leave-list)
     swap here swap !
   repeat
   (leave-list) !
-; immediate
+; immediate (compile-only)
 
-: loop 1 postpone literal postpone +loop ; immediate
+: loop 1 postpone literal postpone +loop ; immediate (compile-only)
 
 : leave
   postpone unloop
@@ -294,7 +294,7 @@ variable (leave-list)
   (leave-list) @ ,
   here 1 cells -
   (leave-list) !
-; immediate
+; immediate (compile-only)
 
 : ?do ( n1|u1 n2|u2 -- ) ( R: -- loop-sys )
   ['] (?do) compile,
@@ -304,7 +304,7 @@ variable (leave-list)
   here 1 cells -
   (leave-list) !
   here
-; immediate
+; immediate (compile-only)
 
 : fill ( c-addr u char -- ) rot rot 0 ?do 2dup c! char+ loop 2drop ;
 
@@ -412,10 +412,11 @@ variable (leave-list)
         dup -9 = if drop ." invalid memory address " else
         dup -10 = if drop ." division by zero " else
         dup -13 = if drop ." undefined word: " (diagnostic) else
+        dup -14 = if drop ." interpreting a compile-only word" else
         dup -19 = if drop ." definition name too long: " (diagnostic) else
         dup -20 = if drop ." parsed string overflow " else
         dup -21 = if drop ." unsupported operation " else
-        ." error: " . then then then then then then then then then then then cr
+        ." error: " . then then then then then then then then then then then then cr
       else drop then
       \ Reset compilation state and clear stack.
       postpone [
@@ -432,7 +433,7 @@ variable (leave-list)
   rot if (diagnostic!) -2 throw else 2drop then
 ;
 
-: abort" postpone s" postpone (abort") ; immediate
+: abort" postpone s" postpone (abort") ; immediate (compile-only)
 
 \ TODO: Move to block set later.
 : load begin refill while (interpret) repeat ;
