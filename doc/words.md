@@ -160,6 +160,7 @@ Ferth implements the following words from the Forth-2012 standard.
 [`pick`](https://forth-standard.org/standard/core/PICK)
 [`refill`](https://forth-standard.org/standard/core/REFILL)
 [`true`](https://forth-standard.org/standard/core/TRUE)
+[`unused`](https://forth-standard.org/standard/core/UNUSED)
 [`within`](https://forth-standard.org/standard/core/WITHIN)
 
 ## exception

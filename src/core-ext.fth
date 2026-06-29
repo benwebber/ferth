@@ -6,3 +6,11 @@
 
 : pick cells (sp@) swap + 2 cells + @ ;
 : nip swap drop ;
+
+: unused ( -- u )
+  \ Address of data stack scratch cell (last cell in memory).
+  (sp0) @ 1 cells +
+  s" STACK-CELLS" environment? drop cells -
+  s" RETURN-STACK-CELLS" environment? drop cells -
+  here -
+;
