@@ -6,6 +6,7 @@
 
 : pick cells (sp@) swap + 2 cells + @ ;
 : nip swap drop ;
+: tuck ( x1 x2 -- x2 x1 x2 ) swap over ;
 
 : unused ( -- u )
   \ Address of data stack scratch cell (last cell in memory).
