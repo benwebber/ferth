@@ -1,14 +1,17 @@
 : .( ( "ccc<paren>" -- ) [char] ) parse type ; immediate
 
-: erase 0 fill ;
+: erase ( addr u ) 0 fill ;
 
-: within ( n lo hi -- flag ) over - >r - r> u< ;
+: within ( u1 u2 u3 -- flag ) over - >r - r> u< ;
 
-: pick cells (sp@) swap + 2 cells + @ ;
-: nip swap drop ;
+: pick ( xu...x1 x0 u -- xu...x1 x0 xu ) cells (sp@) swap + 2 cells + @ ;
+: roll ( xu xu-1 ... x0 u -- xu-1 ... x0 xu )
+  dup if swap >r 1- recurse r> swap exit then drop
+;
+: nip ( x1 x2 -- x2 ) swap drop ;
 : tuck ( x1 x2 -- x2 x1 x2 ) swap over ;
 
-: :noname
+: :noname ( C: -- colon-sys ) ( -- xt )
   here 0 (header)
   (latest) @
   -1 state !
@@ -20,4 +23,90 @@
   s" STACK-CELLS" environment? drop cells -
   s" RETURN-STACK-CELLS" environment? drop cells -
   here -
+;
+
+: u> ( u1 u2 -- flag ) swap u< ;
+
+: buffer: ( u "<spaces>name" -- ) create allot ;
+
+: 2r@ ( -- x1 x2 ) ( R: x1 x2 -- x1 x2 ) (rp@) 3 cells + @ (rp@) 2 cells + @ ;
+
+: .r ( n1 n2 -- )
+  swap dup abs 0 <# #s rot sign #>
+  rot over - spaces type
+;
+: u.r ( u1 u2 -- )
+  swap 0 <# #s #>
+  rot over - spaces type
+;
+: holds ( addr u -- ) begin dup while 1- 2dup + c@ hold repeat 2drop ;
+
+\ Compile an inline counted string. At runtime, push its address.
+\
+\ The result looks like this in memory:
+\
+\                         addr             dest
+\                         v                v
+\   [Lit][addr][Jmp][dest][11][foo bar baz][...]
+\
+\
+\ `Lit` pushes `addr` and then `Jmp` jumps past the string to `dest`.
+: c" ( C: "ccc<quote>" -- ) ( -- c-addr )
+  \ Reserve the `Lit` and `Jmp` placeholders.
+  ['] (lit) compile, here 0 ,   ( addr-slot )
+  ['] (jmp) compile, here 0 ,   ( addr-slot dest-slot )
+  here                          ( addr-slot dest-slot addr )
+  [char] " parse                ( ... src len )
+  \ Store the length byte.
+  dup c,
+  \ Copy the characters after the count byte.
+  here swap dup allot move      ( addr-slot dest-slot addr )
+  align
+  \ Patch `Lit`.
+  rot !                         ( dest-slot )
+  \ Patch `Jmp`.
+  here swap !                   ( )
+; immediate (compile-only)
+
+\ case
+\
+\ `case` structures expand to a nested `if ... then`. `case` pushes an
+\ accumulator onto the stack. Each `of` increments the accumulator. `endcase`
+\ compiles a `then` for each `of`.
+\
+\ Lifted from
+\ <https://forth-standard.org/standard/rationale#paragraph.A.3.2.3.2>.
+0 constant case immediate (compile-only)
+
+: of
+  1+
+  >r
+  postpone over postpone =
+  postpone if
+  postpone drop
+  r>
+; immediate (compile-only)
+
+: endof
+  >r
+  postpone else
+  r>
+; immediate (compile-only)
+
+: endcase
+  postpone drop
+  0 ?do
+    postpone then
+  loop
+; immediate (compile-only)
+
+: source-id ( -- 0|-1 ) (source-id) @ ;
+: save-input ( -- xn...x1 n ) >in @ source source-id 4 ;
+: restore-input ( xn...x1 n -- flag )
+  depth > if -4 throw then
+  (source-id) !
+  (source-len) !
+  (source-addr) !
+  >in !
+  false
 ;
