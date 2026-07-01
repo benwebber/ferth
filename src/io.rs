@@ -83,12 +83,16 @@ impl Io for BufIo<'_> {
         let mut len = 0;
         while self.input_pos < self.input.len() && len < buf.len() {
             let c = self.input[self.input_pos];
-            buf[len] = c;
-            len += 1;
             self.input_pos += 1;
             if c == b'\n' {
                 break;
             }
+            buf[len] = c;
+            len += 1;
+        }
+        // Strip end of line characters.
+        if len > 0 && buf[len - 1] == b'\r' {
+            len -= 1;
         }
         Ok(Some(len))
     }
@@ -131,7 +135,14 @@ impl Io for StdIo {
         if n == 0 {
             return Ok(None);
         }
-        let len = n.min(buf.len());
+        // Strip end of line characters.
+        if line.last() == Some(&b'\n') {
+            line.pop();
+            if line.last() == Some(&b'\r') {
+                line.pop();
+            }
+        }
+        let len = line.len().min(buf.len());
         buf[..len].copy_from_slice(&line[..len]);
         Ok(Some(len))
     }

@@ -63,11 +63,10 @@ impl Io for ReplIo {
         match self.editor.read_line("")? {
             Some(line) => {
                 let bytes = line.as_bytes();
-                let len = bytes.len().min(buf.len().saturating_sub(1));
+                let len = bytes.len().min(buf.len());
                 buf[..len].copy_from_slice(&bytes[..len]);
-                // rustyline strips `\n`. `refill` and `parse` currently expect it.
-                buf[len] = b'\n';
-                Ok(Some(len + 1))
+                // rustyline already strips end of line characters.
+                Ok(Some(len))
             }
             None => Ok(None),
         }
