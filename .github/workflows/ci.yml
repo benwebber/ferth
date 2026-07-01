@@ -10,22 +10,52 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: no_std-safe
+          - name: no_std-safe-x86_64
+            target: x86_64-unknown-linux-gnu
             opts: "--no-default-features"
-          - name: no_std-unsafe
+          - name: no_std-safe-i686
+            target: i686-unknown-linux-gnu
+            opts: "--no-default-features"
+          - name: no_std-unsafe-x86_64
+            target: x86_64-unknown-linux-gnu
             opts: "--features unsafe"
-          - name: std-safe
+          - name: no_std-unsafe-i686
+            target: i686-unknown-linux-gnu
+            opts: "--features unsafe"
+          - name: std-safe-x86_64
+            target: x86_64-unknown-linux-gnu
             opts: "--features std"
-          - name: std-unsafe
+          - name: std-safe-i686
+            target: i686-unknown-linux-gnu
+            opts: "--features std"
+          - name: std-unsafe-x86_64
+            target: x86_64-unknown-linux-gnu
             opts: "--features std,unsafe"
-          - name: repl-safe
+          - name: std-unsafe-i686
+            target: i686-unknown-linux-gnu
+            opts: "--features std,unsafe"
+          - name: repl-safe-x86_64
+            target: x86_64-unknown-linux-gnu
             opts: "--features repl"
-          - name: repl-unsafe
+          - name: repl-safe-i686
+            target: i686-unknown-linux-gnu
+            opts: "--features repl"
+          - name: repl-unsafe-x86_64
+            target: x86_64-unknown-linux-gnu
+            opts: "--features repl,unsafe"
+          - name: repl-unsafe-i686
+            target: i686-unknown-linux-gnu
             opts: "--features repl,unsafe"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: "true"
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          targets: ${{ matrix.target }}
+      - if: matrix.target == 'i686-unknown-linux-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib libc6-dev-i386
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
-      - run: cargo test ${{ matrix.opts }}
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo test --target ${{ matrix.target }} ${{ matrix.opts }}
