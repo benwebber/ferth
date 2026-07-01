@@ -4,6 +4,8 @@ Ferth implements the following words from the Forth-2012 standard.
 
 ## core
 
+All words:
+
 [`!`](https://forth-standard.org/standard/core/Store)
 [`#>`](https://forth-standard.org/standard/core/num-end)
 [`#`](https://forth-standard.org/standard/core/num)
@@ -140,30 +142,61 @@ Ferth implements the following words from the Forth-2012 standard.
 
 ### core-ext
 
+All words except [`[compile]`](https://forth-standard.org/standard/core/BracketCOMPILE):
+
 [`.(`](https://forth-standard.org/standard/core/Dotp)
+[`.r`](https://forth-standard.org/standard/core/DotR)
 [`0<>`](https://forth-standard.org/standard/core/Zerone)
 [`0>`](https://forth-standard.org/standard/core/Zeromore)
 [`2>r`](https://forth-standard.org/standard/core/TwotoR)
 [`2r>`](https://forth-standard.org/standard/core/TwoRfrom)
+[`2r@`](https://forth-standard.org/standard/core/TwoRFetch)
 [`:noname`](https://forth-standard.org/standard/core/ColonNONAME)
 [`<>`](https://forth-standard.org/standard/core/ne)
 [`?do`](https://forth-standard.org/standard/core/qDO)
 [`\`](https://forth-standard.org/standard/core/bs)
+[`action-of`](https://forth-standard.org/standard/core/ACTION-OF)
 [`again`](https://forth-standard.org/standard/core/AGAIN)
+[`buffer:`](https://forth-standard.org/standard/core/BUFFERColon)
+[`c"`](https://forth-standard.org/standard/core/Cq)
+[`case`](https://forth-standard.org/standard/core/CASE)
 [`compile,`](https://forth-standard.org/standard/core/COMPILEComma)
+[`defer!`](https://forth-standard.org/standard/core/DEFERStore)
+[`defer@`](https://forth-standard.org/standard/core/DEFERFetch)
+[`defer`](https://forth-standard.org/standard/core/DEFER)
+[`endcase`](https://forth-standard.org/standard/core/ENDCASE)
+[`endof`](https://forth-standard.org/standard/core/ENDOF)
 [`erase`](https://forth-standard.org/standard/core/ERASE)
 [`false`](https://forth-standard.org/standard/core/FALSE)
 [`hex`](https://forth-standard.org/standard/core/HEX)
+[`holds`](https://forth-standard.org/standard/core/HOLDS)
+[`is`](https://forth-standard.org/standard/core/IS)
+[`marker`](https://forth-standard.org/standard/core/MARKER)
 [`nip`](https://forth-standard.org/standard/core/NIP)
+[`of`](https://forth-standard.org/standard/core/OF)
 [`pad`](https://forth-standard.org/standard/core/PAD)
 [`parse-name`](https://forth-standard.org/standard/core/PARSE-NAME)
 [`parse`](https://forth-standard.org/standard/core/PARSE)
 [`pick`](https://forth-standard.org/standard/core/PICK)
 [`refill`](https://forth-standard.org/standard/core/REFILL)
+[`restore-input`](https://forth-standard.org/standard/core/RESTORE-INPUT)
+[`roll`](https://forth-standard.org/standard/core/ROLL)
+[`s\"`](https://forth-standard.org/standard/core/Seq)
+[`save-input`](https://forth-standard.org/standard/core/SAVE-INPUT)
+[`source-id`](https://forth-standard.org/standard/core/SOURCE-ID)
+[`to`](https://forth-standard.org/standard/core/TO)
 [`true`](https://forth-standard.org/standard/core/TRUE)
 [`tuck`](https://forth-standard.org/standard/core/TUCK)
+[`u.r`](https://forth-standard.org/standard/core/UDotR)
+[`u>`](https://forth-standard.org/standard/core/Umore)
 [`unused`](https://forth-standard.org/standard/core/UNUSED)
+[`value`](https://forth-standard.org/standard/core/VALUE)
 [`within`](https://forth-standard.org/standard/core/WITHIN)
+
+## double
+
+[`dabs`](https://forth-standard.org/standard/double/DABS)
+[`dnegate`](https://forth-standard.org/standard/double/DNEGATE)
 
 ## exception
 
