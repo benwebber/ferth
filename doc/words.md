@@ -142,7 +142,7 @@ All words:
 
 ### core-ext
 
-All words except [`[compile]`](https://forth-standard.org/standard/core/BracketCOMPILE):
+All words:
 
 [`.(`](https://forth-standard.org/standard/core/Dotp)
 [`.r`](https://forth-standard.org/standard/core/DotR)
@@ -154,6 +154,7 @@ All words except [`[compile]`](https://forth-standard.org/standard/core/BracketC
 [`:noname`](https://forth-standard.org/standard/core/ColonNONAME)
 [`<>`](https://forth-standard.org/standard/core/ne)
 [`?do`](https://forth-standard.org/standard/core/qDO)
+[`[compile]`](https://forth-standard.org/standard/core/BracketCOMPILE)
 [`\`](https://forth-standard.org/standard/core/bs)
 [`action-of`](https://forth-standard.org/standard/core/ACTION-OF)
 [`again`](https://forth-standard.org/standard/core/AGAIN)

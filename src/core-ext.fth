@@ -151,3 +151,5 @@
     source >in @ pad (parse\") >in !
   then
 ; immediate
+
+: [compile] ' compile, ; immediate (compile-only)
