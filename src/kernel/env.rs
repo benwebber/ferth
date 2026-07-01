@@ -54,7 +54,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            hold: 64,
+            // TODO: Validate minimum size of `/hold` (2*bits+2).
+            hold: 2 * (usize::BITS as usize) + 2,
             pad: 84,
             return_stack_cells: 64,
             stack_cells: 64,

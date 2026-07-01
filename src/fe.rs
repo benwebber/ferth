@@ -166,7 +166,11 @@ mod tests {
             br#"s" /COUNTED-STRING" environment?"#,
             u8::MAX as usize,
         );
-        single(&mut fe, br#"s" /HOLD" environment?"#, 64);
+        single(
+            &mut fe,
+            br#"s" /HOLD" environment?"#,
+            2 * (usize::BITS as usize) + 2,
+        );
         single(&mut fe, br#"s" /PAD" environment?"#, 84);
         single(
             &mut fe,

@@ -208,7 +208,7 @@
 \   https://forth-standard.org/standard/usage#subsubsection.3.2.1.3
 \   https://www.jimbrooks.org/programming/forth/forthPicturedNumericOutput.php
 variable hld
-: pad ( -- c-addr ) here (/pad) + ;
+: pad ( -- c-addr ) here (/hold) + ;
 : hold ( char -- )
   hld @ 1-   ( char hld-1 )
   dup hld !  ( char hld-1 )
@@ -225,7 +225,7 @@ variable hld
   (digit) hold  ( qlo )
   r>            ( qlo qhi ) ( R: )
 ;
-: <# ( -- ) pad (/hold) + hld ! ;
+: <# ( -- ) pad hld ! ;
 : #s ( ud1 -- ud2 )
   begin
     #           ( ud2 )
@@ -235,7 +235,7 @@ variable hld
 : #> ( xd -- c-addr u )
   2drop      ( )
   hld @      ( c-addr )
-  pad (/hold) +   ( c-addr bufend )
+  pad        ( c-addr bufend )
   over -     ( c-addr u )
 ;
 : sign ( n -- ) 0< if [char] - hold then ;
