@@ -170,6 +170,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             (b"(call)", Op::Call),
             (b"(yield)", Op::Yield),
             (b"(parse)", Op::Parse),
+            (br#"(parse\")"#, Op::ParseEscaped),
             (b"(number)", Op::Number),
             (b"(>number)", Op::ToNumber),
             (b"(compile,)", Op::CompileComma),

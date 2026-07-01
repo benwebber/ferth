@@ -27,6 +27,7 @@ impl_ior!(
     PARSED_STRING_OVERFLOW = -18,
     DEFINITION_NAME_TOO_LONG = -19,
     ADDRESS_ALIGNMENT_EXCEPTION = -23,
+    INVALID_ESCAPE = -256,
 );
 
 impl From<Ior> for isize {
@@ -78,6 +79,8 @@ impl Error {
                 VmError::DivisionByZero => Throw(Ior::DIVISION_BY_ZERO),
                 VmError::AddressOutOfRange(_) => Throw(Ior::INVALID_MEMORY_ADDRESS),
                 VmError::AddressMisaligned(_) => Throw(Ior::ADDRESS_ALIGNMENT_EXCEPTION),
+                VmError::ParsedStringOverflow => Throw(Ior::PARSED_STRING_OVERFLOW),
+                VmError::InvalidEscape(_) => Throw(Ior::INVALID_ESCAPE),
             },
             Error::Io | Error::Kernel(_) => Abort,
         }

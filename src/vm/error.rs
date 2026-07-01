@@ -20,6 +20,8 @@ pub enum VmError {
     InvalidOpCode(u8),
     /// Attempted to divide by zero.
     DivisionByZero,
+    ParsedStringOverflow,
+    InvalidEscape(u8),
 }
 
 impl core::error::Error for VmError {}
@@ -40,6 +42,8 @@ impl core::fmt::Display for VmError {
             }
             Self::InvalidOpCode(op) => write!(f, "invalid opcode: 0x{op:02x}"),
             Self::DivisionByZero => write!(f, "division by zero"),
+            Self::ParsedStringOverflow => write!(f, "parsed string overflow"),
+            Self::InvalidEscape(c) => write!(f, "invalid escape: 0x{c:02x}"),
         }
     }
 }

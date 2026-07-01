@@ -137,3 +137,17 @@
 : action-of ( "<spaces>name" -- xt )
   state @ if postpone ['] postpone defer@ else ' defer@ then
 ; immediate
+
+\ Similar to s", but calls `(parse\")` to parse escape sequences.
+: s\" ( "ccc<quote>" -- )
+  state @ if
+    ['] (s") compile,
+    source >in @ here cell+   ( src srclen pos dest )
+    (parse\")                 ( dest u pos' )
+    >in !                     ( dest u )
+    nip                       ( u )
+    dup , allot align
+  else
+    source >in @ pad (parse\") >in !
+  then
+; immediate

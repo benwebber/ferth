@@ -335,6 +335,8 @@ ops! {
     /// (decode) ( ip -- op operand next )
     /// ```
     Decode = 0x29,
+
+    ParseEscaped = 0x2a,
 }
 
 #[cfg(test)]

@@ -579,6 +579,19 @@ impl Vm {
                 self.push(data, len)?;
                 self.push(data, to_in)?;
             }
+            Op::ParseEscaped => {
+                let dest = self.pop(data)?;
+                let pos = self.pop(data)?;
+                let srclen = self.pop(data)?;
+                let src = self.pop(data)?;
+                let mut buf = [0u8; 256];
+                let bytes = data.read(src + pos, srclen - pos)?;
+                let (read, written) = parser::parse_escaped(bytes, &mut buf)?;
+                data.write(dest, &buf[..written])?;
+                self.push(data, dest)?;
+                self.push(data, written)?;
+                self.push(data, pos + read)?;
+            }
             Op::Number => {
                 let base = self.pop(data)?;
                 let len = self.pop(data)?;
