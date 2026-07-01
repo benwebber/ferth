@@ -121,3 +121,9 @@
   postpone (marker)
   ['] (exit) compile,
 ;
+
+: value ( x "<spaces>name" -- ) create , does> @ ;
+: to ( x "<spaces>name" -- )
+  ' >body
+  state @ if postpone literal postpone ! else ! then
+; immediate
