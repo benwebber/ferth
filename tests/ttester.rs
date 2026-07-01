@@ -34,7 +34,7 @@ macro_rules! ttester {
             // `&dest` used below
             let result = (|| -> ferth::Result<()> {
                 let io = BufIo::new(&src, &mut dest);
-                let mut fe = Fe::new([0u8; 65536], io)?;
+                let mut fe = Fe::new(vec![0u8; 1 << 17], io)?;
                 fe.load()
             })();
             result.map_err(|error| {
@@ -51,4 +51,10 @@ ttester!(
     test_core,
     "forth2012-test-suite/src/core.fr",
     "forth2012-test-suite/src/coreplustest.fth"
+);
+ttester!(
+    test_coreext,
+    "forth2012-test-suite/src/errorreport.fth",
+    "forth2012-test-suite/src/utilities.fth",
+    "forth2012-test-suite/src/coreexttest.fth"
 );
