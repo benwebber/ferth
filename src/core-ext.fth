@@ -110,3 +110,14 @@
   >in !
   false
 ;
+
+: (marker) ( addr addr ) (here) ! (latest) ! ;
+
+: marker ( "<spaces>name" -- )
+  here (latest) @     ( here latest )
+  parse-name (header)
+  postpone literal    ( here )
+  postpone literal    ( )
+  postpone (marker)
+  ['] (exit) compile,
+;
