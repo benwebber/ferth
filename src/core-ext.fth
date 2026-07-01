@@ -127,3 +127,13 @@
   ' >body
   state @ if postpone literal postpone ! else ! then
 ; immediate
+
+: defer ( "<spaces>name" -- ) create ['] abort compile, does> @ execute ;
+: defer! ( xt2 xt1 -- ) >body ! ;
+: defer@ ( xt1 -- xt2 ) >body @ ;
+: is ( xt "<spaces>name" -- )
+  state @ if postpone ['] postpone defer! else ' defer! then
+; immediate
+: action-of ( "<spaces>name" -- xt )
+  state @ if postpone ['] postpone defer@ else ' defer@ then
+; immediate
