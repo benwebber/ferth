@@ -436,4 +436,4 @@ variable (leave-list)
 : abort" postpone s" postpone (abort") ; immediate (compile-only)
 
 \ TODO: Move to block set later.
-: load begin refill while (interpret) repeat ;
+: (load) begin refill while (interpret) repeat ;

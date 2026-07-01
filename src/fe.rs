@@ -74,7 +74,7 @@ impl<M: Mem, I: Io> Fe<M, I, Loading> {
                 .ok_or(KernelError::MissingEntryPoint(name).into())
         };
         let state = Ready {
-            xt_load: xt("load")?,
+            xt_load: xt("(load)")?,
             xt_quit: xt("quit")?,
         };
         fe.evaluate(b"(check-bootstrap)")?;
