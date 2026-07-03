@@ -43,29 +43,31 @@
 
 \ Compile an inline counted string. At runtime, push its address.
 \
-\ The result looks like this in memory:
+\ c" compiles a `Str` instruction like s". The result looks like this in memory:
 \
-\                         addr             dest
-\                         v                v
-\   [Lit][addr][Jmp][dest][11][foo bar baz][...]
+\            addr
+\            v
+\   [Str][12][11][foo bar baz][...]
 \
-\
-\ `Lit` pushes `addr` and then `Jmp` jumps past the string to `dest`.
+\ The first cell (12) is the length of the entire counted string (including its
+\ own length byte).
 : c" ( C: "ccc<quote>" -- ) ( -- c-addr )
-  \ Reserve the `Lit` and `Jmp` placeholders.
-  ['] (lit) compile, here 0 ,   ( addr-slot )
-  ['] (jmp) compile, here 0 ,   ( addr-slot dest-slot )
-  here                          ( addr-slot dest-slot addr )
-  [char] " parse                ( ... src len )
-  \ Store the length byte.
-  dup c,
-  \ Copy the characters after the count byte.
-  here swap dup allot move      ( addr-slot dest-slot addr )
+  ['] (s") compile,
+  [char] " parse    ( src len )
+  \ Compile payload length.
+  dup 1+ ,
+  \ Save start of counted string.
+  here >r           ( R: addr )
+  \ Reserve count byte and characters.
+  dup 1+ allot
+  \ Store count byte.
+  r@ c!             ( src ) ( R: addr )
+  \ Copy characters after count byte.
+  r@ 1+ r@ c@ move
+  r> drop           ( R: )
   align
-  \ Patch `Lit`.
-  rot !                         ( dest-slot )
-  \ Patch `Jmp`.
-  here swap !                   ( )
+  \ When executed, drop the length pushed by `Str`.
+  ['] drop compile,
 ; immediate (compile-only)
 
 \ case
