@@ -13,8 +13,13 @@ fn main() {
         file,
     } = parse_args();
     let io = make_io();
-    let mut fe =
-        Fe::with_config(vec![0u8; mem], io, config).expect("failed to initialize interpreter");
+    let mut fe = match Fe::with_config(vec![0u8; mem], io, config) {
+        Ok(fe) => fe,
+        Err(e) => {
+            eprintln!("{e}");
+            exit(1);
+        }
+    };
 
     if let Some(code) = command {
         if let Err(e) = fe.evaluate(code) {

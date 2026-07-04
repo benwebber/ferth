@@ -11,7 +11,7 @@ use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 use super::builtins::{emit, find, header, key, refill};
 use super::env;
 use super::layout;
-use super::{Builtin, Kernel, MAX_BUILTINS};
+use super::{Builtin, Kernel, MAX_BUILTINS, MIN_DATA_SPACE};
 use crate::packed::PackedInstr;
 
 use env::Environment;
@@ -37,23 +37,22 @@ enum Token {
 }
 
 impl<M: Mem, I: Io> Kernel<M, I, Booting> {
-    pub fn new(mem: M, io: I, config: Config) -> Self {
+    pub fn new(mem: M, io: I, config: Config) -> Result<Self> {
         let env = Environment {
             config,
             ..Default::default()
         };
         let data = Data::new(mem);
+        if data.size() < MIN_DATA_SPACE {
+            return Err(KernelError::DataSpaceTooSmall(MIN_DATA_SPACE).into());
+        }
         let vm = Vm::new(
             data.size(),
             env.config.stack_cells,
             env.config.return_stack_cells,
-        );
+        )?;
         let layout_base = Vm::DATA_BASE;
-        assert!(
-            layout_base + Layout::DATA <= vm.data_top(),
-            "data space too small for system"
-        );
-        Self {
+        Ok(Self {
             vm,
             data,
             io,
@@ -62,7 +61,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
             layout_base,
             env,
             state: Booting {},
-        }
+        })
     }
 
     pub fn boot(mut self) -> Result<Kernel<M, I, Booted>> {
@@ -701,6 +700,7 @@ mod tests {
     #[test]
     fn tag_boot_words_with_kind() {
         let mut k = Kernel::new([0u8; 65536], NoIo, Config::default())
+            .unwrap()
             .boot()
             .unwrap();
         let mut flags = |name: &[u8]| {

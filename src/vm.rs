@@ -162,16 +162,16 @@ impl Vm {
     /// default return address.
     pub const DATA_BASE: usize = SIZE;
 
-    pub fn new(mem_size: usize, ds_len: usize, rs_len: usize) -> Self {
-        assert!(
-            mem_size >= SIZE * (1 + ds_len + rs_len),
-            "memory too small for stacks"
-        );
+    pub fn new(mem_size: usize, ds_len: usize, rs_len: usize) -> VmResult<Self> {
+        let mem_min = SIZE * (2 + ds_len + rs_len);
+        if mem_size < mem_min {
+            return Err(VmError::MemoryTooSmall(mem_min));
+        }
         let sp0 = mem_size - 2 * SIZE; // Reserve top cell as scratch cell.
         let sp_min = sp0 - ds_len * SIZE;
         let rp0 = sp_min;
         let rp_min = rp0 - rs_len * SIZE;
-        Self {
+        Ok(Self {
             ip: 0,
             sp: sp0,
             tos: 0,
@@ -180,7 +180,7 @@ impl Vm {
             sp_min,
             rp0,
             rp_min,
-        }
+        })
     }
 
     /// Reset stacks.
@@ -712,7 +712,7 @@ mod tests {
     const MEM: usize = 1024;
 
     fn vm() -> (Vm, Data<[u8; MEM]>) {
-        let v = Vm::new(MEM, DS_LEN, RS_LEN);
+        let v = Vm::new(MEM, DS_LEN, RS_LEN).unwrap();
         let d = Data::new([0u8; MEM]);
         (v, d)
     }

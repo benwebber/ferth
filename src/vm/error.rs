@@ -22,6 +22,10 @@ pub enum VmError {
     DivisionByZero,
     ParsedStringOverflow,
     InvalidEscape(u8),
+    /// The memory is too small for the VM state.
+    ///
+    /// Contains the minimum memory size in bytes.
+    MemoryTooSmall(usize),
 }
 
 impl core::error::Error for VmError {}
@@ -44,6 +48,7 @@ impl core::fmt::Display for VmError {
             Self::DivisionByZero => write!(f, "division by zero"),
             Self::ParsedStringOverflow => write!(f, "parsed string overflow"),
             Self::InvalidEscape(c) => write!(f, "invalid escape: 0x{c:02x}"),
+            Self::MemoryTooSmall(n) => write!(f, "memory must be at least {n} bytes"),
         }
     }
 }

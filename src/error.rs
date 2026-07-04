@@ -94,7 +94,8 @@ impl Error {
                 VmError::StackOverflow
                 | VmError::ReturnStackOverflow
                 // A malformed word should terminate the program.
-                | VmError::InvalidOpCode(_) => Abort,
+                | VmError::InvalidOpCode(_)
+                | VmError::MemoryTooSmall(_) => Abort,
                 VmError::StackUnderflow => Throw(Ior::STACK_UNDERFLOW),
                 VmError::ReturnStackUnderflow => Throw(Ior::RETURN_STACK_UNDERFLOW),
                 VmError::DivisionByZero => Throw(Ior::DIVISION_BY_ZERO),
@@ -111,14 +112,18 @@ impl Error {
 /// A kernel error.
 #[derive(Debug, PartialEq)]
 pub enum KernelError {
-    /// Irrecoverable. No builtin exists with the wrapped index.
+    /// No builtin exists with the wrapped index.
     InvalidBuiltin(u8),
-    /// Irrecoverable. The builtins table is full.
+    /// The builtins table is full.
     BuiltinTableFull,
-    /// Irrecoverable. A runtime entry point (e.g. `quit`) does not exist.
+    /// A runtime entry point (e.g. `quit`) does not exist.
     MissingEntryPoint(&'static str),
-    /// Irrecoverable. An *xt* does not fit in the bytes reserved for it in a packed instruction cell.
+    /// An *xt* does not fit in the bytes reserved for it in a packed instruction cell.
     XtTooLarge(usize),
+    /// The data space is too small to boot the system.
+    ///
+    /// Contains the minimum size of the data space in bytes.
+    DataSpaceTooSmall(usize),
 }
 
 impl From<KernelError> for Error {
@@ -151,6 +156,7 @@ impl core::fmt::Display for KernelError {
             Self::BuiltinTableFull => write!(f, "builtin table full"),
             Self::MissingEntryPoint(name) => write!(f, "missing entry point: {name}"),
             Self::XtTooLarge(xt) => write!(f, "xt too large to pack: {xt:#x}"),
+            Self::DataSpaceTooSmall(n) => write!(f, "data space must be at least {n} bytes"),
         }
     }
 }

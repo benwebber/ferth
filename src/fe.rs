@@ -58,7 +58,7 @@ impl<M: Mem, I: Io> Fe<M, I, Loading> {
     /// Build an [`Fe`] with a specific environment configuration.
     pub fn with_config(mem: M, io: I, config: Config) -> Result<Fe<M, I, Ready>> {
         let mut fe = Fe {
-            kernel: Kernel::new(mem, io, config).boot()?,
+            kernel: Kernel::new(mem, io, config)?.boot()?,
             state: Loading {},
         };
         #[allow(unused_variables)] // name in debug!

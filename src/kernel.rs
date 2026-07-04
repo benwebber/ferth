@@ -23,6 +23,12 @@ pub use env::Config;
 const MAX_WORD_LEN: usize = 31;
 /// The maximum number of builtins in the builtins table.
 const MAX_BUILTINS: usize = 256;
+/// The minimum size of the data space, in bytes.
+///
+/// 2<sup>15</sup> is a rough bound. As of 822297c, the real size of the kernel and VM state is
+/// around 45 000 bytes. In the future we will implement an image format. That format can encode
+/// the size of the system. We could load the REPL system from a compiled image.
+pub(crate) const MIN_DATA_SPACE: usize = 2 << 15;
 
 pub(crate) type Builtin<M, I> = fn(&mut Context<'_, M, I>) -> Result<()>;
 
