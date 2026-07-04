@@ -507,10 +507,19 @@ impl Vm {
             }
             Op::Str => {
                 let len = data.read_cell(self.ip)?;
-                self.ip += SIZE;
+                self.ip = self
+                    .ip
+                    .checked_add(SIZE)
+                    .ok_or(VmError::AddressOutOfRange(self.ip))?;
                 self.push(data, self.ip)?;
                 self.push(data, len)?;
-                self.ip += (len + SIZE - 1) & !(SIZE - 1);
+                let padded = len
+                    .checked_next_multiple_of(SIZE)
+                    .ok_or(VmError::AddressOutOfRange(self.ip))?;
+                self.ip = self
+                    .ip
+                    .checked_add(padded)
+                    .ok_or(VmError::AddressOutOfRange(self.ip))?;
             }
             Op::LShift => {
                 binary!(self, data, |x, u| x.wrapping_shl(u as u32));
@@ -572,14 +581,23 @@ impl Vm {
                         c == delim
                     }
                 };
-                while to_in < srclen && !is_delim(data.read_char(src + to_in)?) {
+                while to_in < srclen {
+                    let addr = src
+                        .checked_add(to_in)
+                        .ok_or(VmError::AddressOutOfRange(src))?;
+                    if is_delim(data.read_char(addr)?) {
+                        break;
+                    }
                     to_in += 1;
                 }
                 let len = to_in - start;
                 if to_in < srclen {
                     to_in += 1;
                 }
-                self.push(data, src + start)?;
+                let caddr = src
+                    .checked_add(start)
+                    .ok_or(VmError::AddressOutOfRange(src))?;
+                self.push(data, caddr)?;
                 self.push(data, len)?;
                 self.push(data, to_in)?;
             }
@@ -589,7 +607,10 @@ impl Vm {
                 let srclen = self.pop(data)?;
                 let src = self.pop(data)?;
                 let mut buf = [0u8; 256];
-                let bytes = data.read(src + pos, srclen - pos)?;
+                let addr = src
+                    .checked_add(pos)
+                    .ok_or(VmError::AddressOutOfRange(src))?;
+                let bytes = data.read(addr, srclen.saturating_sub(pos))?;
                 let (read, written) = parser::parse_escaped(bytes, &mut buf)?;
                 data.write(dest, &buf[..written])?;
                 self.push(data, dest)?;
@@ -635,12 +656,12 @@ impl Vm {
                 if flags.contains(Flags::PRIMITIVE) {
                     let x = data.read_cell(xt)?;
                     data.write_cell(h, x)?;
-                    h += SIZE;
+                    h = h.checked_add(SIZE).ok_or(VmError::AddressOutOfRange(h))?;
                 } else {
                     data.write_cell(h, Op::Call as usize)?;
-                    h += SIZE;
+                    h = h.checked_add(SIZE).ok_or(VmError::AddressOutOfRange(h))?;
                     data.write_cell(h, xt)?;
-                    h += SIZE;
+                    h = h.checked_add(SIZE).ok_or(VmError::AddressOutOfRange(h))?;
                 }
                 self.push(data, h)?;
             }
@@ -655,12 +676,30 @@ impl Vm {
                     | Op::Call
                     | Op::DoCreate
                     | Op::PlusLoop
-                    | Op::QDo => (data.read_cell(ip + SIZE)?, ip + 2 * SIZE),
-                    Op::Str => {
-                        let len = data.read_cell(ip + SIZE)?;
-                        (len, ip + 2 * SIZE + len.next_multiple_of(SIZE))
+                    | Op::QDo => {
+                        let operand = ip.checked_add(SIZE).ok_or(VmError::AddressOutOfRange(ip))?;
+                        let next = ip
+                            .checked_add(2 * SIZE)
+                            .ok_or(VmError::AddressOutOfRange(ip))?;
+                        (data.read_cell(operand)?, next)
                     }
-                    _ => (0, ip + SIZE),
+                    Op::Str => {
+                        let len_addr =
+                            ip.checked_add(SIZE).ok_or(VmError::AddressOutOfRange(ip))?;
+                        let len = data.read_cell(len_addr)?;
+                        let padded = len
+                            .checked_next_multiple_of(SIZE)
+                            .ok_or(VmError::AddressOutOfRange(ip))?;
+                        let next = ip
+                            .checked_add(2 * SIZE)
+                            .and_then(|n| n.checked_add(padded))
+                            .ok_or(VmError::AddressOutOfRange(ip))?;
+                        (len, next)
+                    }
+                    _ => (
+                        0,
+                        ip.checked_add(SIZE).ok_or(VmError::AddressOutOfRange(ip))?,
+                    ),
                 };
                 self.push(data, op as usize)?;
                 self.push(data, operand)?;

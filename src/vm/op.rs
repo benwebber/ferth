@@ -308,35 +308,40 @@ ops! {
     /// ```
     Parse = 0x25,
 
+    /// Parse a token from the input buffer and write it to `dest-addr`, processing escape codes.
+    ///
+    /// ```text
+    /// (parse\") ( source-addr source-len pos dest-addr -- c-addr u pos' )
+    /// ```
+    ParseEscaped = 0x26,
+
     /// Attempt to convert a string to a number.
     ///
     /// ```text
     /// (number) ( c-addr u base -- n 1 | c-addr u 0 )
     /// ```
-    Number = 0x26,
+    Number = 0x27,
 
     /// Accumulate digits from a string into a double-cell number.
     ///
     /// ```text
     /// (>number) ( lo hi c-addr u base -- lo' hi' c-addr' u' )
     /// ```
-    ToNumber = 0x27,
+    ToNumber = 0x28,
 
     /// Compile a call to *xt* to the current definition.
     ///
     /// ```text
     /// (compile,) ( xt here -- here' )
     /// ```
-    CompileComma = 0x28,
+    CompileComma = 0x29,
 
     /// Decode the packed instruction at *ip*.
     ///
     /// ```text
     /// (decode) ( ip -- op operand next )
     /// ```
-    Decode = 0x29,
-
-    ParseEscaped = 0x2a,
+    Decode = 0x2a,
 }
 
 #[cfg(test)]
