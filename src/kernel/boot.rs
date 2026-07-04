@@ -51,7 +51,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         let layout_base = Vm::DATA_BASE;
         assert!(
             layout_base + Layout::DATA <= vm.data_top(),
-            "data space too small for VM"
+            "data space too small for system"
         );
         Self {
             vm,

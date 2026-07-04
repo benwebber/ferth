@@ -144,6 +144,10 @@ impl Vm {
     pub const DATA_BASE: usize = SIZE;
 
     pub fn new(mem_size: usize, ds_len: usize, rs_len: usize) -> Self {
+        assert!(
+            mem_size >= SIZE * (1 + ds_len + rs_len),
+            "memory too small for stacks"
+        );
         let sp0 = mem_size - 2 * SIZE; // Reserve top cell as scratch cell.
         let sp_min = sp0 - ds_len * SIZE;
         let rp0 = sp_min;
