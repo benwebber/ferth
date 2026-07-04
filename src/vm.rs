@@ -138,6 +138,25 @@ pub struct Vm {
     rp_min: usize,
 }
 
+/// Read a source specification from the data space.
+///
+/// Given a source address, source length, and offset (i.e., `source >in @`), return the start
+/// address and the remaining bytes in the parse area.
+///
+/// Used by `Parse` and `ParseEscaped`.
+fn source_slice<M: Mem>(
+    data: &Data<M>,
+    source_addr: usize,
+    source_len: usize,
+    pos: usize,
+) -> VmResult<(usize, &[u8])> {
+    let addr = source_addr
+        .checked_add(pos)
+        .ok_or(VmError::AddressOutOfRange(source_addr))?;
+    let bytes = data.read(addr, source_len.saturating_sub(pos))?;
+    Ok((addr, bytes))
+}
+
 impl Vm {
     /// The base address of the data space. Address 0x00 is reserved because it serves as the
     /// default return address.
@@ -568,38 +587,15 @@ impl Vm {
                 self.rp = addr;
             }
             Op::Parse => {
-                let toin = self.pop(data)?;
+                let pos = self.pop(data)?;
                 let srclen = self.pop(data)?;
                 let src = self.pop(data)?;
                 let delim = self.pop(data)? as u8;
-                let start = toin;
-                let mut to_in = toin;
-                let is_delim = |c: u8| {
-                    if delim == b' ' {
-                        c.is_ascii_whitespace()
-                    } else {
-                        c == delim
-                    }
-                };
-                while to_in < srclen {
-                    let addr = src
-                        .checked_add(to_in)
-                        .ok_or(VmError::AddressOutOfRange(src))?;
-                    if is_delim(data.read_char(addr)?) {
-                        break;
-                    }
-                    to_in += 1;
-                }
-                let len = to_in - start;
-                if to_in < srclen {
-                    to_in += 1;
-                }
-                let caddr = src
-                    .checked_add(start)
-                    .ok_or(VmError::AddressOutOfRange(src))?;
+                let (caddr, bytes) = source_slice(data, src, srclen, pos)?;
+                let (read, len) = parser::parse(bytes, delim);
                 self.push(data, caddr)?;
                 self.push(data, len)?;
-                self.push(data, to_in)?;
+                self.push(data, pos + read)?;
             }
             Op::ParseEscaped => {
                 let dest = self.pop(data)?;
@@ -607,10 +603,7 @@ impl Vm {
                 let srclen = self.pop(data)?;
                 let src = self.pop(data)?;
                 let mut buf = [0u8; 256];
-                let addr = src
-                    .checked_add(pos)
-                    .ok_or(VmError::AddressOutOfRange(src))?;
-                let bytes = data.read(addr, srclen.saturating_sub(pos))?;
+                let (_, bytes) = source_slice(data, src, srclen, pos)?;
                 let (read, written) = parser::parse_escaped(bytes, &mut buf)?;
                 data.write(dest, &buf[..written])?;
                 self.push(data, dest)?;

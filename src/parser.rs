@@ -43,6 +43,19 @@ pub fn parse_num(bytes: &[u8], base: u32) -> Option<usize> {
     }
 }
 
+pub fn parse(src: &[u8], delim: u8) -> (usize, usize) {
+    let is_delim = |c: u8| {
+        if delim == b' ' {
+            c.is_ascii_whitespace()
+        } else {
+            c == delim
+        }
+    };
+    let len = src.iter().position(|&c| is_delim(c)).unwrap_or(src.len());
+    let read = if len < src.len() { len + 1 } else { len };
+    (read, len)
+}
+
 // TODO: This should return its own error, not a VM error.
 pub fn parse_escaped(src: &[u8], dst: &mut [u8]) -> VmResult<(usize, usize)> {
     let mut input_pos = 0;
@@ -181,6 +194,42 @@ mod tests {
     fn to_number_case_folding() {
         assert_eq!(to_number(Double(0), b"abc", 16), (Double(0xabc), &b""[..]));
         assert_eq!(to_number(Double(0), b"ABC", 16), (Double(0xabc), &b""[..]));
+    }
+
+    #[test]
+    fn parse_stops_at_delimiter() {
+        assert_eq!(parse(b"abc def", b' '), (4, 3));
+    }
+
+    #[test]
+    fn parse_no_delimiter() {
+        assert_eq!(parse(b"abc", b' '), (3, 3));
+    }
+
+    #[test]
+    fn parse_empty() {
+        assert_eq!(parse(b"", b' '), (0, 0));
+    }
+
+    #[test]
+    fn parse_leading_delimiter() {
+        assert_eq!(parse(b" abc", b' '), (1, 0));
+    }
+
+    #[test]
+    fn parse_custom_delimiter() {
+        assert_eq!(parse(br#"abc"xyz"#, b'"'), (4, 3));
+    }
+
+    #[test]
+    fn parse_space_folds_whitespace() {
+        assert_eq!(parse(b"abc\tdef", b' '), (4, 3));
+        assert_eq!(parse(b"abc\ndef", b' '), (4, 3));
+    }
+
+    #[test]
+    fn parse_custom_delimiter_keeps_whitespace() {
+        assert_eq!(parse(br#"a b"c"#, b'"'), (4, 3));
     }
 
     #[test]
