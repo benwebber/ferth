@@ -107,7 +107,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         match self.state.throw_xt() {
             Some(throw_xt) => {
                 // Throw in Forth.
-                self.push(ior as usize)?;
+                self.push(ior.into())?;
                 match self.vm.enter(&mut self.data, throw_xt.into()) {
                     Ok(stop) => Ok(stop),
                     Err(e) => Err(self.abort(e.into())),
@@ -137,7 +137,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booted> {
         self.execute(self.state.xt_catch)?;
         let code = self.pop()? as isize;
         if code != 0 {
-            return Err(Error::Throw(code));
+            return Err(Error::Throw(code.into()));
         }
         Ok(())
     }

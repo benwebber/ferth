@@ -103,7 +103,7 @@ impl<M: Mem, I: Io> Fe<M, I, Ready> {
         self.kernel.execute(catch_xt)?;
         let code = self.pop()? as isize;
         if code != 0 {
-            return Err(Error::Throw(code));
+            return Err(Error::Throw(code.into()));
         }
         Ok(())
     }
@@ -253,6 +253,6 @@ mod tests {
         // *ior*.
         fe.evaluate(b": divzero 0 0 0 um/mod ;").unwrap();
         fe.evaluate(b"' divzero catch").unwrap();
-        assert_eq!(fe.pop().unwrap() as isize, Ior::DIVISION_BY_ZERO);
+        assert_eq!(fe.pop().unwrap() as isize, Ior::DIVISION_BY_ZERO.into());
     }
 }

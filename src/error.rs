@@ -1,21 +1,22 @@
 //! Error and result types.
 pub use crate::vm::VmError;
 
-macro_rules! impl_ior {
-    ($($(#[$attr:meta])* $name:ident = $val:literal),+ $(,)?) => {
-        impl Ior {
-            $($(#[$attr])* pub const $name: isize = $val;)+
-        }
-    }
-}
-
 /// The result type of this crate.
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// A Forth error code (*ior*).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ior(pub isize);
 
+macro_rules! impl_ior {
+    ($($(#[$attr:meta])* $name:ident = $val:literal),+ $(,)?) => {
+        impl Ior {
+            $($(#[$attr])* pub const $name: Self = Self($val);)+
+        }
+    }
+}
+
+// Standard throw codes.
 impl_ior!(
     STACK_OVERFLOW = -3,
     STACK_UNDERFLOW = -4,
@@ -27,12 +28,32 @@ impl_ior!(
     PARSED_STRING_OVERFLOW = -18,
     DEFINITION_NAME_TOO_LONG = -19,
     ADDRESS_ALIGNMENT_EXCEPTION = -23,
-    INVALID_ESCAPE = -256,
 );
+
+// Custom throw codes.
+impl_ior!(INVALID_ESCAPE = -256,);
+
+impl core::fmt::Display for Ior {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<isize> for Ior {
+    fn from(i: isize) -> Self {
+        Self(i)
+    }
+}
 
 impl From<Ior> for isize {
     fn from(ior: Ior) -> Self {
         ior.0
+    }
+}
+
+impl From<Ior> for usize {
+    fn from(ior: Ior) -> Self {
+        ior.0 as usize
     }
 }
 
@@ -42,7 +63,7 @@ pub enum Severity {
     /// A catchable Forth exception.
     ///
     /// The kernel places the error code on the stack for `throw`.
-    Throw(isize),
+    Throw(Ior),
     /// An unrecoverable fault.
     ///
     /// The kernel resets and aborts to the host.
@@ -57,7 +78,7 @@ pub enum Error {
     /// A generic error for I/O errors.
     Io,
     /// A Forth exception.
-    Throw(isize),
+    Throw(Ior),
     /// A kernel error.
     Kernel(KernelError),
 }
