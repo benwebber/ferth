@@ -509,10 +509,10 @@ impl Vm {
                 self.ip += (len + SIZE - 1) & !(SIZE - 1);
             }
             Op::LShift => {
-                binary!(self, data, |x, u| x << u);
+                binary!(self, data, |x, u| x.wrapping_shl(u as u32));
             }
             Op::RShift => {
-                binary!(self, data, |x, u| x >> u);
+                binary!(self, data, |x, u| x.wrapping_shr(u as u32));
             }
             Op::UmDivMod => {
                 let u1 = self.pop(data)?;
@@ -1754,6 +1754,15 @@ mod tests {
     }
 
     #[test]
+    fn op_lshift_masks_count() {
+        let (mut v, mut d) = vm();
+        v.push(&mut d, 1).unwrap();
+        v.push(&mut d, usize::BITS as usize + 3).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::LShift)).unwrap();
+        assert_eq!(ds(&v, &d), vec![8]);
+    }
+
+    #[test]
     fn op_lshift_underflow() {
         let (mut v, mut d) = vm();
         v.push(&mut d, 1).unwrap();
@@ -1770,6 +1779,15 @@ mod tests {
         let (mut v, mut d) = vm();
         v.push(&mut d, 16).unwrap();
         v.push(&mut d, 2).unwrap();
+        v.step(&mut d, PackedInstr::from(Op::RShift)).unwrap();
+        assert_eq!(ds(&v, &d), vec![4]);
+    }
+
+    #[test]
+    fn op_rshift_masks_count() {
+        let (mut v, mut d) = vm();
+        v.push(&mut d, 16).unwrap();
+        v.push(&mut d, usize::BITS as usize + 2).unwrap();
         v.step(&mut d, PackedInstr::from(Op::RShift)).unwrap();
         assert_eq!(ds(&v, &d), vec![4]);
     }
