@@ -49,6 +49,13 @@ impl From<u32> for Double {
     }
 }
 
+impl From<u64> for Double {
+    #[inline]
+    fn from(u: u64) -> Self {
+        Self(u as DoubleInner)
+    }
+}
+
 impl From<(usize, usize)> for Double {
     #[inline]
     fn from((lo, hi): (usize, usize)) -> Self {

@@ -12,8 +12,9 @@ categories = ["compilers", "no-std"]
 
 [features]
 std = []
-repl = ["std", "dep:rustyline"]
+repl = ["std", "time", "dep:rustyline"]
 unsafe = []
+time = ["dep:chrono"]
 
 [[bin]]
 name = "fe"
@@ -28,6 +29,7 @@ name = "lua"
 harness = false
 
 [dependencies]
+chrono = { version = "0.4.45", optional = true }
 rustyline = { version = "14", optional = true }
 
 [dev-dependencies]

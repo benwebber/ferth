@@ -204,6 +204,14 @@ All words:
 [`catch`](https://forth-standard.org/standard/exception/CATCH)
 [`throw`](https://forth-standard.org/standard/exception/THROW)
 
+## facility
+
+> [!NOTE]
+> `time&date` always returns time in UTC.
+
+[`ms`](https://forth-standard.org/standard/facility/MS)
+[`time&date`](https://forth-standard.org/standard/facility/TIMEandDATE)
+
 ## string
 
 [`compare`](https://forth-standard.org/standard/string/COMPARE)

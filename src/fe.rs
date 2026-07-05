@@ -255,4 +255,59 @@ mod tests {
         fe.evaluate(b"' divzero catch").unwrap();
         assert_eq!(fe.pop().unwrap() as isize, Ior::DIVISION_BY_ZERO.into());
     }
+
+    #[cfg(feature = "time")]
+    #[test]
+    fn test_time_and_date() {
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
+
+        fe.evaluate(b"time&date").unwrap();
+        let year = fe.pop().unwrap();
+        let month = fe.pop().unwrap();
+        let day = fe.pop().unwrap();
+        let hour = fe.pop().unwrap();
+        let minute = fe.pop().unwrap();
+        let second = fe.pop().unwrap();
+
+        assert!(second <= 60); // 60 to allow for a leap second
+        assert!(minute <= 59);
+        assert!(hour <= 23);
+        assert!((1..=31).contains(&day));
+        assert!((1..=12).contains(&month));
+        assert!(year >= 2024);
+    }
+
+    #[cfg(feature = "time")]
+    #[test]
+    fn test_ms() {
+        use std::time::{Duration, Instant};
+
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
+
+        let start = Instant::now();
+        fe.evaluate(b"10 ms").unwrap();
+        assert!(start.elapsed() >= Duration::from_millis(10));
+    }
+
+    #[cfg(feature = "time")]
+    #[test]
+    fn test_utime() {
+        use std::thread;
+        use std::time::Duration;
+
+        let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
+
+        let read = |fe: &mut Fe| -> u128 {
+            fe.evaluate(b"(utime)").unwrap();
+            let hi = fe.pop().unwrap() as u128;
+            let lo = fe.pop().unwrap() as u128;
+            (hi << usize::BITS) | lo
+        };
+
+        let before = read(&mut fe);
+        thread::sleep(Duration::from_millis(5));
+        let after = read(&mut fe);
+
+        assert!(after - before >= 5_000); // at least the time slept
+    }
 }

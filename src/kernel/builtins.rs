@@ -1,4 +1,6 @@
 use crate::data::Mem;
+#[cfg(feature = "time")]
+use crate::double::Double;
 use crate::error::Ior;
 use crate::io::Io;
 use crate::{Error, Result};
@@ -98,4 +100,53 @@ pub fn header<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
     let code_addr = ctx.dict().create_at(addr, len, 0)?;
     ctx.dict().set_latest(code_addr)?;
     ctx.dict().set_here(code_addr)
+}
+
+/// Return the current time and date, in UTC.
+///
+/// ```text
+/// time&date ( -- ss mm hh DD MM YYYY )
+/// ```
+#[cfg(feature = "time")]
+pub fn time_and_date<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
+    use chrono::{Datelike, Timelike};
+    let now = chrono::Utc::now();
+    ctx.push(now.second() as usize)?;
+    ctx.push(now.minute() as usize)?;
+    ctx.push(now.hour() as usize)?;
+    ctx.push(now.day() as usize)?;
+    ctx.push(now.month() as usize)?;
+    ctx.push(now.year() as usize)
+}
+
+/// Wait for *u* milliseconds.
+///
+/// ```text
+/// ms ( u -- )
+/// ```
+#[cfg(feature = "time")]
+pub fn ms<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
+    use std::thread;
+    use std::time::Duration;
+    let ms = ctx.pop()? as u64;
+    let d = Duration::from_millis(ms);
+    thread::sleep(d);
+    Ok(())
+}
+
+/// Push the value of a monotonic clock in microseconds.
+///
+/// ```text
+/// (utime) ( -- ud )
+/// ```
+#[cfg(feature = "time")]
+pub fn utime<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
+    use std::sync::LazyLock;
+    use std::time::Instant;
+    static EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
+    let d = Instant::now() - *EPOCH;
+    let us = d.as_micros() as u64;
+    let (lo, hi): (usize, usize) = Double::from(us).into();
+    ctx.push(lo)?;
+    ctx.push(hi)
 }

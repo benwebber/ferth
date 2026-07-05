@@ -8,7 +8,7 @@ use crate::state::{Booted, Booting};
 use crate::vm::{Op, Vm};
 use crate::{BL, Error, FALSE, Result, SIZE, TRUE};
 
-use super::builtins::{emit, find, header, key, refill};
+use super::builtins;
 use super::env;
 use super::layout;
 use super::{Builtin, Kernel, MAX_BUILTINS, MIN_DATA_SPACE};
@@ -210,14 +210,20 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
     fn register_builtins(&mut self) -> Result<()> {
         let builtins: &[(&[u8], Builtin<M, I>)] = &[
-            (b"emit", emit),
-            (b"(find)", find),
-            (b"key", key),
-            (b"refill", refill),
-            (b"(header)", header),
+            (b"emit", builtins::emit),
+            (b"(find)", builtins::find),
+            (b"key", builtins::key),
+            (b"refill", builtins::refill),
+            (b"(header)", builtins::header),
         ];
         for (name, f) in builtins {
             self.register_builtin(name, *f)?;
+        }
+        #[cfg(feature = "time")]
+        {
+            self.register_builtin(b"time&date", builtins::time_and_date)?;
+            self.register_builtin(b"ms", builtins::ms)?;
+            self.register_builtin(b"(utime)", builtins::utime)?;
         }
         Ok(())
     }
