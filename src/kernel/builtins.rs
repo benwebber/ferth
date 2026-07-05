@@ -1,6 +1,4 @@
 use crate::data::Mem;
-#[cfg(feature = "time")]
-use crate::double::Double;
 use crate::error::Ior;
 use crate::io::Io;
 use crate::{Error, Result};
@@ -124,7 +122,7 @@ pub fn time_and_date<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// ```text
 /// ms ( u -- )
 /// ```
-#[cfg(feature = "time")]
+#[cfg(feature = "std")]
 pub fn ms<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
     use std::thread;
     use std::time::Duration;
@@ -139,8 +137,9 @@ pub fn ms<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// ```text
 /// (utime) ( -- ud )
 /// ```
-#[cfg(feature = "time")]
+#[cfg(feature = "std")]
 pub fn utime<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
+    use crate::double::Double;
     use std::sync::LazyLock;
     use std::time::Instant;
     static EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);

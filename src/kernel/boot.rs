@@ -219,11 +219,14 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         for (name, f) in builtins {
             self.register_builtin(name, *f)?;
         }
+        #[cfg(feature = "std")]
+        {
+            self.register_builtin(b"ms", builtins::ms)?;
+            self.register_builtin(b"(utime)", builtins::utime)?;
+        }
         #[cfg(feature = "time")]
         {
             self.register_builtin(b"time&date", builtins::time_and_date)?;
-            self.register_builtin(b"ms", builtins::ms)?;
-            self.register_builtin(b"(utime)", builtins::utime)?;
         }
         Ok(())
     }
