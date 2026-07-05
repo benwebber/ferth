@@ -126,7 +126,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(())
     }
 
-    /// Compile inner interpreter words ("opcodes").
+    /// Compile opcode primitives.
     ///
     /// The inner interpreter implements these words directly. They comprise the most fundamental
     /// set of execution, stack, memory, and arithmetic operations.
@@ -203,11 +203,9 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(())
     }
 
-    /// Compile outer interpreter words ("builtins").
+    /// Compile builtin primitives.
     ///
-    /// These words concern parsing and I/O. They may exist as builtins for several reasons. The
-    /// parsing words are difficult, or inefficient, to express in Forth. The inner interpreter
-    /// lacks any I/O facilities, so the outer interpreter naturally has to provide these.
+    /// These words require host facilities such as I/O or a system clock.
     fn register_builtins(&mut self) -> Result<()> {
         let builtins: &[(&[u8], Builtin<M, I>)] = &[
             (b"emit", builtins::emit),
