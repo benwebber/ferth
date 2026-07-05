@@ -15,7 +15,7 @@ A safe, native-sized Forth.
 ## Usage
 
 ```
-fe [-m MEMORY] [-s STACK_CELLS] [-r RETURN_STACK_CELLS] [FILE]
+fe [-m MEMORY] [-d STACK_CELLS] [-r RETURN_STACK_CELLS] [FILE]
 ```
 
 ## Architecture

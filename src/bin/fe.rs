@@ -9,7 +9,7 @@ fn main() {
     let Args {
         config,
         mem,
-        command,
+        evaluate,
         file,
     } = parse_args();
     let host = make_host();
@@ -21,7 +21,7 @@ fn main() {
         }
     };
 
-    if let Some(code) = command {
+    if let Some(code) = evaluate {
         if let Err(e) = fe.evaluate(code) {
             eprintln!("{e}");
             exit(1);
@@ -64,14 +64,14 @@ fn main() {
 struct Args {
     config: Config,
     mem: usize,
-    command: Option<String>,
+    evaluate: Option<String>,
     file: Option<String>,
 }
 
 fn parse_args() -> Args {
     let mut mem = 65536usize;
     let mut config = Config::default();
-    let mut command = None;
+    let mut evaluate = None;
     let mut file = None;
     let mut args = env::args();
     let basename = args.next().unwrap_or_else(|| "fe".into());
@@ -85,10 +85,10 @@ fn parse_args() -> Args {
                 version();
                 exit(0);
             }
-            "-c" => command = Some(string(&basename, "-c", args.next())),
+            "-d" => config.stack_cells = int(&basename, "-d", args.next()),
+            "-e" => evaluate = Some(string(&basename, "-e", args.next())),
             "-m" => mem = int(&basename, "-m", args.next()),
-            "-s" => config.stack_cells = int(&basename, "-s", args.next()),
-            "-r" => config.return_stack_cells = int(&basename, "-s", args.next()),
+            "-r" => config.return_stack_cells = int(&basename, "-r", args.next()),
             other => {
                 if file.is_some() {
                     eprintln!("{basename}: unexpected argument: {other}");
@@ -98,21 +98,21 @@ fn parse_args() -> Args {
             }
         }
     }
-    if command.is_some() && file.is_some() {
-        eprintln!("{basename}: -c and FILE are mutually exclusive");
+    if evaluate.is_some() && file.is_some() {
+        eprintln!("{basename}: -e and FILE are mutually exclusive");
         exit(1);
     }
     Args {
         config,
         mem,
-        command,
+        evaluate,
         file,
     }
 }
 
 fn usage(basename: &str) {
     println!(
-        "usage: {basename} [-c CODE] [-m MEMORY] [-s STACK_CELLS] [-r RETURN_STACK_CELLS] [-h] [-v] [FILE]"
+        "usage: {basename} [-e CODE] [-m MEMORY] [-s STACK_CELLS] [-r RETURN_STACK_CELLS] [-h] [-v] [FILE]"
     )
 }
 
