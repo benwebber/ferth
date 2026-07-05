@@ -1,6 +1,6 @@
 use crate::data::{Data, Mem};
 use crate::error::{KernelError, Severity};
-use crate::io::{Io, NoIo};
+use crate::host::{Io, NullHost};
 use crate::state::{Booted, Booting, State};
 use crate::vm::{Stop, Vm};
 use crate::{Error, FALSE, Result, TRUE};
@@ -30,21 +30,21 @@ const MAX_BUILTINS: usize = 256;
 /// the size of the system. We could load the REPL system from a compiled image.
 pub(crate) const MIN_DATA_SPACE: usize = 2 << 15;
 
-pub(crate) type Builtin<M, I> = fn(&mut Context<'_, M, I>) -> Result<()>;
+pub(crate) type Builtin<M, H> = fn(&mut H, &mut Context<'_, M>) -> Result<()>;
 
 /// The outer interpreter.
-pub struct Kernel<M: Mem = [u8; 65536], I: Io = NoIo, S: State = Booting> {
+pub struct Kernel<M: Mem = [u8; 65536], H: Io = NullHost, S: State = Booting> {
     vm: Vm,
     data: Data<M>,
-    io: I,
-    builtins: [Option<Builtin<M, I>>; MAX_BUILTINS],
+    host: H,
+    builtins: [Option<Builtin<M, H>>; MAX_BUILTINS],
     builtins_len: usize,
     layout_base: usize,
     env: Environment,
     state: S,
 }
 
-impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
+impl<M: Mem, H: Io, S: State> Kernel<M, H, S> {
     /// Push an item to the data stack.
     ///
     /// ```text
@@ -73,10 +73,6 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
         self.vm.stack(&self.data)
     }
 
-    pub(crate) fn context(&mut self) -> Context<'_, M, I> {
-        Context::new(&mut self.vm, &mut self.data, &mut self.io, self.layout_base)
-    }
-
     pub(crate) fn dict(&mut self) -> Dict<'_, M> {
         Dict::new(&mut self.data, self.layout_base)
     }
@@ -92,7 +88,9 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
                 Stop::Yield(token) => {
                     let f = self.builtins[token.index]
                         .ok_or(KernelError::InvalidBuiltin(token.index as u8))?;
-                    stop = match f(&mut self.context()) {
+                    let host = &mut self.host;
+                    let mut ctx = Context::new(&mut self.vm, &mut self.data, self.layout_base);
+                    stop = match f(host, &mut ctx) {
                         Ok(()) => match self.vm.resume(&mut self.data, token) {
                             Ok(s) => s,
                             Err(e) => self.throw(e.into())?,
@@ -137,7 +135,7 @@ impl<M: Mem, I: Io, S: State> Kernel<M, I, S> {
     }
 }
 
-impl<M: Mem, I: Io> Kernel<M, I, Booted> {
+impl<M: Mem, H: Io> Kernel<M, H, Booted> {
     pub(super) fn catch_interpret(&mut self) -> Result<()> {
         self.push(self.state.xt_interpret)?;
         self.execute(self.state.xt_catch)?;

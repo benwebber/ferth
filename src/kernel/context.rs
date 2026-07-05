@@ -1,28 +1,22 @@
 use crate::Result;
 use crate::data::{Data, Mem};
-use crate::io::Io;
 use crate::vm::Vm;
 
+use super::INPUT_BUFFER_SIZE;
 use super::dict::Dict;
+use super::layout::Layout;
 
-pub(crate) struct Context<'a, M: Mem, I: Io> {
+pub(crate) struct Context<'a, M: Mem> {
     vm: &'a mut Vm,
     data: &'a mut Data<M>,
-    io: &'a mut I,
     layout_base: usize,
 }
 
-impl<'a, M: Mem, I: Io> Context<'a, M, I> {
-    pub(crate) fn new(
-        vm: &'a mut Vm,
-        data: &'a mut Data<M>,
-        io: &'a mut I,
-        layout_base: usize,
-    ) -> Self {
+impl<'a, M: Mem> Context<'a, M> {
+    pub(crate) fn new(vm: &'a mut Vm, data: &'a mut Data<M>, layout_base: usize) -> Self {
         Self {
             vm,
             data,
-            io,
             layout_base,
         }
     }
@@ -35,21 +29,12 @@ impl<'a, M: Mem, I: Io> Context<'a, M, I> {
         Ok(self.vm.pop(self.data)?)
     }
 
-    pub(crate) fn emit(&mut self, c: u8) -> Result<()> {
-        self.io.emit(c)
-    }
-
-    pub(crate) fn key(&mut self) -> Result<Option<u8>> {
-        self.io.key()
-    }
-
-    pub(crate) fn refill(&mut self) -> Result<Option<usize>> {
-        let mut dict = Dict::new(self.data, self.layout_base);
-        let buf = dict.input_mut()?;
-        self.io.refill(buf)
-    }
-
     pub(crate) fn dict(&mut self) -> Dict<'_, M> {
         Dict::new(self.data, self.layout_base)
+    }
+
+    pub(crate) fn input_mut(&mut self) -> Result<&mut [u8]> {
+        let addr = self.layout_base + Layout::INPUT;
+        Ok(self.data.slice_mut(addr, INPUT_BUFFER_SIZE)?)
     }
 }

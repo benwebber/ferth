@@ -2,12 +2,15 @@ use std::io::{self, Read, Write};
 
 use rustyline::{DefaultEditor, error::ReadlineError};
 
-use crate::io::Io;
+use crate::double::Double;
+use crate::time::{DateTime, sleep_ms, utime};
 use crate::{Error, Result};
+
+use super::{Clock, Io};
 
 /// A line editor.
 ///
-/// This trait exists to make `ReplIo` generic over any rustyline `Editor`. rustyline does not
+/// This trait exists to make `ReplHost` generic over any rustyline `Editor`. rustyline does not
 /// expose a trait like this.
 pub trait LineEditor {
     /// Yield one edited line (without trailing newline), or `None` at EOF.
@@ -27,12 +30,12 @@ impl LineEditor for DefaultEditor {
     }
 }
 
-/// An [`Io`] implementation that uses [`rustyline`].
-pub struct ReplIo {
+/// A host implementation that uses [`rustyline`].
+pub struct ReplHost {
     editor: Box<dyn LineEditor>,
 }
 
-impl ReplIo {
+impl ReplHost {
     pub fn new(editor: impl LineEditor + 'static) -> Self {
         Self {
             editor: Box::new(editor),
@@ -40,7 +43,7 @@ impl ReplIo {
     }
 }
 
-impl Io for ReplIo {
+impl Io for ReplHost {
     fn key(&mut self) -> Result<Option<u8>> {
         let mut buf = [0u8; 1];
         match io::stdin().read_exact(&mut buf) {
@@ -70,5 +73,19 @@ impl Io for ReplIo {
             }
             None => Ok(None),
         }
+    }
+}
+
+impl Clock for ReplHost {
+    fn utime(&self) -> Double {
+        utime()
+    }
+
+    fn sleep_ms(&self, ms: usize) {
+        sleep_ms(ms)
+    }
+
+    fn time_and_date(&self) -> DateTime {
+        DateTime::now()
     }
 }

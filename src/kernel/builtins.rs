@@ -1,6 +1,7 @@
 use crate::data::Mem;
 use crate::error::Ior;
-use crate::io::Io;
+#[cfg(feature = "std")]
+use crate::host::{Clock, Io};
 use crate::{Error, Result};
 
 use super::context::Context;
@@ -13,8 +14,8 @@ use super::{FALSE, MAX_WORD_LEN, TRUE};
 /// ```
 ///
 /// See [`KEY`](https://forth-standard.org/standard/core/KEY).
-pub fn key<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
-    match ctx.key()? {
+pub fn key<M: Mem, H: Io>(host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
+    match host.key()? {
         Some(c) => ctx.push(c as usize),
         None => Err(Error::Io),
     }
@@ -27,10 +28,10 @@ pub fn key<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// ```
 ///
 /// See [`EMIT`](https://forth-standard.org/standard/core/EMIT).
-pub fn emit<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
+pub fn emit<M: Mem, H: Io>(host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
     // TODO: What if the TOS is not a char?
     let c = ctx.pop()? as u8;
-    ctx.emit(c)
+    host.emit(c)
 }
 
 /// A variant of `find` that reads a Forth string `( c-addr u )` instead of a counted string `(
@@ -43,7 +44,7 @@ pub fn emit<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// Similar to [`search-wordlist`] except it does not accept a wordlist ID.
 ///
 /// [`search-wordlist`]: https://forth-standard.org/standard/search/SEARCH-WORDLIST
-pub fn find<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
+pub fn find<M: Mem, H>(_host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
     let len = ctx.pop()?;
     let addr = ctx.pop()?;
     if len > MAX_WORD_LEN {
@@ -66,8 +67,8 @@ pub fn find<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// ```
 ///
 /// See [`REFILL`](https://forth-standard.org/standard/core/REFILL).
-pub fn refill<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
-    match ctx.refill() {
+pub fn refill<M: Mem, H: Io>(host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
+    match host.refill(ctx.input_mut()?) {
         Ok(Some(len)) => {
             ctx.dict().set_source_len(len)?;
             ctx.push(TRUE)?;
@@ -88,7 +89,7 @@ pub fn refill<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// ```
 ///
 /// After `(header)` executes, `here` points to the `code` field address.
-pub fn header<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
+pub fn header<M: Mem, H>(_host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
     let len = ctx.pop()?;
     let addr = ctx.pop()?;
     if len > MAX_WORD_LEN {
@@ -106,15 +107,14 @@ pub fn header<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// time&date ( -- ss mm hh DD MM YYYY )
 /// ```
 #[cfg(feature = "time")]
-pub fn time_and_date<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
-    use chrono::{Datelike, Timelike};
-    let now = chrono::Utc::now();
-    ctx.push(now.second() as usize)?;
-    ctx.push(now.minute() as usize)?;
-    ctx.push(now.hour() as usize)?;
-    ctx.push(now.day() as usize)?;
-    ctx.push(now.month() as usize)?;
-    ctx.push(now.year() as usize)
+pub fn time_and_date<M: Mem, H: Clock>(host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
+    let dt = host.time_and_date();
+    ctx.push(dt.second)?;
+    ctx.push(dt.minute)?;
+    ctx.push(dt.hour)?;
+    ctx.push(dt.day)?;
+    ctx.push(dt.month)?;
+    ctx.push(dt.year)
 }
 
 /// Wait for *u* milliseconds.
@@ -123,12 +123,9 @@ pub fn time_and_date<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// ms ( u -- )
 /// ```
 #[cfg(feature = "std")]
-pub fn ms<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
-    use std::thread;
-    use std::time::Duration;
-    let ms = ctx.pop()? as u64;
-    let d = Duration::from_millis(ms);
-    thread::sleep(d);
+pub fn ms<M: Mem, H: Clock>(host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
+    let ms = ctx.pop()?;
+    host.sleep_ms(ms);
     Ok(())
 }
 
@@ -138,14 +135,8 @@ pub fn ms<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
 /// (utime) ( -- ud )
 /// ```
 #[cfg(feature = "std")]
-pub fn utime<M: Mem, I: Io>(ctx: &mut Context<'_, M, I>) -> Result<()> {
-    use crate::double::Double;
-    use std::sync::LazyLock;
-    use std::time::Instant;
-    static EPOCH: LazyLock<Instant> = LazyLock::new(Instant::now);
-    let d = Instant::now() - *EPOCH;
-    let us = d.as_micros() as u64;
-    let (lo, hi): (usize, usize) = Double::from(us).into();
+pub fn utime<M: Mem, H: Clock>(host: &mut H, ctx: &mut Context<'_, M>) -> Result<()> {
+    let (lo, hi): (usize, usize) = host.utime().into();
     ctx.push(lo)?;
     ctx.push(hi)
 }

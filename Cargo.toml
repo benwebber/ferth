@@ -14,7 +14,7 @@ categories = ["compilers", "no-std"]
 std = []
 repl = ["std", "time", "dep:rustyline"]
 unsafe = []
-time = ["dep:chrono"]
+time = ["std", "dep:chrono"]
 
 [[bin]]
 name = "fe"

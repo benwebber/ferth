@@ -2,7 +2,7 @@ use crate::data::{Data, Mem};
 use crate::double::Double;
 use crate::error::{Ior, KernelError};
 use crate::header::{Flags, Header};
-use crate::io::Io;
+use crate::host::{Io, MaybeClock};
 use crate::log::debug;
 use crate::state::{Booted, Booting};
 use crate::vm::{Op, Vm};
@@ -36,8 +36,8 @@ enum Token {
     Variable(usize),
 }
 
-impl<M: Mem, I: Io> Kernel<M, I, Booting> {
-    pub fn new(mem: M, io: I, config: Config) -> Result<Self> {
+impl<M: Mem, H: Io> Kernel<M, H, Booting> {
+    pub fn new(mem: M, host: H, config: Config) -> Result<Self> {
         let env = Environment {
             config,
             ..Default::default()
@@ -55,7 +55,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(Self {
             vm,
             data,
-            io,
+            host,
             builtins: [None; MAX_BUILTINS],
             builtins_len: 0,
             layout_base,
@@ -64,7 +64,10 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         })
     }
 
-    pub fn boot(mut self) -> Result<Kernel<M, I, Booted>> {
+    pub fn boot(mut self) -> Result<Kernel<M, H, Booted>>
+    where
+        H: MaybeClock,
+    {
         self.reserve_variables()?;
         debug!("KERNEL", "Reserved variables");
         self.compile_opcodes()?;
@@ -95,7 +98,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         Ok(Kernel {
             vm: self.vm,
             data: self.data,
-            io: self.io,
+            host: self.host,
             builtins: self.builtins,
             builtins_len: self.builtins_len,
             layout_base: self.layout_base,
@@ -206,8 +209,11 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
     /// Compile builtin primitives.
     ///
     /// These words require host facilities such as I/O or a system clock.
-    fn register_builtins(&mut self) -> Result<()> {
-        let builtins: &[(&[u8], Builtin<M, I>)] = &[
+    fn register_builtins(&mut self) -> Result<()>
+    where
+        H: MaybeClock,
+    {
+        let builtins: &[(&[u8], Builtin<M, H>)] = &[
             (b"emit", builtins::emit),
             (b"(find)", builtins::find),
             (b"key", builtins::key),
@@ -678,7 +684,7 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
         self.dict().set_here(here)
     }
 
-    fn register_builtin(&mut self, name: &[u8], f: Builtin<M, I>) -> Result<()> {
+    fn register_builtin(&mut self, name: &[u8], f: Builtin<M, H>) -> Result<()> {
         let idx = self.builtins_len;
         if idx >= MAX_BUILTINS {
             return Err(KernelError::BuiltinTableFull.into());
@@ -702,11 +708,11 @@ impl<M: Mem, I: Io> Kernel<M, I, Booting> {
 mod tests {
     use super::*;
     use crate::header::{Flags, Header, Info};
-    use crate::io::NoIo;
+    use crate::host::NullHost;
 
     #[test]
     fn tag_boot_words_with_kind() {
-        let mut k = Kernel::new([0u8; 65536], NoIo, Config::default())
+        let mut k = Kernel::new([0u8; 65536], NullHost, Config::default())
             .unwrap()
             .boot()
             .unwrap();

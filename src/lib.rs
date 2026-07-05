@@ -6,9 +6,9 @@
 //! * `repl`: Build the REPL.
 //! ```rust
 //! use ferth::Fe;
-//! use ferth::io::NoIo;
+//! use ferth::host::NullHost;
 //!
-//! let mut fe = Fe::new([0u8; 65536], NoIo).unwrap();
+//! let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
 //! fe.evaluate("
 //! : square ( n -- n ) dup * ;
 //! 2 dup square dup square dup square
@@ -20,16 +20,17 @@
 #![cfg_attr(not(feature = "unsafe"), forbid(unsafe_code))]
 
 mod data;
-mod double;
+pub mod double;
 pub mod error;
 mod fe;
 mod header;
-pub mod io;
+pub mod host;
 mod kernel;
 mod log;
 mod packed;
 mod parser;
 mod state;
+pub mod time;
 mod vm;
 
 pub use error::{Error, Result};

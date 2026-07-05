@@ -2,7 +2,7 @@ use std::env;
 use std::io::{IsTerminal, Read};
 use std::process::exit;
 
-use ferth::io::Io;
+use ferth::host::{Clock, Io};
 use ferth::{Config, Fe};
 
 fn main() {
@@ -12,8 +12,8 @@ fn main() {
         command,
         file,
     } = parse_args();
-    let io = make_io();
-    let mut fe = match Fe::with_config(vec![0u8; mem], io, config) {
+    let host = make_host();
+    let mut fe = match Fe::with_config(vec![0u8; mem], host, config) {
         Ok(fe) => fe,
         Err(e) => {
             eprintln!("{e}");
@@ -155,13 +155,13 @@ fn read_stdin() -> String {
 }
 
 #[cfg(not(feature = "repl"))]
-fn make_io() -> impl Io {
-    ferth::io::StdIo
+fn make_host() -> impl Io + Clock {
+    ferth::host::std::StdHost
 }
 
 #[cfg(feature = "repl")]
-fn make_io() -> impl Io {
-    use ferth::io::repl::ReplIo;
+fn make_host() -> impl Io + Clock {
+    use ferth::host::repl::ReplHost;
     use rustyline::DefaultEditor;
-    ReplIo::new(DefaultEditor::new().expect("failed to initialize editor"))
+    ReplHost::new(DefaultEditor::new().expect("failed to initialize editor"))
 }

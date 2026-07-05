@@ -122,11 +122,6 @@ impl<'a, M: Mem> Dict<'a, M> {
         Ok(())
     }
 
-    pub(crate) fn input_mut(&mut self) -> Result<&mut [u8]> {
-        let addr = self.layout_addr(Layout::INPUT);
-        Ok(self.data.slice_mut(addr, INPUT_BUFFER_SIZE)?)
-    }
-
     pub(super) fn set_source(&mut self, code: &[u8]) -> Result<()> {
         if code.len() > INPUT_BUFFER_SIZE {
             return Err(Error::Throw(Ior::PARSED_STRING_OVERFLOW));
