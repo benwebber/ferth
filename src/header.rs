@@ -23,12 +23,12 @@ impl Layout {
 ///
 /// The length of the name follows as a single byte, then the bytes of the name.
 ///
-/// The `bodylen` field encodes the length of the body in cells.
+/// The `bodylen` field encodes the length of the body in bytes.
 ///
-/// The `info` field packs the flags into the least significant byte and the length into the
-/// next byte. It currently reserves two additional bytes of space.
+/// The `info` field packs the length of the name into the least significant byte and the flags
+/// into the next byte. It currently reserves two additional bytes of space.
 ///
-/// The `link` field links to the `code` field of the next word in the dictionary.
+/// The `link` field links to the `code` field of the previous word in the dictionary.
 ///
 /// The `code` field contains an [`Op`][crate::vm::Op] code. The compiled `body` of the word follows the op code.
 ///

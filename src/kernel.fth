@@ -123,34 +123,34 @@ create handler 0 ,
 \
 \         name      bodylen        code
 \         v         v              v
-\     ...[3]["dup"][2][info][link][Dup][Exit]
+\     ...[3]["dup"][0][info][link][Dup]
 \
 \ A colon definition composed of primitives looks like:
 \
 \     : over >r dup r> swap ;
 \
-\         name       bodylen        code
-\         v          v              v
-\     ...[4]["over"][4][info][link][ToR][Dup][RFrom][Swap][Exit]
+\         name       bodylen         code
+\         v          v               v
+\     ...[4]["over"][20][info][link][ToR][Dup][RFrom][Swap][Exit]
 \
 \ A word that calls other colon definitions looks like:
 \
-\     : ?dup dup if dup then ;
+\     : 2dup over over ;
 \
-\         name       bodylen        code
-\         v          v              v
-\     ...[4]["?dup"][4][info][link][Dup][Call]['if][Dup][Call]['then][Exit]
+\         name       bodylen         code
+\         v          v               v
+\     ...[4]["2dup"][20][info][link][Call]['over][Call]['over][Exit]
 \
-\ Where `'if` and `'then` are those words' XTs.
+\ Where `'over` is that word's XT.
 \
 \ This permits simple tail-call optimization. If the last instruction in a
 \ definition is a `Call`, we would normally push a stack frame to enter that
 \ word. Not only does this incur extra work, but deep recursion will overflow
 \ the return stack.  Instead, we can easily patch the final `Call` to a `Jmp`.
 \
-\         name       bodylen        code                 patch
-\         v          v              v                    v
-\     ...[4]["?dup"][4][info][link][Dup][Call]['if][Dup][Jmp]['then][Exit]
+\         name       bodylen         code         patch
+\         v          v               v            v
+\     ...[4]["2dup"][20][info][link][Call]['over][Jmp]['over][Exit]
 \
 \ This is safe for all words, and particularly useful for recursive words. Note
 \ that this does leave a spurious, yet harmless, `Exit` at the end of the

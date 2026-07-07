@@ -12,7 +12,7 @@ use crate::{Result, SIZE};
 /// The packed representation ensures all instructions with operands have the same width, and that
 /// words like `see` can recover primitives' code addresses without a lookup table. This scheme
 /// restricts `Op` primitives to the first 2<sup>24</sup> addresses (16777216), and builtins to the
-/// first 2<sup>16</sup> (65566), minus the system's reserved addresses.
+/// first 2<sup>16</sup> (65536), minus the system's reserved addresses, assuming a 32-bit cell.
 ///
 /// # Performance
 ///
