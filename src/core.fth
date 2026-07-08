@@ -187,7 +187,11 @@
 ;
 
 : char+ 1 + ;
-: char ( "<spaces>name>" -- char ) bl word char+ c@ ;
+: char ( "<spaces>name>" -- char )
+  bl word
+  dup c@ 0= if -16 throw then
+  char+ c@
+;
 : [char] char postpone literal ; immediate (compile-only)
 
 \ output
@@ -413,10 +417,11 @@ variable (leave-list)
         dup -10 = if drop ." division by zero " else
         dup -13 = if drop ." undefined word: " (diagnostic) else
         dup -14 = if drop ." interpreting a compile-only word" else
+        dup -16 = if drop ." attempt to use zero-length string as a name" else
         dup -19 = if drop ." definition name too long: " (diagnostic) else
         dup -20 = if drop ." parsed string overflow " else
         dup -21 = if drop ." unsupported operation " else
-        ." error: " . then then then then then then then then then then then then cr
+        ." error: " . then then then then then then then then then then then then then cr
       else drop then
       \ Reset compilation state and clear stack.
       postpone [
