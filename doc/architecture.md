@@ -128,7 +128,7 @@ After it has bootstrapped the interpreter, it compiles the rest of the system ke
 
 ### System
 
-The outermost layer, `Fe`, holds the kernel and provides limited access to it with an embedding API. (Refer to the crate documentation for details.)
+The outermost layer, `Ferth`, holds the kernel and provides limited access to it with an embedding API. (Refer to the crate documentation for details.)
 
 When the system starts, it:
 

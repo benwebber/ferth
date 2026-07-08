@@ -4,7 +4,7 @@
 A safe, native-sized Forth.
 
 Ferth is a [Forth-2012 standard system](https://forth-standard.org/standard/label).
-This project provides both the `ferth` crate and the `fe` interpreter.
+This project provides both the `ferth` crate and the `ferth` command-line interpreter.
 
 ## Highlights
 
@@ -27,7 +27,7 @@ cargo install --git https://github.com/benwebber/ferth.git --features repl
 ## Usage
 
 ```
-fe [-m MEMORY] [-d STACK_CELLS] [-r RETURN_STACK_CELLS] [FILE]
+ferth [-m MEMORY] [-d STACK_CELLS] [-r RETURN_STACK_CELLS] [FILE]
 ```
 
 ## Licence

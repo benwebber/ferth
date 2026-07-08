@@ -17,7 +17,7 @@ unsafe = []
 time = ["std", "dep:chrono"]
 
 [[bin]]
-name = "fe"
+name = "ferth"
 required-features = ["std"]
 
 [[bench]]

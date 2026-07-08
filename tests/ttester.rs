@@ -1,7 +1,7 @@
 use ferth::double::Double;
 use ferth::host::{Clock, Io};
 use ferth::time::DateTime;
-use ferth::{Error, Fe, Result};
+use ferth::{Error, Ferth, Result};
 
 struct TtesterError {
     error: Error,
@@ -96,7 +96,7 @@ macro_rules! ttester {
             // `&dest` used below
             let result = (|| -> ferth::Result<()> {
                 let io = TtesterHost::new(src.as_slice(), &mut dest);
-                let mut fe = Fe::new(vec![0u8; 1 << 17], io)?;
+                let mut fe = Ferth::new(vec![0u8; 1 << 17], io)?;
                 fe.load()
             })();
             result.map_err(|error| {

@@ -5,10 +5,10 @@
 //! * `std`: Add support for standard input and output.
 //! * `repl`: Build the REPL.
 //! ```rust
-//! use ferth::Fe;
+//! use ferth::Ferth;
 //! use ferth::host::NullHost;
 //!
-//! let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
+//! let mut fe = Ferth::new([0u8; 65536], NullHost).unwrap();
 //! fe.evaluate("
 //! : square ( n -- n ) dup * ;
 //! 2 dup square dup square dup square
@@ -22,7 +22,7 @@
 mod data;
 pub mod double;
 pub mod error;
-mod fe;
+mod ferth;
 mod header;
 pub mod host;
 mod kernel;
@@ -34,7 +34,7 @@ pub mod time;
 mod vm;
 
 pub use error::{Error, Result};
-pub use fe::Fe;
+pub use ferth::Ferth;
 pub use kernel::Config;
 
 /// The size of a cell in bytes.

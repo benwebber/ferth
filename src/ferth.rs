@@ -13,12 +13,12 @@ const WORDLISTS: &[(&str, &[u8])] = &[
 ];
 
 /// The Forth system.
-pub struct Fe<M: Mem = [u8; 65536], H: Io = NullHost, S: State = Ready> {
+pub struct Ferth<M: Mem = [u8; 65536], H: Io = NullHost, S: State = Ready> {
     kernel: Kernel<M, H, Booted>,
     state: S,
 }
 
-impl<M: Mem, H: Io, S: State> Fe<M, H, S> {
+impl<M: Mem, H: Io, S: State> Ferth<M, H, S> {
     /// Evaluate Forth code.
     pub fn evaluate(&mut self, code: impl AsRef<[u8]>) -> Result<()> {
         for line in code.as_ref().split(|&u| u == b'\n') {
@@ -49,9 +49,9 @@ impl<M: Mem, H: Io, S: State> Fe<M, H, S> {
     }
 }
 
-impl<M: Mem, H: Io> Fe<M, H, Loading> {
+impl<M: Mem, H: Io> Ferth<M, H, Loading> {
     /// Build an [`Fe`] with the default environment configuration.
-    pub fn new(mem: M, host: H) -> Result<Fe<M, H, Ready>>
+    pub fn new(mem: M, host: H) -> Result<Ferth<M, H, Ready>>
     where
         H: MaybeClock,
     {
@@ -59,11 +59,11 @@ impl<M: Mem, H: Io> Fe<M, H, Loading> {
     }
 
     /// Build an [`Fe`] with a specific environment configuration.
-    pub fn with_config(mem: M, host: H, config: Config) -> Result<Fe<M, H, Ready>>
+    pub fn with_config(mem: M, host: H, config: Config) -> Result<Ferth<M, H, Ready>>
     where
         H: MaybeClock,
     {
-        let mut fe = Fe {
+        let mut fe = Ferth {
             kernel: Kernel::new(mem, host, config)?.boot()?,
             state: Loading {},
         };
@@ -86,14 +86,14 @@ impl<M: Mem, H: Io> Fe<M, H, Loading> {
         fe.evaluate(b"(check-bootstrap)")?;
         debug!("SYSTEM", "Passed boot checks");
         debug!("SYSTEM", "Ready");
-        Ok(Fe {
+        Ok(Ferth {
             kernel: fe.kernel,
             state,
         })
     }
 }
 
-impl<M: Mem, H: Io> Fe<M, H, Ready> {
+impl<M: Mem, H: Io> Ferth<M, H, Ready> {
     /// Load and interpret code from the current input source.
     pub fn load(&mut self) -> Result<()> {
         // unwrap: Safe because typestate validates kernel already defined `catch`.
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_undefined_word() {
-        let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], NullHost).unwrap();
         assert!(matches!(
             fe.evaluate(b"nope"),
             Err(Error::Throw(Ior::UNDEFINED_WORD))
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_long_word_name_errors() {
-        let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], NullHost).unwrap();
         // A name at the limit (30 bytes) is accepted.
         let ok = [b": ".as_slice(), &[b'a'; 30], b" 1 ;"].concat();
         assert!(fe.evaluate(&ok).is_ok());
@@ -153,14 +153,14 @@ mod tests {
 
     #[test]
     fn test_environment() {
-        let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], NullHost).unwrap();
 
-        let single = |fe: &mut Fe, q: &[u8], expected: usize| {
+        let single = |fe: &mut Ferth, q: &[u8], expected: usize| {
             fe.evaluate(q).unwrap();
             assert_eq!(fe.pop().unwrap(), TRUE);
             assert_eq!(fe.pop().unwrap(), expected);
         };
-        let double = |fe: &mut Fe, q: &[u8], lo: usize, hi: usize| {
+        let double = |fe: &mut Ferth, q: &[u8], lo: usize, hi: usize| {
             fe.evaluate(q).unwrap();
             assert_eq!(fe.pop().unwrap(), TRUE);
             assert_eq!(fe.pop().unwrap(), hi);
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_catch_throw() {
-        let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], NullHost).unwrap();
 
         // Success. `catch` returns 0 and the protected word is next on stack.
         fe.evaluate(b": ok 42 ;").unwrap();
@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn test_abort_irrecoverable_error() {
         use crate::error::VmError;
-        let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], NullHost).unwrap();
 
         // Force a data stack overflow, an irrecoverable error.
         fe.evaluate(b": overflow begin 1 again ;").unwrap();
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn test_catch_recoverable_error() {
-        let mut fe = Fe::new([0u8; 65536], NullHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], NullHost).unwrap();
 
         // Re-raise recoverable errors (division by zero) as a Forth exception. `catch` returns its
         // *ior*.
@@ -265,7 +265,7 @@ mod tests {
     #[cfg(feature = "time")]
     #[test]
     fn test_time_and_date() {
-        let mut fe = Fe::new([0u8; 65536], crate::host::std::StdHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], crate::host::std::StdHost).unwrap();
 
         fe.evaluate(b"time&date").unwrap();
         let year = fe.pop().unwrap();
@@ -288,7 +288,7 @@ mod tests {
     fn test_ms() {
         use std::time::{Duration, Instant};
 
-        let mut fe = Fe::new([0u8; 65536], crate::host::std::StdHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], crate::host::std::StdHost).unwrap();
 
         let start = Instant::now();
         fe.evaluate(b"10 ms").unwrap();
@@ -301,9 +301,9 @@ mod tests {
         use std::thread;
         use std::time::Duration;
 
-        let mut fe = Fe::new([0u8; 65536], crate::host::std::StdHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], crate::host::std::StdHost).unwrap();
 
-        let read = |fe: &mut Fe<[u8; 65536], crate::host::std::StdHost>| -> u128 {
+        let read = |fe: &mut Ferth<[u8; 65536], crate::host::std::StdHost>| -> u128 {
             fe.evaluate(b"(utime)").unwrap();
             let hi = fe.pop().unwrap() as u128;
             let lo = fe.pop().unwrap() as u128;

@@ -3,7 +3,7 @@ use std::io::{IsTerminal, Read};
 use std::process::exit;
 
 use ferth::host::{Clock, Io};
-use ferth::{Config, Fe};
+use ferth::{Config, Ferth};
 
 fn main() {
     let Args {
@@ -13,7 +13,7 @@ fn main() {
         file,
     } = parse_args();
     let host = make_host();
-    let mut fe = match Fe::with_config(vec![0u8; mem], host, config) {
+    let mut fe = match Ferth::with_config(vec![0u8; mem], host, config) {
         Ok(fe) => fe,
         Err(e) => {
             eprintln!("{e}");
@@ -117,7 +117,7 @@ fn usage(basename: &str) {
 }
 
 fn version() {
-    println!("fe {}", env!("CARGO_PKG_VERSION"))
+    println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
 }
 
 fn string(basename: &str, flag: &str, value: Option<String>) -> String {

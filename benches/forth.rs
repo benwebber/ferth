@@ -1,5 +1,5 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use ferth::{Fe, host::NullHost};
+use ferth::{Ferth, host::NullHost};
 use std::hint::black_box;
 
 macro_rules! impl_bench {
@@ -31,7 +31,7 @@ macro_rules! bench {
             $label,
             $file,
             $expr,
-            Fe::new([0u8; 65536], NullHost).unwrap()
+            Ferth::new([0u8; 65536], NullHost).unwrap()
         );
     };
 }
