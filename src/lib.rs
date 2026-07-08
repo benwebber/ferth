@@ -4,6 +4,7 @@
 //!
 //! * `std`: Add support for standard input and output.
 //! * `repl`: Build the REPL.
+//! * `unsafe`: Enable unchecked stack access optimizations.
 //! ```rust
 //! use ferth::Ferth;
 //! use ferth::host::NullHost;

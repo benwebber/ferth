@@ -1,4 +1,4 @@
-//! System clock.
+//! Date and time.
 #[cfg(feature = "std")]
 mod inner {
     use crate::double::Double;

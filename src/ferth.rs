@@ -50,7 +50,7 @@ impl<M: Mem, H: Io, S: State> Ferth<M, H, S> {
 }
 
 impl<M: Mem, H: Io> Ferth<M, H, Loading> {
-    /// Build an [`Fe`] with the default environment configuration.
+    /// Build a [`Ferth`] with the default environment configuration.
     pub fn new(mem: M, host: H) -> Result<Ferth<M, H, Ready>>
     where
         H: MaybeClock,
@@ -58,7 +58,7 @@ impl<M: Mem, H: Io> Ferth<M, H, Loading> {
         Self::with_config(mem, host, Config::default())
     }
 
-    /// Build an [`Fe`] with a specific environment configuration.
+    /// Build a [`Ferth`] with a specific environment configuration.
     pub fn with_config(mem: M, host: H, config: Config) -> Result<Ferth<M, H, Ready>>
     where
         H: MaybeClock,
@@ -265,7 +265,7 @@ mod tests {
     #[cfg(feature = "time")]
     #[test]
     fn test_time_and_date() {
-        let mut fe = Ferth::new([0u8; 65536], crate::host::std::StdHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], crate::host::StdHost).unwrap();
 
         fe.evaluate(b"time&date").unwrap();
         let year = fe.pop().unwrap();
@@ -288,7 +288,7 @@ mod tests {
     fn test_ms() {
         use std::time::{Duration, Instant};
 
-        let mut fe = Ferth::new([0u8; 65536], crate::host::std::StdHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], crate::host::StdHost).unwrap();
 
         let start = Instant::now();
         fe.evaluate(b"10 ms").unwrap();
@@ -301,9 +301,9 @@ mod tests {
         use std::thread;
         use std::time::Duration;
 
-        let mut fe = Ferth::new([0u8; 65536], crate::host::std::StdHost).unwrap();
+        let mut fe = Ferth::new([0u8; 65536], crate::host::StdHost).unwrap();
 
-        let read = |fe: &mut Ferth<[u8; 65536], crate::host::std::StdHost>| -> u128 {
+        let read = |fe: &mut Ferth<[u8; 65536], crate::host::StdHost>| -> u128 {
             fe.evaluate(b"(utime)").unwrap();
             let hi = fe.pop().unwrap() as u128;
             let lo = fe.pop().unwrap() as u128;

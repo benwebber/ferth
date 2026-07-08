@@ -1,6 +1,5 @@
 use crate::data::Mem;
 use crate::error::Ior;
-#[cfg(feature = "std")]
 use crate::host::{Clock, Io};
 use crate::{Error, Result};
 

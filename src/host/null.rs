@@ -4,7 +4,7 @@ use crate::{Error, Result};
 
 use super::{Clock, Io};
 
-/// A host implementation that returns an error for any I/O operation and performs no timekeeping.
+/// A host implementation that returns an error for any I/O operation does not keep time.
 ///
 /// Suitable for `no_std`.
 pub struct NullHost;

@@ -156,7 +156,7 @@ fn read_stdin() -> String {
 
 #[cfg(not(feature = "repl"))]
 fn make_host() -> impl Io + Clock {
-    ferth::host::std::StdHost
+    ferth::host::StdHost
 }
 
 #[cfg(feature = "repl")]

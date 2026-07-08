@@ -1,4 +1,4 @@
-//! Host implementations.
+//! Host traits and implementations.
 use crate::Result;
 use crate::double::Double;
 use crate::time::DateTime;
@@ -7,11 +7,16 @@ mod null;
 #[cfg(feature = "repl")]
 pub mod repl;
 #[cfg(feature = "std")]
-pub mod std;
+mod std;
 
 pub use null::NullHost;
 
+#[cfg(feature = "std")]
+pub use std::StdHost;
+
 /// System I/O.
+///
+/// Hosts must implement this trait to support the words `emit`, `key`, and `refill`.
 pub trait Io {
     /// Read a single character (byte) from the input source.
     ///
@@ -27,12 +32,14 @@ pub trait Io {
     fn refill(&mut self, buf: &mut [u8]) -> Result<Option<usize>>;
 }
 
-/// A system clock.
+/// System clock.
+///
+/// Hosts must implement this trait to support the words `ms`, `time&date`, and `(utime)`.
 pub trait Clock {
-    /// The monotonic clock, in microseconds.
+    /// Return the value of a monotonic clock, in microseconds.
     fn utime(&self) -> Double;
 
-    /// The wall clock, in UTC.
+    /// The current time and date, in UTC.
     fn time_and_date(&self) -> DateTime;
 
     /// Sleep for *ms* milliseconds.
