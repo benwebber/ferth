@@ -2,6 +2,8 @@ use core::mem::offset_of;
 
 /// The size of the terminal input buffer.
 pub(super) const INPUT_BUFFER_SIZE: usize = 256;
+/// The size of the transient buffer region.
+pub(super) const TRANSIENT_BUFFER_SIZE: usize = 2 * INPUT_BUFFER_SIZE;
 
 /// The layout of the data space.
 ///
@@ -33,6 +35,8 @@ pub(super) struct Layout {
     rp0: usize,
     /// The terminal input buffer.
     input: [u8; INPUT_BUFFER_SIZE],
+    /// The transient buffer region.
+    transient: [u8; TRANSIENT_BUFFER_SIZE],
     /// The address of a buffer containing a diagnostic message.
     diagnostic_addr: usize,
     /// The length of the message in the diagnostic buffer.
@@ -52,6 +56,7 @@ impl Layout {
     pub const SP0: usize = offset_of!(Self, sp0);
     pub const RP0: usize = offset_of!(Self, rp0);
     pub const INPUT: usize = offset_of!(Self, input);
+    pub const TRANSIENT: usize = offset_of!(Self, transient);
     pub const DIAGNOSTIC_ADDR: usize = offset_of!(Self, diagnostic_addr);
     pub const DIAGNOSTIC_LEN: usize = offset_of!(Self, diagnostic_len);
     pub const DATA: usize = size_of::<Self>();

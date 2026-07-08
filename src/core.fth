@@ -244,6 +244,14 @@ variable hld
 ;
 : sign ( n -- ) 0< if [char] - hold then ;
 
+\ Toggles between 0 and 1.
+variable (buf-addr-id)
+\ Return an available transient buffer address.
+: (buf-addr) ( -- c-addr )
+  (buf-addr-id) @               ( id )
+  dup (buf-size) * (buf-base) + ( id buf-addr )
+  swap 1 xor (buf-addr-id) !    ( buf-addr )
+;
 : s"
   state @ if
     ['] (s") compile,
@@ -255,7 +263,11 @@ variable hld
     move
     align
   else
-    [char] " parse
+    [char] " parse    ( src len )
+    dup >r            ( R: len )
+    (buf-addr) dup >r ( src len buf-addr ) ( R: len buf-addr )
+    swap move         ( )
+    r> r>             ( buf-addr len ) ( R: )
   then
 ; immediate
 

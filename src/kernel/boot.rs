@@ -546,7 +546,13 @@ impl<M: Mem, H: Io> Kernel<M, H, Booting> {
     }
 
     fn compile_wrappers(&mut self) -> Result<()> {
-        use Token::Name as N;
+        use Token::{Lit as L, Name as N};
+        self.compile(
+            b"(buf-base)",
+            Flags::EMPTY,
+            &[L(self.layout_base + Layout::TRANSIENT)],
+        )?;
+        self.compile(b"(buf-size)", Flags::EMPTY, &[L(layout::INPUT_BUFFER_SIZE)])?;
         self.compile(
             b"parse",
             Flags::EMPTY,
