@@ -1,5 +1,7 @@
 # ferth
 [![CI](https://github.com/benwebber/ferth/actions/workflows/ci.yml/badge.svg)](https://github.com/benwebber/ferth/actions/workflows/ci.yml)
+[![Crates.io Version](https://img.shields.io/crates/v/ferth)](https://crates.io/crates/ferth/)
+[![docs.rs](https://img.shields.io/docsrs/ferth)](https://docs.rs/ferth/)
 
 A safe, native-sized Forth.
 
@@ -21,7 +23,7 @@ Download a pre-built binary of the [latest release](https://github.com/benwebber
 Or install with Cargo:
 
 ```
-cargo install --git https://github.com/benwebber/ferth.git --features repl
+cargo install ferth --features repl
 ```
 
 ## Usage
