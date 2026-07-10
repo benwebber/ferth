@@ -17,5 +17,10 @@ regex = '''
 message_template = "Release {new_version}"
 tag_template = "v{new_version}"
 
+[[before_commit]]
+# Updates self-dependency in Cargo.lock
+name = "cargo check"
+cmd = "cargo check && git add Cargo.lock"
+
 [[file]]
 src = "Cargo.toml"
