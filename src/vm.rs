@@ -240,6 +240,21 @@ impl Vm {
         Ok(x)
     }
 
+    /// Push a double onto the data stack.
+    fn push_double<M: Mem>(&mut self, data: &mut Data<M>, d: Double) -> VmResult<()> {
+        let (lo, hi): (usize, usize) = d.into();
+        self.push(data, lo)?;
+        self.push(data, hi)?;
+        Ok(())
+    }
+
+    /// Pop a double from the data stack.
+    fn pop_double<M: Mem>(&mut self, data: &mut Data<M>) -> VmResult<Double> {
+        let hi = self.pop(data)?;
+        let lo = self.pop(data)?;
+        Ok(Double::from((lo, hi)))
+    }
+
     /// Push a cell onto the return stack.
     fn rpush<M: Mem>(&mut self, data: &mut Data<M>, x: usize) -> VmResult<()> {
         if self.rp <= self.rp_min {
@@ -427,9 +442,7 @@ impl Vm {
                 let u1 = Double::from(self.pop(data)?);
                 let u2 = Double::from(self.pop(data)?);
                 let ud = Double(u1.0 * u2.0);
-                let (lo, hi): (usize, usize) = ud.into();
-                self.push(data, lo)?;
-                self.push(data, hi)?;
+                self.push_double(data, ud)?;
             }
             Op::Nand => {
                 binary!(self, data, |a, b| !(a & b));
@@ -548,12 +561,10 @@ impl Vm {
             }
             Op::UmDivMod => {
                 let u1 = self.pop(data)?;
-                let ud_hi = self.pop(data)?;
-                let ud_lo = self.pop(data)?;
+                let ud = self.pop_double(data)?;
                 if u1 == 0 {
                     return Err(VmError::DivisionByZero);
                 }
-                let ud = Double::from((ud_lo, ud_hi));
                 let u1 = Double::from(u1);
                 self.push(data, (ud.0 % u1.0) as usize)?;
                 self.push(data, (ud.0 / u1.0) as usize)?;
@@ -627,16 +638,12 @@ impl Vm {
                 let base = self.pop(data)? as u32;
                 let u = self.pop(data)?;
                 let caddr = self.pop(data)?;
-                let hi = self.pop(data)?;
-                let lo = self.pop(data)?;
-                let acc = Double::from((lo, hi));
+                let acc = self.pop_double(data)?;
                 let bytes = data.read(caddr, u)?;
                 let (acc, rest) = parser::to_number(acc, bytes, base);
                 let consumed = bytes.len() - rest.len();
                 let remaining = rest.len();
-                let (lo, hi): (usize, usize) = acc.into();
-                self.push(data, lo)?;
-                self.push(data, hi)?;
+                self.push_double(data, acc)?;
                 self.push(data, caddr + consumed)?;
                 self.push(data, remaining)?;
             }
