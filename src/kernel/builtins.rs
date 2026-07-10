@@ -1,10 +1,13 @@
 use crate::data::Mem;
 use crate::error::Ior;
-use crate::host::{Clock, Io};
+use crate::host::Io;
 use crate::{Error, Result};
 
 use super::context::Context;
 use super::{FALSE, MAX_WORD_LEN, TRUE};
+
+#[cfg(feature = "std")]
+use crate::host::Clock;
 
 /// Receive a single character from the input device.
 ///
