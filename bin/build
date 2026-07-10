@@ -5,4 +5,4 @@ TARGET="${1:?target}"
 VERSION="${2:?version}"
 
 cargo build --features repl --release --target "${TARGET}" --verbose
-tar -cvzf "ferth-${VERSION}-${TARGET}.tar.gz" -C "target/${TARGET}/release" fe
+tar -cvzf "ferth-${VERSION}-${TARGET}.tar.gz" -C "target/${TARGET}/release" ferth
